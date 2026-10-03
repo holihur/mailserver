@@ -1,6 +1,9 @@
 package secret
 
-import "testing"
+import (
+	"encoding/base64"
+	"testing"
+)
 
 func TestRoundTrip(t *testing.T) {
 	SetKey("test-secret-key")
@@ -30,4 +33,28 @@ func TestDifferentKeysFail(t *testing.T) {
 	if _, err := Decrypt(enc); err == nil {
 		t.Fatal("decrypt with wrong key should fail")
 	}
+}
+
+func TestDecryptErrors(t *testing.T) {
+	SetKey("k")
+	if _, err := Decrypt("!!!not base64!!!"); err == nil {
+		t.Fatal("bad base64 should error")
+	}
+	short := base64.StdEncoding.EncodeToString([]byte("abc"))
+	if _, err := Decrypt(short); err == nil {
+		t.Fatal("short ciphertext should error")
+	}
+}
+
+func TestNilKey(t *testing.T) {
+	mu.Lock()
+	key = nil
+	mu.Unlock()
+	if _, err := Encrypt([]byte("x")); err == nil {
+		t.Fatal("encrypt without key should error")
+	}
+	if _, err := Decrypt("AAAA"); err == nil {
+		t.Fatal("decrypt without key should error")
+	}
+	SetKey("restore")
 }

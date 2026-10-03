@@ -27,7 +27,7 @@ DIR="${MAILSERVER_DIR:-/opt/mailserver}"
 MAIL_HOST="${MAIL_HOST:-}"
 ADMIN_EMAILS="${ADMIN_EMAILS:-}"
 WITH_DNS="${WITH_DNS:-1}"           # 1 安装内置 DNS
-DATABASE_URL_IN="${DATABASE_URL:-}" # 二进制方式：指定后使用 PostgreSQL，否则 SQLite
+DATABASE_URL_IN="${DATABASE_URL:-}" # 二进制方式：使用已有 PostgreSQL；为空则本机自动安装
 TAG=""                              # 解析后的版本号，如 v1.0.0
 
 # ---------------------------------------------------------------------------

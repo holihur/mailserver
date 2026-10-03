@@ -52,9 +52,18 @@ type Store struct {
 
 // New 从数据库加载配置，缺省项用 cfg（环境变量）补齐，并恢复 DKIM 签名器。
 func New(db *gorm.DB, cfg config.Config) *Store {
-	s := &Store{db: db, vals: map[string]string{}}
 	var rows []model.Setting
-	db.Find(&rows)
+	if db != nil {
+		db.Find(&rows)
+	}
+	s := newStore(cfg, rows)
+	s.db = db
+	return s
+}
+
+// newStore 纯逻辑：合并数据库行与环境变量默认值（便于单测）。
+func newStore(cfg config.Config, rows []model.Setting) *Store {
+	s := &Store{vals: map[string]string{}}
 	for _, r := range rows {
 		s.vals[r.Key] = r.Value
 	}
@@ -85,7 +94,6 @@ func New(db *gorm.DB, cfg config.Config) *Store {
 			if _, err := dkim.LoadPEM(domain, sel, b); err == nil {
 				if enc, err := secret.Encrypt(b); err == nil {
 					s.vals[KeyDKIMKeyEnc] = enc
-					s.persist(KeyDKIMKeyEnc, enc)
 				}
 			}
 		}
@@ -113,6 +121,9 @@ func (s *Store) Set(key, val string) error {
 }
 
 func (s *Store) persist(key, val string) {
+	if s.db == nil { // 单元测试/无库时仅内存生效
+		return
+	}
 	_ = s.db.Clauses(clause.OnConflict{UpdateAll: true}).
 		Create(&model.Setting{Key: key, Value: val, UpdatedAt: time.Now()}).Error
 }

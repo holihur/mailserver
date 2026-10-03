@@ -27,7 +27,7 @@ services:
     environment:
       PORT: 8080
       # PostgreSQL 连接串
-      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-mailserver}:${POSTGRES_PASSWORD:-mailserver}@db:5432/${POSTGRES_DB:-mailserver}?sslmode=disable}
+      DATABASE_URL: ${DATABASE_URL:-postgres://mailserver:${POSTGRES_PASSWORD:-mailserver}@db:5432/mailserver?sslmode=disable}
       DATA_DIR: /data
       CERT_DIR: /data/certs
       JWT_SECRET: ${JWT_SECRET:-change-me-32chars-min}

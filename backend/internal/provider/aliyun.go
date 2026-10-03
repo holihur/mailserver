@@ -289,12 +289,12 @@ func (a *aliyun) DeleteRecord(ctx context.Context, zone, name, typ, value string
 	return a.call(ctx, "DeleteDomainRecord", map[string]string{"RecordId": rec.RecordID}, nil)
 }
 
-// aliTTL 归一到阿里云常用取值（600~86400）。
+// aliTTL 归一到阿里云常用取值（600~86400，向上取档，超过最大档取 86400）。
 func aliTTL(ttl int) int {
 	for _, a := range []int{600, 1800, 3600, 43200, 86400} {
 		if ttl <= a {
 			return a
 		}
 	}
-	return 600
+	return 86400
 }

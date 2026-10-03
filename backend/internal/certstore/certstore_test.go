@@ -86,3 +86,16 @@ func TestBadPEM(t *testing.T) {
 		t.Fatal("expected error for bad PEM")
 	}
 }
+
+func TestLoadEmptyAndTLSConfig(t *testing.T) {
+	s := New(t.TempDir())
+	if err := s.Load(); err != nil {
+		t.Fatalf("load empty: %v", err)
+	}
+	if s.Meta().Exists {
+		t.Fatal("should not exist")
+	}
+	if s.TLSConfig() == nil || s.TLSConfig().GetCertificate == nil {
+		t.Fatal("tls config should provide GetCertificate")
+	}
+}
