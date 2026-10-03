@@ -174,6 +174,7 @@ func main() {
 	mux.HandleFunc("/api/admin/providers", cors(ad.Providers))
 	mux.HandleFunc("/api/admin/providers/", cors(ad.ProviderOne))
 	mux.HandleFunc("/api/admin/settings", cors(ad.Settings))
+	mux.HandleFunc("/api/admin/relay/test", cors(ad.RelayTest))
 	mux.HandleFunc("/api/admin/tls", cors(ad.TLS))
 	mux.HandleFunc("/api/admin/tls/manual", cors(ad.TLSManual))
 	mux.HandleFunc("/api/admin/tls/acme", cors(ad.TLSAcme))

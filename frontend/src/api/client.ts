@@ -42,6 +42,7 @@ export const api = {
   providerDomains: (id) => req(`/api/admin/providers/${id}/domains`),
   providerApply: (id, b) => req(`/api/admin/providers/${id}/apply`, { method: 'POST', body: JSON.stringify(b) }),
   settingsGet: () => req('/api/admin/settings'),
+  relayTest: () => req('/api/admin/relay/test', { method: 'POST' }),
   settingsPatch: (b) => req('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(b) }),
   tlsGet: () => req('/api/admin/tls'),
   tlsManual: (b) => req('/api/admin/tls/manual', { method: 'POST', body: JSON.stringify(b) }),

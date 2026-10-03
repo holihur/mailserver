@@ -110,7 +110,8 @@ function ProviderCard({ provider, onChanged }) {
   const fetchDomains = () => run('domains', async () => {
     const ds = await api.providerDomains(provider.id)
     setDomains(ds)
-    if (ds.length === 1) setSel(ds[0].Name)
+    if (ds.length === 1) setSel(ds[0].name)
+    if (ds.length === 0) setMsg(t('providers.noDomains'))
   })
 
   const test = () => run('test', async () => { await api.providerTest(provider.id); setMsg('OK ✓') })
@@ -149,7 +150,7 @@ function ProviderCard({ provider, onChanged }) {
             <span className="text-muted-foreground">{t('providers.domain')}</span>
             <Select value={sel} onChange={e => setSel(e.target.value)}>
               <option value="">{t('providers.choose')}</option>
-              {domains.map(d => <option key={d.ID || d.Name} value={d.Name}>{d.Name}</option>)}
+              {domains.map((d: any) => <option key={d.id || d.name} value={d.name}>{d.name}</option>)}
             </Select>
           </label>
           <label className="text-xs space-y-1">

@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2, UserPlus } from 'lucide-react'
+import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2, UserPlus, PlugZap } from 'lucide-react'
 
 export default function AdminSettings() {
   const { t } = useI18n()
@@ -12,6 +12,7 @@ export default function AdminSettings() {
   const [dkim, setDkim] = useState(null)
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
+  const [relayMsg, setRelayMsg] = useState('')
 
   async function load() {
     try { setS(await api.settingsGet()) } catch (e) { setMsg(e.message) }
@@ -43,6 +44,15 @@ export default function AdminSettings() {
       const ip = (await r.text()).trim()
       if (/^\d+\.\d+\.\d+\.\d+$/.test(ip)) field('public_ip', ip)
     } catch { setMsg('IP detection failed, please fill manually') }
+  }
+
+  async function testRelay() {
+    setBusy('relay'); setRelayMsg('')
+    try {
+      const r: any = await api.relayTest()
+      const steps = (r.steps || []).join(' → ')
+      setRelayMsg((r.ok ? '✓ ' : '✗ ') + steps + (r.ok ? '' : ` (${r.error || ''})`))
+    } catch (e: any) { setRelayMsg(e.message) } finally { setBusy('') }
   }
 
   async function genDKIM() {
@@ -83,6 +93,12 @@ export default function AdminSettings() {
               </Field>
             </div>
             <Field label={t('settings.relayFrom')}><Input placeholder="noreply@example.com" value={s.relay_from || ''} onChange={e => field('relay_from', e.target.value)} /></Field>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" type="button" onClick={testRelay} disabled={busy === 'relay'}>
+                {busy === 'relay' ? <Loader2 className="animate-spin" /> : <PlugZap />}{t('settings.testRelay')}
+              </Button>
+              {relayMsg && <span className="text-xs text-muted-foreground break-all">{relayMsg}</span>}
+            </div>
           </Card>
 
           <Card className="p-4 space-y-3">

@@ -152,6 +152,7 @@ export const DICTS = {
     'settings.relayPass': '密码',
     'settings.relayPassKeep': '已设置（留空不改）',
     'settings.relayFrom': '发件人兜底地址',
+    'settings.testRelay': '测试发件中继',
     'settings.dkim': 'DKIM 签名',
     'settings.dkimHint': 'DKIM 相当于给邮件盖防伪章，能降低进垃圾箱概率。点按钮即可自动生成。',
     'settings.dkimGenerate': '一键生成 DKIM 密钥',
@@ -205,6 +206,7 @@ export const DICTS = {
     'providers.mxHost': 'MX 主机（可选）',
     'providers.apply': '一键配置',
     'providers.choose': '请选择…',
+    'providers.noDomains': '该账号下没有可用域名（先在服务商处添加/确认权限）',
 
     'users.title': '用户账号',
     'users.desc': '给每个使用者创建邮箱账号，他们就能在网页和手机客户端登录收发信。',
@@ -377,6 +379,7 @@ export const DICTS = {
     'settings.relayPass': 'Password',
     'settings.relayPassKeep': 'Already set (leave blank to keep)',
     'settings.relayFrom': 'Fallback sender',
+    'settings.testRelay': 'Test relay',
     'settings.dkim': 'DKIM signing',
     'settings.dkimHint': 'DKIM stamps mail to reduce spam scoring. Generate with one click — no CLI.',
     'settings.dkimGenerate': 'Generate DKIM key',
@@ -430,6 +433,7 @@ export const DICTS = {
     'providers.mxHost': 'MX host (optional)',
     'providers.apply': 'Apply',
     'providers.choose': 'Choose…',
+    'providers.noDomains': 'No domains in this account (add one or check permissions)',
 
     'users.title': 'Users',
     'users.desc': 'Create a mailbox per person; they can sign in on web and mobile.',

@@ -6,8 +6,10 @@ package queue
 // 无中继时站外信会标记 relay_err，前端 /setup 页可见，不静默丢信。
 
 import (
+	"crypto/tls"
 	"fmt"
 	"log"
+	"net"
 	"net/smtp"
 	"strings"
 	"time"
@@ -56,10 +58,9 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail
 	}
 	// 默认 envelope-from 用本人地址；若中继强制要求认证账号一致，失败后会自动用 RelayFrom 重试一次
 	msg := buildMsg(c.Name, m, signer)
-	auth := smtp.PlainAuth("", c.User, c.Pass, c.Host)
-	if err := smtp.SendMail(c.Host+":"+c.Port, auth, m.From, []string{m.To}, msg); err != nil {
+	if err := sendSMTP(c, m.From, []string{m.To}, msg); err != nil {
 		if c.From != "" {
-			if err2 := smtp.SendMail(c.Host+":"+c.Port, auth, c.From, []string{m.To}, msg); err2 == nil {
+			if err2 := sendSMTP(c, c.From, []string{m.To}, msg); err2 == nil {
 				db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
 				return
 			}
@@ -69,6 +70,58 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail
 		return
 	}
 	db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
+}
+
+// sendSMTP 通过中继发信；465 用隐式 TLS，25/587 用 STARTTLS。
+func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
+	host := strings.TrimSpace(c.Host)
+	port := strings.TrimSpace(c.Port)
+	if port == "" {
+		port = "587"
+	}
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 15*time.Second)
+	if err != nil {
+		return err
+	}
+	if port == "465" || port == "8465" {
+		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12})
+	}
+	cl, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	defer cl.Close()
+	if ok, _ := cl.Extension("STARTTLS"); ok {
+		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return err
+		}
+	}
+	if c.User != "" {
+		if ok, _ := cl.Extension("AUTH"); ok {
+			if err := cl.Auth(smtp.PlainAuth("", c.User, c.Pass, host)); err != nil {
+				return err
+			}
+		}
+	}
+	if err := cl.Mail(from); err != nil {
+		return err
+	}
+	for _, rcpt := range to {
+		if err := cl.Rcpt(rcpt); err != nil {
+			return err
+		}
+	}
+	w, err := cl.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return cl.Quit()
 }
 
 // 组装 RFC5322；发件域==签名域且配了私钥时加 DKIM-Signature（签的就是实际发出的头）
