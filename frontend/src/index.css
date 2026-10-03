@@ -43,5 +43,19 @@ body {
 /* 触屏点击反馈 */
 button, a { -webkit-tap-highlight-color: transparent; }
 
+/* 键盘可达性 */
+:focus-visible {
+  outline: 2px solid hsl(var(--primary));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 防止移动端横向滚动 */
+html, body { overflow-x: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
+
 /* 安全区（iPhone 刘海/底部） */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

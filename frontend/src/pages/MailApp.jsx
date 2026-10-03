@@ -153,16 +153,21 @@ function Compose({ init, onClose }) {
   const { t } = useI18n()
   const [f, setF] = useState({ to: init.to || '', subject: init.subject || '', body: init.body || '' })
   const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
   async function submit(folder) {
     setSaving(true)
     try { await api.send({ ...f, folder }); onClose() } catch (e) { alert(e.message) }
     finally { setSaving(false) }
   }
   return (
-    <div className="fixed inset-0 bg-black/40 grid place-items-center sm:p-4 z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/40 grid place-items-center sm:p-4 z-50" onClick={onClose} role="dialog" aria-modal="true" aria-label={t('mail.compose')}>
       <Card className="w-full h-full sm:h-auto sm:max-w-lg p-4 space-y-3 rounded-none sm:rounded-lg" onClick={e => e.stopPropagation()}>
         <b>{t('mail.compose')}</b>
-        <Input placeholder={t('mail.to')} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} />
+        <Input autoFocus placeholder={t('mail.to')} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} />
         <Input placeholder={t('mail.subject')} value={f.subject} onChange={e => setF({ ...f, subject: e.target.value })} />
         <Textarea rows={10} placeholder={t('mail.body')} value={f.body} onChange={e => setF({ ...f, body: e.target.value })} />
         <div className="flex gap-2 justify-end">
