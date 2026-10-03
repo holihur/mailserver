@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card } from '../components/ui/controls'
 import { LangToggle, ThemeToggle } from '../components/HeaderControls'
@@ -8,7 +7,6 @@ import { Mail, Loader2 } from 'lucide-react'
 
 export default function Login() {
   const { t } = useI18n()
-  const nav = useNavigate()
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ email: '', name: '', password: '' })
   const [err, setErr] = useState('')
@@ -25,7 +23,8 @@ export default function Login() {
       const fn = mode === 'login' ? api.login : api.register
       const d = await fn({ email: form.email, name: form.name || form.email.split('@')[0], password: form.password })
       localStorage.setItem('token', d.token)
-      nav('/')
+      // 整页跳转最稳：避免 SPA 路由/缓存导致登录后不跳转
+      window.location.assign('/')
     } catch (e2) { setErr(e2.message) }
     finally { setLoading(false) }
   }

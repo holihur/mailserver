@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge } from '../components/ui/controls'
 import { ThemeToggle, LangToggle } from '../components/HeaderControls'
@@ -19,7 +19,6 @@ const FOLDERS = [
 
 export default function MailApp() {
   const { t } = useI18n()
-  const nav = useNavigate()
   const [folder, setFolder] = useState('inbox')
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -45,7 +44,7 @@ export default function MailApp() {
     setItems(items.map(i => i.id === id ? { ...i, read: true } : i))
   }
 
-  function logout() { localStorage.removeItem('token'); nav('/login') }
+  function logout() { localStorage.removeItem('token'); location.assign('/login') }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
