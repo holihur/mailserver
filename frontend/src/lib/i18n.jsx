@@ -42,7 +42,7 @@ export const DICTS = {
     'login.loginBtn': '登录',
     'login.registerBtn': '注册并登录',
     'login.pleaseWait': '请稍候…',
-    'login.hint': '默认后端 /api。',
+    'login.hint': '首次注册的账号自动成为管理员；可填邮箱或用户名。',
 
     'mail.inbox': '收件箱',
     'mail.sent': '已发送',
@@ -264,7 +264,7 @@ export const DICTS = {
     'login.loginBtn': 'Sign in',
     'login.registerBtn': 'Sign up & sign in',
     'login.pleaseWait': 'Please wait…',
-    'login.hint': 'Backend is /api by default.',
+    'login.hint': 'The first registered account becomes admin; email or username is fine.',
 
     'mail.inbox': 'Inbox',
     'mail.sent': 'Sent',

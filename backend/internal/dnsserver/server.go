@@ -1,8 +1,7 @@
-// 自研权威 DNS 服务器（低内存：常驻约 8~15MB）。
-// 从 zones.json 加载 zones（由 backend API 导出），应答本地域名的 A/AAAA/MX/TXT/NS/SOA/CNAME/SRV/CAA。
-// 非本地域名 -> REFUSED（不做递归，防放大攻击）；文件每 10s 检查 mtime 热加载。
-
-package main
+// Package dnsserver 是本项目内置的权威 DNS 服务器（原 dns/main.go），
+// 现在与 API 编译进同一个二进制，避免单独部署 nsd。
+// 只应答本机托管域名的 A/AAAA/MX/TXT/NS/SOA/CNAME/SRV/CAA；非托管域 REFUSED（不递归）。
+package dnsserver
 
 import (
 	"encoding/json"
@@ -23,29 +22,46 @@ type Rec struct {
 	TTL   int    `json:"ttl"`
 	Prio  int    `json:"prio"`
 }
+
 type Zone struct {
 	Domain  string `json:"domain"`
 	Records []Rec  `json:"records"`
 }
 
-var (
-	mu     sync.RWMutex
-	zones  []Zone
-	zonesF = getenv("ZONES_PATH", "./zones.json")
-	nsHost = getenv("NS_HOST", "") // 如 ns1.example.com.，为空则用各 zone 的 ns1
-)
-
-func getenv(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
+type Server struct {
+	ZonesPath string
+	NSHost    string
+	mu        sync.RWMutex
+	zones     []Zone
 }
 
-func loadZones() {
-	b, err := os.ReadFile(zonesF)
+// New 创建 DNS 服务器；zonesPath 为 backend 导出的 zones.json。
+func New(zonesPath, nsHost string) *Server {
+	return &Server{ZonesPath: zonesPath, NSHost: nsHost}
+}
+
+// Start 加载 zones 并启动 UDP+TCP 监听（阻塞在 TCP 上，建议 go 调用）。
+func (s *Server) Start(addr string) {
+	s.load()
+	go s.watch()
+	mux := dns.NewServeMux()
+	mux.HandleFunc(".", s.handle)
+	go func() {
+		srv := &dns.Server{Addr: addr, Net: "udp", UDPSize: 4096, Handler: mux}
+		if err := srv.ListenAndServe(); err != nil {
+			log.Println("dns udp listen:", err)
+		}
+	}()
+	srv := &dns.Server{Addr: addr, Net: "tcp", Handler: mux}
+	if err := srv.ListenAndServe(); err != nil {
+		log.Println("dns tcp listen:", err)
+	}
+}
+
+func (s *Server) load() {
+	b, err := os.ReadFile(s.ZonesPath)
 	if err != nil {
-		log.Println("dns: 无 zones 文件:", zonesF, "（等 backend 生成）")
+		log.Println("dns: 无 zones 文件:", s.ZonesPath, "（等 backend 生成）")
 		return
 	}
 	var v struct {
@@ -55,25 +71,25 @@ func loadZones() {
 		log.Println("dns: zones 解析失败:", err)
 		return
 	}
-	mu.Lock()
-	zones = v.Zones
-	mu.Unlock()
+	s.mu.Lock()
+	s.zones = v.Zones
+	s.mu.Unlock()
 	log.Printf("dns: 加载 %d 个 zone", len(v.Zones))
 }
 
-func watchZones() {
+func (s *Server) watch() {
 	var last time.Time
-	if fi, err := os.Stat(zonesF); err == nil {
+	if fi, err := os.Stat(s.ZonesPath); err == nil {
 		last = fi.ModTime()
 	}
 	for range time.Tick(10 * time.Second) {
-		fi, err := os.Stat(zonesF)
+		fi, err := os.Stat(s.ZonesPath)
 		if err != nil {
 			continue
 		}
 		if fi.ModTime().After(last) {
 			last = fi.ModTime()
-			loadZones()
+			s.load()
 		}
 	}
 }
@@ -89,17 +105,16 @@ func fqdn(name, domain string) string {
 	return strings.ToLower(name + "." + domain + ".")
 }
 
-// 找最长后缀匹配的 zone
-func findZone(q string) *Zone {
-	mu.RLock()
-	defer mu.RUnlock()
+func (s *Server) findZone(q string) *Zone {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	q = strings.ToLower(q)
 	var best *Zone
-	for i := range zones {
-		suf := strings.ToLower(zones[i].Domain) + "."
+	for i := range s.zones {
+		suf := strings.ToLower(s.zones[i].Domain) + "."
 		if q == suf || strings.HasSuffix(q, "."+suf) {
-			if best == nil || len(zones[i].Domain) > len(best.Domain) {
-				b := zones[i]
+			if best == nil || len(s.zones[i].Domain) > len(best.Domain) {
+				b := s.zones[i]
 				best = &b
 			}
 		}
@@ -107,19 +122,18 @@ func findZone(q string) *Zone {
 	return best
 }
 
-func soaRR(zone string) dns.RR {
-	ttl := uint32(3600)
-	s := &dns.SOA{
-		Hdr:     dns.RR_Header{Name: zone + ".", Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: ttl},
+func (s *Server) soaRR(zone string) dns.RR {
+	out := &dns.SOA{
+		Hdr:     dns.RR_Header{Name: zone + ".", Rrtype: dns.TypeSOA, Class: dns.ClassINET, Ttl: 3600},
 		Ns:      "ns1." + zone + ".",
 		Mbox:    "hostmaster." + zone + ".",
 		Serial:  1,
 		Refresh: 7200, Retry: 3600, Expire: 1209600, Minttl: 300,
 	}
-	if nsHost != "" {
-		s.Ns = nsHost
+	if s.NSHost != "" {
+		out.Ns = s.NSHost
 	}
-	return s
+	return out
 }
 
 func toRRs(z *Zone, qtype uint16) []dns.RR {
@@ -162,7 +176,7 @@ func toRRs(z *Zone, qtype uint16) []dns.RR {
 			out = append(out, &dns.CNAME{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: ttl}, Target: tgt})
 		case qtype == dns.TypeSRV && t == "SRV":
 			// value: "prio weight port target"
-			n, _ := splitSRV(r.Value)
+			n := strings.Fields(r.Value)
 			if len(n) == 4 {
 				pr, we, po := atoi(n[0]), atoi(n[1]), atoi(n[2])
 				tgt := n[3]
@@ -172,16 +186,14 @@ func toRRs(z *Zone, qtype uint16) []dns.RR {
 				out = append(out, &dns.SRV{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypeSRV, Class: dns.ClassINET, Ttl: ttl}, Priority: uint16(pr), Weight: uint16(we), Port: uint16(po), Target: tgt})
 			}
 		case qtype == dns.TypeCAA && t == "CAA":
-			// value: '0 issue "letsencrypt.org"' 或整串
 			flag, tag, val := parseCAA(r.Value)
 			out = append(out, &dns.CAA{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypeCAA, Class: dns.ClassINET, Ttl: ttl}, Flag: flag, Tag: tag, Value: val})
 		}
 	}
-	// 只保留 qname 匹配的（@ 展开后比较）
 	return out
 }
 
-// TXT 单段 ≤255 字节才合法（如 2048 位 DKIM 公钥 ~400 字符必须切分）
+// TXT 单段 ≤255 字节才合法（如 2048 位 DKIM 公钥必须切分）
 func chunkTXT(s string) []string {
 	var out []string
 	for len(s) > 0 {
@@ -198,10 +210,6 @@ func chunkTXT(s string) []string {
 	return out
 }
 
-func splitSRV(s string) ([]string, int) {
-	f := strings.Fields(s)
-	return f, len(f)
-}
 func atoi(s string) int {
 	n := 0
 	for _, c := range s {
@@ -212,6 +220,7 @@ func atoi(s string) int {
 	}
 	return n
 }
+
 func parseCAA(s string) (uint8, string, string) {
 	f := strings.Fields(s)
 	if len(f) >= 3 {
@@ -219,36 +228,36 @@ func parseCAA(s string) (uint8, string, string) {
 	}
 	return 0, "issue", strings.Trim(s, `"`)
 }
-func handle(w dns.ResponseWriter, req *dns.Msg) {
+
+func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
 	resp := new(dns.Msg)
 	resp.SetReply(req)
 	resp.Authoritative = true
 	resp.RecursionAvailable = false
 	if len(req.Question) == 0 {
-		w.WriteMsg(resp)
+		_ = w.WriteMsg(resp)
 		return
 	}
 	q := req.Question[0]
-	z := findZone(q.Name)
+	z := s.findZone(q.Name)
 	if z == nil {
-		resp.Rcode = dns.RcodeRefused // 非托管域：拒绝（不递归）
-		w.WriteMsg(resp)
+		resp.Rcode = dns.RcodeRefused
+		_ = w.WriteMsg(resp)
 		return
 	}
 	switch q.Qtype {
 	case dns.TypeSOA:
-		resp.Answer = []dns.RR{soaRR(z.Domain)}
+		resp.Answer = []dns.RR{s.soaRR(z.Domain)}
 	case dns.TypeAXFR, dns.TypeIXFR:
-		resp.Rcode = dns.RcodeRefused // 禁止区传送
+		resp.Rcode = dns.RcodeRefused
 	default:
-		ans := []dns.RR{}
+		var ans []dns.RR
 		for _, rr := range toRRs(z, q.Qtype) {
 			if strings.EqualFold(rr.Header().Name, q.Name) {
 				ans = append(ans, rr)
 			}
 		}
 		if len(ans) == 0 {
-			// NODATA / NXDOMAIN 判定
 			exists := false
 			for _, r := range z.Records {
 				if strings.EqualFold(fqdn(r.Name, z.Domain), q.Name) {
@@ -259,27 +268,10 @@ func handle(w dns.ResponseWriter, req *dns.Msg) {
 			if !exists {
 				resp.Rcode = dns.RcodeNameError
 			}
-			resp.Ns = []dns.RR{soaRR(z.Domain)}
+			resp.Ns = []dns.RR{s.soaRR(z.Domain)}
 		} else {
 			resp.Answer = ans
 		}
 	}
-	w.WriteMsg(resp)
-}
-
-func main() {
-	addr := getenv("DNS_ADDR", ":53")
-	loadZones()
-	go watchZones()
-	dns.HandleFunc(".", handle)
-	go func() {
-		s := &dns.Server{Addr: addr, Net: "udp", UDPSize: 4096}
-		log.Println("dns authoritative udp on", addr)
-		if err := s.ListenAndServe(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-	s := &dns.Server{Addr: addr, Net: "tcp"}
-	log.Println("dns authoritative tcp on", addr)
-	log.Fatal(s.ListenAndServe())
+	_ = w.WriteMsg(resp)
 }

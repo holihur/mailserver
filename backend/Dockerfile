@@ -27,5 +27,5 @@ WORKDIR /app
 COPY --from=build /app/mailserver .
 VOLUME /data
 ENV PORT=8080 DATA_DIR=/data CERT_DIR=/data/certs
-EXPOSE 8080 2525 25 587 465 110 143 995 993
+EXPOSE 8080 5353/udp 5353/tcp 2525 25 587 465 110 143 995 993
 ENTRYPOINT ["./mailserver"]

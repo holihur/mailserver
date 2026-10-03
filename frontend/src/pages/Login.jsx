@@ -43,9 +43,13 @@ export default function Login() {
           <button onClick={() => setMode('register')} className={mode === 'register' ? 'font-semibold text-primary' : 'text-muted-foreground'}>{t('login.register')}</button>
         </div>
         <form onSubmit={submit} className="space-y-3">
-          <Input type="email" autoComplete="username" placeholder="you@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+          <Input type="text" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username"
+            placeholder="you@example.com · admin" value={form.email}
+            onChange={e => setForm({ ...form, email: e.target.value })} required />
           {mode === 'register' && <Input autoComplete="nickname" placeholder={t('login.nickname')} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />}
-          <Input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder={t('login.password')} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+          <Input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+            placeholder={t('login.password')} value={form.password}
+            onChange={e => setForm({ ...form, password: e.target.value })} required />
           {err && <p className="text-sm text-red-500" role="alert">{err}</p>}
           <Button className="w-full" disabled={loading}>
             {loading ? <><Loader2 className="animate-spin" />{t('login.pleaseWait')}</> : mode === 'login' ? t('login.loginBtn') : t('login.registerBtn')}

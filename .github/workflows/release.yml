@@ -17,7 +17,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) GoReleaser：构建「含前端」的后端单二进制 + DNS 二进制，创建 GitHub Release
+  # 1) GoReleaser：构建「含前端 + 内置 DNS」的单个二进制，创建 GitHub Release
   # ---------------------------------------------------------------------------
   goreleaser:
     name: GoReleaser
@@ -30,9 +30,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache-dependency-path: |
-            backend/go.sum
-            dns/go.sum
+          cache-dependency-path: backend/go.sum
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -56,11 +54,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # 2) 构建并推送多架构 Docker 镜像到 GHCR
-  #    api 镜像已内嵌前端；dns 为权威 DNS
+  # 2) 构建并推送 Docker 镜像到 GHCR（api 已内嵌前端 + 内置 DNS）
   # ---------------------------------------------------------------------------
   docker:
-    name: Publish Docker images
+    name: Publish Docker image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,7 +75,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push api (含前端)
+      - name: Build & push api
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -88,13 +85,3 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}-api:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}-api:latest
-
-      - name: Build & push dns
-        uses: docker/build-push-action@v6
-        with:
-          context: ./dns
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}-dns:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}-dns:latest

@@ -10,25 +10,11 @@ before:
     - sh -c "rm -rf backend/web && mkdir -p backend/web && touch backend/web/.keep && cp -r frontend/dist/. backend/web/"
 
 builds:
-  # 后端 + 内嵌前端（单二进制，纯 Go）
+  # 单二进制：API + SMTP/POP3/IMAP + 内置权威 DNS + 内嵌前端（纯 Go）
   - id: mailserver
     dir: backend
     main: .
     binary: mailserver
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w
-    env:
-      - CGO_ENABLED=0
-    goos: [linux]
-    goarch: [amd64, arm64]
-
-  # 自研权威 DNS（纯 Go）
-  - id: nsd
-    dir: dns
-    main: .
-    binary: nsd
     flags:
       - -trimpath
     ldflags:
@@ -43,10 +29,6 @@ archives:
     ids: [mailserver]
     formats: [tar.gz]
     name_template: "mailserver_{{ .Tag }}_linux_{{ .Arch }}"
-  - id: nsd
-    ids: [nsd]
-    formats: [tar.gz]
-    name_template: "nsd_{{ .Tag }}_linux_{{ .Arch }}"
 
 checksum:
   name_template: checksums.txt

@@ -14,6 +14,7 @@ import (
 	"mailserver/internal/certstore"
 	"mailserver/internal/config"
 	"mailserver/internal/db"
+	"mailserver/internal/dnsserver"
 	"mailserver/internal/handler"
 	"mailserver/internal/imap"
 	"mailserver/internal/pop3"
@@ -79,6 +80,12 @@ func main() {
 		go pop3.ServeTLS(":"+cfg.Pop3TLSPort, host, g, tlsConf)
 	}
 	go queue.Start(g, rt)
+
+	// 内置权威 DNS（与 API 同一进程/二进制；DNS_ADDR=off 可禁用）
+	if cfg.DNSAddr != "" && !strings.EqualFold(cfg.DNSAddr, "off") && !strings.EqualFold(cfg.DNSAddr, "none") {
+		go dnsserver.New(dns.ZonesPath, cfg.NSHost).Start(cfg.DNSAddr)
+		log.Println("authoritative dns on", cfg.DNSAddr)
+	}
 
 	renewCtx, cancelRenew := context.WithCancel(context.Background())
 	defer cancelRenew()

@@ -26,7 +26,8 @@ MODE="${MAILSERVER_MODE:-}"          # docker | binary
 DIR="${MAILSERVER_DIR:-/opt/mailserver}"
 MAIL_HOST="${MAIL_HOST:-}"
 ADMIN_EMAILS="${ADMIN_EMAILS:-}"
-WITH_DNS="${WITH_DNS:-1}"           # 1 安装内置 DNS
+WITH_DNS="${WITH_DNS:-1}"           # 1 启用内置权威 DNS（DNS_ADDR=:53）
+WEB_PORT="${WEB_PORT:-}"            # Web/API 端口：二进制默认 80，Docker 默认宿主机 80
 DATABASE_URL_IN="${DATABASE_URL:-}" # 二进制方式：使用已有 PostgreSQL；为空则本机自动安装
 TAG=""                              # 解析后的版本号，如 v1.0.0
 
@@ -67,7 +68,8 @@ usage() {
   --mail-host HOST    邮件域名，如 mail.example.com
   --admin EMAILS      管理员邮箱，逗号分隔
   --database-url DSN  使用已有 PostgreSQL（如 postgres://user:pass@host:5432/db?sslmode=disable）；不填则本机自动安装
-  --no-dns            不安装内置权威 DNS
+  --port PORT         Web/API 端口（二进制默认 80，Docker 默认宿主机 80）
+  --no-dns            不启用内置权威 DNS
   -h, --help          显示帮助
 EOF
 }
@@ -132,6 +134,7 @@ while [ $# -gt 0 ]; do
     --admin) ADMIN_EMAILS="${2:?--admin 需要参数}"; shift ;;
     --database-url) DATABASE_URL_IN="${2:?--database-url 需要参数}"; shift ;;
     --no-dns) WITH_DNS=0 ;;
+    --port) WEB_PORT="${2:?--port 需要参数}"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "未知参数: $1（--help 查看用法）" ;;
   esac
@@ -207,6 +210,9 @@ POSTGRES_PASSWORD=$(rand_secret)
 MAIL_HOST=${MAIL_HOST}
 ADMIN_EMAILS=${ADMIN_EMAILS}
 MAILSERVER_TAG=${TAG:-latest}
+# Web 端口：宿主机 HTTP_PORT，容器内 PORT
+HTTP_PORT=${WEB_PORT:-80}
+PORT=8080
 EOF
     chmod 600 "${DIR}/.env"
   else
@@ -240,34 +246,26 @@ install_binary() {
 
   log "下载二进制 (${TAG} / linux-${arch})…"
   download "${GH}/releases/download/${TAG}/mailserver_${TAG}_linux_${arch}.tar.gz" "${tmp}/api.tar.gz"
-  if [ "$WITH_DNS" = "1" ]; then
-    download "${GH}/releases/download/${TAG}/nsd_${TAG}_linux_${arch}.tar.gz"  "${tmp}/dns.tar.gz"
-  fi
 
   mkdir -p "${DIR}/bin" "${DIR}/data" /etc/mailserver
 
-  # mailserver 二进制已内嵌前端，单文件即可同时提供网页 + API
-  # 归档还含 .env.example/install.sh/compose，只取二进制与示例配置
+  # 单二进制：已内嵌前端与权威 DNS
   mkdir -p "${tmp}/x"
   tar -xzf "${tmp}/api.tar.gz" -C "${tmp}/x"
   install -m 0755 "${tmp}/x/mailserver" "${DIR}/bin/mailserver"
   if [ -f "${tmp}/x/.env.example" ]; then
     cp "${tmp}/x/.env.example" /etc/mailserver/mailserver.env.example
   fi
-  if [ "$WITH_DNS" = "1" ]; then
-    mkdir -p "${tmp}/xd"
-    tar -xzf "${tmp}/dns.tar.gz" -C "${tmp}/xd"
-    install -m 0755 "${tmp}/xd/nsd" "${DIR}/bin/nsd"
-  fi
 
   if [ ! -f /etc/mailserver/mailserver.env ]; then
     log "生成 /etc/mailserver/mailserver.env …"
     setup_postgres
     cat > /etc/mailserver/mailserver.env <<EOF
-PORT=80
+PORT=${WEB_PORT:-80}
 DATA_DIR=${DIR}/data
 DATABASE_URL=${DATABASE_URL_IN}
 CERT_DIR=${DIR}/data/certs
+DNS_ADDR=$([ "$WITH_DNS" = "1" ] && echo ":53" || echo "off")
 JWT_SECRET=$(rand_secret)
 MAIL_HOST=${MAIL_HOST}
 ADMIN_EMAILS=${ADMIN_EMAILS}
@@ -287,7 +285,7 @@ EOF
   log "写入 systemd 服务…"
   cat > /etc/systemd/system/mailserver.service <<EOF
 [Unit]
-Description=Mailserver API (HTTP + SMTP + POP3 + IMAP)
+Description=Mailserver (HTTP + SMTP + POP3 + IMAP + DNS)
 After=network.target
 
 [Service]
@@ -297,45 +295,25 @@ EnvironmentFile=/etc/mailserver/mailserver.env
 ExecStart=${DIR}/bin/mailserver
 Restart=always
 RestartSec=3
-# 低内存环境限制（可按需调整）
-MemoryMax=256M
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  if [ "$WITH_DNS" = "1" ]; then
-    cat > /etc/systemd/system/mailserver-dns.service <<EOF
-[Unit]
-Description=Mailserver authoritative DNS
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=${DIR}
-Environment=ZONES_PATH=${DIR}/data/zones.json
-Environment=DNS_ADDR=:53
-ExecStart=${DIR}/bin/nsd
-Restart=always
-RestartSec=3
+# 内置 DNS 需要绑定 :53
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
-MemoryMax=128M
+# 低内存环境限制（可按需调整）
+MemoryMax=320M
 
 [Install]
 WantedBy=multi-user.target
 EOF
-  fi
 
   systemctl daemon-reload
   systemctl enable --now mailserver.service
-  if [ "$WITH_DNS" = "1" ]; then systemctl enable --now mailserver-dns.service; fi
 
   sleep 1
   ok "二进制部署完成（版本 ${TAG}）"
   systemctl --no-pager --lines=0 status mailserver.service || true
   echo
-  log "Web 界面:  http://<服务器IP>/（前端已内嵌，无需 nginx）"
+  log "Web 界面:  http://<服务器IP>:${WEB_PORT:-80}/（前端已内嵌）"
+  [ "$WITH_DNS" = "1" ] && log "权威 DNS:  53/udp+tcp（内置在同一进程）"
   log "配置文件:  /etc/mailserver/mailserver.env"
   log "数据目录:  ${DIR}/data"
   log "查看日志:  journalctl -u mailserver -f"

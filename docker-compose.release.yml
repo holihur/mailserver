@@ -23,9 +23,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    ports: ["80:8080", "2525:2525", "25:2525", "587:587", "110:110", "143:143", "465:465", "993:993", "995:995"]
+    ports: ["${HTTP_PORT:-80}:${PORT:-8080}", "2525:2525", "25:2525", "587:587", "110:110", "143:143", "465:465", "993:993", "995:995", "53:5353/udp", "53:5353/tcp"]
     environment:
-      PORT: 8080
+      # 容器内监听 PORT（默认 8080）；宿主机映射 HTTP_PORT（默认 80）
+      PORT: ${PORT:-8080}
+      # 内置权威 DNS（容器内 5353，避免非 root 绑定 53）
+      DNS_ADDR: ${DNS_ADDR:-:5353}
       # PostgreSQL 连接串
       DATABASE_URL: ${DATABASE_URL:-postgres://mailserver:${POSTGRES_PASSWORD:-mailserver}@db:5432/mailserver?sslmode=disable}
       DATA_DIR: /data
@@ -46,19 +49,5 @@ services:
     volumes: [maildata:/data]
     restart: unless-stopped
     mem_limit: 192m
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-
-  dns:
-    image: ghcr.io/holihur/mailserver-dns:${MAILSERVER_TAG:-latest}
-    ports: ["53:53/udp", "53:53/tcp"]
-    environment:
-      ZONES_PATH: /data/zones.json
-    volumes: [maildata:/data]
-    restart: unless-stopped
-    mem_limit: 64m
 
 volumes: { maildata: {}, pgdata: {} }

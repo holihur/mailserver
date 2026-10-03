@@ -1,6 +1,8 @@
 # 自托管域名上线步骤（不用任何第三方 DNS 托管）
 
-你的 DNS 就是 `mailserver/dns/` 这个自研权威服务器，`backend` 是控制面（增删改解析记录 → 导出 `zones.json` → dns 10s 内热加载）。
+权威 DNS 已内置在**同一个 `mailserver` 二进制/进程**里（不再单独部署 `nsd`）：
+backend 在管理后台增删解析记录 → 导出 `zones.json` → 内置 DNS 每 10s 热加载。
+设置 `DNS_ADDR=off` 可关闭内置 DNS（只当普通邮件服务器用）。
 
 ## 0. 准备
 
@@ -10,10 +12,16 @@
 ## 1. 启动
 
 ```bash
-cd mailserver
-JWT_SECRET=$(openssl rand -hex 32) docker compose up -d --build
-# 本页添加域名 example.com，IP 填 1.2.3.4 → 自动生成 NS/A/MX/SPF/DMARC/DKIM
+# 一键二进制（默认启用内置 DNS，监听 :53）
+curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | sudo bash
+
+# 或 Docker（内置 DNS 在容器内 5353，宿主机映射 53）
+docker compose up -d --build
 ```
+
+然后在管理后台 `/#/dns` 添加域名 `example.com`，IP 填 `1.2.3.4` → 自动生成 NS/A/MX/SPF/DMARC/DKIM。
+
+> 端口：`HTTP_PORT`（Web，默认 80）、内置 DNS 默认 `:53`（Docker 内为 `:5353`）。
 
 ## 2. 注册商处设置（关键两步）
 
@@ -36,12 +44,13 @@ dig example.com MX               # 不加 @，走公网递归，应同样返回
 | 项目 | 做法 |
 |------|------|
 | PTR 反向解析 | 云厂商控制台把 `1.2.3.4` 的 PTR 设为 `mail.example.com`（收件方反垃圾用） |
-| DKIM | 服务器上 `openssl genrsa 2048` 生成 key，公钥替换 `dkim._domainkey` 那条 TXT 的 `PASTE_PUBLIC_KEY_HERE`，私钥给 SMTP 发件签名用 |
+| DKIM | 管理后台「邮件主机」一键生成密钥，公钥自动进 `dkim._domainkey` |
 | SPF/DMARC | 已自动生成，`dig TXT` 能查到即可 |
-| 25 端口 | 很多云默认封 25，需工单解封；解封前只能收不能向外发，可先用中继（`.env` 的 `SMTP_RELAY_*`）过渡 |
+| SSL | 管理后台「SSL 证书」一键申请 Let's Encrypt（或手动上传） |
+| 25 端口 | 很多云默认封 25，需工单解封；解封前只能收不能向外发，可先用中继（管理后台「发件中继」）过渡 |
 
 ## 5. 低内存说明
 
-- `dns` 服务常驻约 8~15MB（单进程、无递归、无缓存堆积），`api` 约 20~30MB
-- 不做公网递归（收到非托管域直接 REFUSED），既省内存又防 DNS 放大攻击连带
-- 记录全放 SQLite，由 backend 统一导出文件，dns 只读文件，两个进程不争库
+- 单个 `mailserver` 进程常驻约 20~35MB（含 API、SMTP/POP3/IMAP、权威 DNS、内嵌前端）
+- 不做公网递归（收到非托管域直接 REFUSED），既省内存又防 DNS 放大攻击
+- 记录全放 PostgreSQL，由 backend 统一导出 `zones.json`，内置 DNS 只读文件

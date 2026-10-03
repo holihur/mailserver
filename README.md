@@ -21,10 +21,10 @@ mailserver/
 │   │   ├── certstore/          # TLS 证书热替换
 │   │   ├── letsencrypt/        # ACME DNS-01 自动签发
 │   │   ├── runtimecfg/ secret/ # 后台可改配置 / 凭证加密
+│   │   ├── dnsserver/          # 内置权威 DNS（与 API 同进程）
 │   │   ├── smtp/ pop3/ imap/ queue/ dkim/
 │   ├── go.mod
 │   └── .env.example
-├── dns/              # 自研权威 DNS (miekg/dns)
 ├── frontend/         # React + Vite + Tailwind + shadcn 风格 ui/ (pnpm)
 │   ├── package.json
 │   ├── pnpm-lock.yaml
@@ -108,7 +108,7 @@ API 默认 `:8080`，SMTP 入站 `:2525`，前端 dev `:5173`。
 
 ## 一键安装（二进制）
 
-无需编译、无需 Docker：自动下载预编译的单二进制（已内嵌网页），用 systemd 运行。
+无需编译、无需 Docker：自动下载预编译的单二进制（已内嵌网页与权威 DNS），用 systemd 运行。
 数据库使用 PostgreSQL；未提供 `--database-url` 时，脚本会尝试在本机自动安装并初始化 PostgreSQL。
 
 ```bash
@@ -139,7 +139,7 @@ curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh 
 
 - **CI**（`.github/workflows/ci.yml`）：push / PR 到 `main` 时校验 backend、dns（`go vet` + `build` + `test`）与 frontend（`pnpm install --frozen-lockfile` + `build`）。
 - **Release**（`.github/workflows/release.yml`）：推送 `v*` 标签时自动：
-  1. 用 GoReleaser 编译 Linux `amd64`/`arm64` 的单二进制（内嵌前端）与 DNS 二进制，附 `checksums.txt` 并创建 GitHub Release；
+  1. 用 GoReleaser 编译 Linux `amd64`/`arm64` 的单个二进制（内嵌前端 + 权威 DNS），附 `checksums.txt` 并创建 GitHub Release；
   2. 构建并推送多架构 Docker 镜像到 GHCR。
 
 发布新版本：
@@ -154,5 +154,4 @@ git tag v0.2.1 && git push origin v0.2.1
 cd frontend && pnpm install --frozen-lockfile && pnpm run build
 rm -rf ../backend/web && mkdir -p ../backend/web && cp -r dist/. ../backend/web/
 cd ../backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o mailserver .
-cd ../dns   && CGO_ENABLED=0 go build -ldflags="-s -w" -o nsd .
 ```

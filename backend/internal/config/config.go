@@ -26,6 +26,8 @@ type Config struct {
 	DatabaseURL   string // PostgreSQL DSN（必填）
 	DataDir       string // 数据目录（zones.json、证书等）
 	CertDir       string // 证书 / ACME 缓存目录
+	DNSAddr       string // 内置权威 DNS 监听地址（:53）；off 则禁用
+	NSHost        string // NS 记录主机名，如 ns1.example.com.
 	RelayHost     string // 25 被封时的外发中继（587+STARTTLS）
 	RelayPort     string
 	RelayUser     string
@@ -66,6 +68,8 @@ func Load() Config {
 		DatabaseURL:   dbURL,
 		DataDir:       dataDir,
 		CertDir:       certDir,
+		DNSAddr:       getenv("DNS_ADDR", ":53"),
+		NSHost:        os.Getenv("NS_HOST"),
 		RelayHost:     os.Getenv("SMTP_RELAY_HOST"),
 		RelayPort:     getenv("SMTP_RELAY_PORT", "587"),
 		RelayUser:     os.Getenv("SMTP_RELAY_USER"),
