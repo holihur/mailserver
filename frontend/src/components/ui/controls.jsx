@@ -16,6 +16,14 @@ export function Input({ className, ...p }) {
   return <input className={cn('flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30', className)} {...p} />
 }
 
+export function Select({ className, ...p }) {
+  return <select className={cn('flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30', className)} {...p} />
+}
+
+export function Label({ className, ...p }) {
+  return <label className={cn('text-sm font-medium', className)} {...p} />
+}
+
 export function Textarea({ className, ...p }) {
   return <textarea className={cn('flex min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30', className)} {...p} />
 }

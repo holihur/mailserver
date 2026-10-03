@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card } from '../components/ui/controls'
-import { Mail } from 'lucide-react'
+import { LangToggle, ThemeToggle } from '../components/HeaderControls'
+import { useI18n } from '../lib/i18n'
+import { Mail, Loader2 } from 'lucide-react'
 
 export default function Login() {
+  const { t } = useI18n()
   const nav = useNavigate()
   const [mode, setMode] = useState('login')
   const [form, setForm] = useState({ email: '', name: '', password: '' })
@@ -24,25 +27,31 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen grid place-items-center bg-muted/40 p-4">
+    <div className="relative min-h-screen grid place-items-center bg-muted/40 p-4">
+      <div className="absolute top-3 right-3 flex items-center gap-1">
+        <LangToggle />
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-sm p-6 space-y-4">
         <div className="flex items-center gap-2">
           <span className="grid place-items-center size-9 rounded-md bg-primary text-primary-foreground"><Mail size={18} /></span>
-          <div><h1 className="font-semibold">Mailserver</h1><p className="text-xs text-muted-foreground">轻量 webmail</p></div>
+          <div><h1 className="font-semibold">Mailserver</h1><p className="text-xs text-muted-foreground">{t('login.title')}</p></div>
         </div>
         <div className="flex gap-2 text-sm">
-          <button onClick={() => setMode('login')} className={mode === 'login' ? 'font-semibold text-primary' : 'text-muted-foreground'}>登录</button>
+          <button onClick={() => setMode('login')} className={mode === 'login' ? 'font-semibold text-primary' : 'text-muted-foreground'}>{t('login.login')}</button>
           <span className="text-muted-foreground">/</span>
-          <button onClick={() => setMode('register')} className={mode === 'register' ? 'font-semibold text-primary' : 'text-muted-foreground'}>注册</button>
+          <button onClick={() => setMode('register')} className={mode === 'register' ? 'font-semibold text-primary' : 'text-muted-foreground'}>{t('login.register')}</button>
         </div>
         <form onSubmit={submit} className="space-y-3">
-          <Input placeholder="you@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
-          {mode === 'register' && <Input placeholder="昵称" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />}
-          <Input type="password" placeholder="密码 ≥6位" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
-          {err && <p className="text-sm text-red-500">{err}</p>}
-          <Button className="w-full" disabled={loading}>{loading ? '请稍候…' : mode === 'login' ? '登录' : '注册并登录'}</Button>
+          <Input type="email" autoComplete="username" placeholder="you@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+          {mode === 'register' && <Input autoComplete="nickname" placeholder={t('login.nickname')} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />}
+          <Input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} placeholder={t('login.password')} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+          {err && <p className="text-sm text-red-500" role="alert">{err}</p>}
+          <Button className="w-full" disabled={loading}>
+            {loading ? <><Loader2 className="animate-spin" />{t('login.pleaseWait')}</> : mode === 'login' ? t('login.loginBtn') : t('login.registerBtn')}
+          </Button>
         </form>
-        <p className="text-xs text-muted-foreground">默认后端 <code>/api</code>，Vite 已代理到 :8080。</p>
+        <p className="text-xs text-muted-foreground">{t('login.hint')}</p>
       </Card>
     </div>
   )

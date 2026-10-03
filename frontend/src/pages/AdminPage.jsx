@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { Card, Badge } from '../components/ui/controls'
+import { Card } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
-import { Server, ShieldCheck, Cloud, Users, KeyRound, CheckCircle2, Circle, Globe } from 'lucide-react'
+import { useI18n } from '../lib/i18n'
+import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe } from 'lucide-react'
 
 export default function AdminPage() {
+  const { t } = useI18n()
   const [ov, setOv] = useState(null)
   const [tls, setTls] = useState(null)
   const [settings, setSettings] = useState(null)
@@ -17,24 +19,23 @@ export default function AdminPage() {
     api.providers().then(setProviders).catch(() => {})
   }, [])
 
-  const host = settings?.mail_host
   const steps = [
-    { ok: !!host, label: '填写邮件域名（如 mail.example.com）', to: '#/admin/settings' },
-    { ok: providers.length > 0, label: '接入域名服务商（阿里云 / Cloudflare）', to: '#/admin/providers' },
-    { ok: !!tls?.cert?.exists, label: '配置 SSL 证书（一键申请 Let\'s Encrypt）', to: '#/admin/ssl' },
-    { ok: !!settings?.dkim_ready, label: '生成 DKIM 密钥（防进垃圾箱）', to: '#/admin/settings' },
-    { ok: (ov?.users || 0) > 0, label: '创建邮箱账号', to: '#/admin/users' },
+    { ok: !!settings?.mail_host, label: t('settings.mailDomain'), to: '#/admin/settings' },
+    { ok: providers.length > 0, label: t('providers.title'), to: '#/admin/providers' },
+    { ok: !!tls?.cert?.exists, label: t('ssl.title'), to: '#/admin/ssl' },
+    { ok: !!settings?.dkim_ready, label: t('settings.dkim'), to: '#/admin/settings' },
+    { ok: (ov?.users || 0) > 0, label: t('users.create'), to: '#/admin/users' },
   ]
 
   return (
-    <AdminShell title="概览" desc="按下面的清单一步步配置，通常 5 分钟就能收发邮件。">
+    <AdminShell title={t('admin.dashboard')} desc={t('settings.desc')}>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          ['邮箱账号', ov?.users ?? '—', Users, '#/admin/users'],
-          ['托管域名', ov?.domains ?? '—', Globe, '#/admin/providers'],
-          ['邮件总数', ov?.mails ?? '—', Server, null],
-          ['待发出', ov?.pending ?? '—', Cloud, null],
-        ].map(([k, v, Icon, to]) => (
+          [t('admin.users2'), ov?.users ?? '—', Users],
+          [t('admin.domains'), ov?.domains ?? '—', Globe],
+          [t('admin.mails'), ov?.mails ?? '—', Server],
+          [t('admin.pending'), ov?.pending ?? '—', Cloud],
+        ].map(([k, v, Icon]) => (
           <Card key={k} className="p-3">
             <div className="flex items-center gap-1 text-xs text-muted-foreground"><Icon size={13} />{k}</div>
             <div className="text-2xl font-semibold mt-1">{v}</div>
@@ -43,7 +44,7 @@ export default function AdminPage() {
       </div>
 
       <Card className="p-4">
-        <b className="text-sm">配置清单</b>
+        <b className="text-sm">{t('admin.checklist')}</b>
         <div className="mt-3 space-y-1">
           {steps.map((s, i) => (
             <a key={i} href={s.to} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted text-sm">
@@ -55,14 +56,10 @@ export default function AdminPage() {
       </Card>
 
       <div className="grid sm:grid-cols-3 gap-3">
-        <QuickCard to="#/admin/settings" icon={Server} title="邮件主机" desc="域名、公网 IP、DKIM、发件中继" />
-        <QuickCard to="#/admin/ssl" icon={ShieldCheck} title="SSL 证书" desc="自动申请或手动上传" />
-        <QuickCard to="#/admin/providers" icon={Cloud} title="域名服务商" desc="一键下发 MX/SPF/DKIM" />
+        <QuickCard to="#/admin/settings" icon={Server} title={t('admin.host')} desc={t('admin.quickHost')} />
+        <QuickCard to="#/admin/ssl" icon={ShieldCheck} title={t('admin.ssl')} desc={t('admin.quickSsl')} />
+        <QuickCard to="#/admin/providers" icon={Cloud} title={t('admin.providers')} desc={t('admin.quickProviders')} />
       </div>
-
-      <Card className="p-4 text-xs text-muted-foreground">
-        提示：改动大部分设置会立即生效，无需重启；SMTP/IMAP/POP3 的端口号等少数系统参数需要重启进程。
-      </Card>
     </AdminShell>
   )
 }

@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  color-scheme: light;
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;
@@ -15,14 +16,32 @@
   --radius: 0.5rem;
 }
 .dark {
+  color-scheme: dark;
   --background: 222.2 84% 4.9%;
   --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
+  --card: 222.2 84% 6.5%;
   --card-foreground: 210 40% 98%;
   --primary: 217.2 91.2% 59.8%;
   --primary-foreground: 222.2 47.4% 11.2%;
   --muted: 217.2 32.6% 17.5%;
   --muted-foreground: 215 20.2% 65.1%;
-  --border: 217.2 32.6% 17.5%;
+  --border: 217.2 32.6% 20%;
 }
-body { @apply bg-background text-foreground antialiased; }
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+  @apply bg-background text-foreground antialiased;
+  min-height: 100dvh;
+  transition: background-color .2s ease, color .2s ease;
+}
+
+/* 更细的滚动条，移动端不占空间 */
+* { scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { @apply bg-border rounded-full; }
+
+/* 触屏点击反馈 */
+button, a { -webkit-tap-highlight-color: transparent; }
+
+/* 安全区（iPhone 刘海/底部） */
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }

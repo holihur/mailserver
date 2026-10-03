@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
-import { Plus, Trash2, UserCog, Ban, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { useI18n } from '../lib/i18n'
+import { Plus, Trash2, KeyRound, Loader2, AlertCircle, CheckCircle2, UserCog } from 'lucide-react'
 
 export default function AdminUsers() {
+  const { t } = useI18n()
   const [users, setUsers] = useState([])
   const [form, setForm] = useState({ email: '', name: '', password: '' })
   const [msg, setMsg] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState('')
 
   async function load() {
     try { setUsers(await api.adminUsers()) } catch (e) { setMsg(e.message) }
@@ -17,64 +19,78 @@ export default function AdminUsers() {
 
   async function create(e) {
     e.preventDefault()
-    setBusy(true); setMsg('')
+    setBusy('create'); setMsg('')
     try {
       await api.adminUserCreate(form)
       setForm({ email: '', name: '', password: '' })
-      await load()
-      setMsg('账号已创建')
-    } catch (e) { setMsg(e.message) } finally { setBusy(false) }
+      setMsg(t('users.create'))
+      load()
+    } catch (e) { setMsg(e.message) } finally { setBusy('') }
   }
 
-  async function patch(u, body) {
-    try { await api.adminUserPatch(u.id, body); await load() } catch (e) { alert(e.message) }
+  async function resetPass(u) {
+    const pw = prompt(`${t('users.changePass')}: ${u.email} (≥6)`)
+    if (!pw) return
+    try { await api.adminUserPatch(u.id, { password: pw }); setMsg(t('users.changePass')) } catch (e) { setMsg(e.message) }
   }
-  async function resetPwd(u) {
-    const p = prompt(`为 ${u.email} 设置新密码（至少 6 位）`)
-    if (p) await patch(u, { password: p })
+
+  async function toggle(u, key) {
+    try { await api.adminUserPatch(u.id, { [key]: !u[key] }); load() } catch (e) { setMsg(e.message) }
   }
+
   async function del(u) {
-    if (confirm(`删除 ${u.email} 及其全部邮件？`)) {
-      try { await api.adminUserDelete(u.id); await load() } catch (e) { alert(e.message) }
-    }
+    if (!confirm(`${t('common.delete')} ${u.email}?`)) return
+    try { await api.adminUserDelete(u.id); setMsg(t('common.delete')); load() } catch (e) { setMsg(e.message) }
   }
 
   return (
-    <AdminShell title="用户账号" desc="为你的域名创建邮箱账号。创建前请先在「域名服务商」托管对应域名。">
+    <AdminShell title={t('users.title')} desc={t('users.desc')}>
       <Card className="p-4">
-        <b className="text-sm">新建邮箱</b>
-        <form onSubmit={create} className="grid sm:grid-cols-4 gap-2 mt-3">
-          <Input placeholder="someone@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
-          <Input placeholder="姓名（可选）" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-          <Input type="password" placeholder="密码（≥6 位）" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
-          <Button size="sm" disabled={busy}>{busy ? <Loader2 className="animate-spin" /> : <Plus />}创建</Button>
+        <div className="flex items-center gap-2 mb-3"><UserCog size={16} /><b className="text-sm">{t('users.create')}</b></div>
+        <form onSubmit={create} className="grid sm:grid-cols-4 gap-3 items-end">
+          <label className="text-sm space-y-1">
+            <span className="font-medium">{t('users.email')}</span>
+            <Input type="email" placeholder="user@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
+          </label>
+          <label className="text-sm space-y-1">
+            <span className="font-medium">{t('users.name')}</span>
+            <Input placeholder="Zhang San" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+          </label>
+          <label className="text-sm space-y-1">
+            <span className="font-medium">{t('users.password')}</span>
+            <Input type="text" placeholder="≥6" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+          </label>
+          <Button disabled={busy === 'create'}>
+            {busy === 'create' ? <Loader2 className="animate-spin" /> : <Plus />}{t('common.create')}
+          </Button>
         </form>
-        {msg && <p className="text-xs mt-2 flex items-center gap-1">
-          {msg.includes('已创建') ? <CheckCircle2 size={12} className="text-green-600" /> : <AlertCircle size={12} className="text-yellow-600" />}{msg}
-        </p>}
+        <p className="text-xs text-muted-foreground mt-2">{t('users.hostHint')}</p>
       </Card>
 
+      {msg && <p className="text-sm flex items-center gap-1 text-muted-foreground"><AlertCircle size={14} />{msg}</p>}
+
       <Card className="p-4 overflow-x-auto">
-        <b className="text-sm">全部账号（{users.length}）</b>
-        <table className="w-full text-sm mt-3">
-          <thead><tr className="text-left text-muted-foreground text-xs"><th className="py-1">邮箱</th><th>姓名</th><th>邮件</th><th>状态</th><th></th></tr></thead>
+        <b className="text-sm">{t('users.all', { n: users.length })}</b>
+        <table className="w-full text-sm mt-3 min-w-[560px]">
+          <thead><tr className="text-left text-xs text-muted-foreground">
+            <th className="py-1">{t('users.email')}</th><th>{t('users.name')}</th><th>{t('users.mails')}</th><th>{t('users.status')}</th><th className="text-right">{t('users.actions')}</th>
+          </tr></thead>
           <tbody>
             {users.map(u => (
               <tr key={u.id} className="border-t border-border">
-                <td className="py-2 pr-2 font-mono text-xs">{u.email}{u.admin && <Badge className="ml-2 text-blue-600">管理员</Badge>}</td>
+                <td className="py-2 pr-2">{u.email} {u.admin && <Badge>{t('users.adminBadge')}</Badge>}</td>
                 <td className="pr-2">{u.name}</td>
-                <td className="pr-2 text-muted-foreground">{u.mail_count ?? 0}</td>
-                <td className="pr-2">{u.disabled ? <Badge className="text-red-500">已禁用</Badge> : <Badge className="text-green-600">正常</Badge>}</td>
-                <td className="whitespace-nowrap text-right">
-                  <Button variant="ghost" size="icon" title={u.disabled ? '启用' : '禁用'} onClick={() => patch(u, { disabled: !u.disabled })}>
-                    {u.disabled ? <CheckCircle2 /> : <Ban />}
-                  </Button>
-                  <Button variant="ghost" size="icon" title="重置密码" onClick={() => resetPwd(u)}><UserCog /></Button>
-                  <Button variant="ghost" size="icon" title="删除" onClick={() => del(u)}><Trash2 /></Button>
+                <td className="pr-2">{u.mail_count}</td>
+                <td className="pr-2">{u.disabled ? <span className="text-red-500 text-xs">{t('users.disabled')}</span> : <span className="text-green-600 text-xs">{t('users.normal')}</span>}</td>
+                <td className="text-right whitespace-nowrap">
+                  <Button variant="ghost" size="sm" onClick={() => resetPass(u)}><KeyRound />{t('users.changePass')}</Button>
+                  <Button variant="ghost" size="sm" onClick={() => toggle(u, 'admin')}>{u.admin ? t('users.unsetAdmin') : t('users.setAdmin')}</Button>
+                  <Button variant="ghost" size="sm" onClick={() => toggle(u, 'disabled')}>{u.disabled ? t('users.enable') : t('users.disable')}</Button>
+                  <Button variant="ghost" size="icon" onClick={() => del(u)} aria-label={t('common.delete')}><Trash2 /></Button>
                 </td>
               </tr>
             ))}
-            {users.length === 0 && <tr><td colSpan={5} className="py-4 text-center text-muted-foreground text-sm">还没有账号</td></tr>}
+            {users.length === 0 && <tr><td colSpan={5} className="py-4 text-center text-muted-foreground">{t('users.none')}</td></tr>}
           </tbody>
         </table>
       </Card>
