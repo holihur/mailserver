@@ -7,13 +7,14 @@ function headers() {
 
 async function req(path, opts = {}) {
   const r = await fetch(BASE + path, { ...opts, headers: headers() })
-  if (r.status === 401) { localStorage.removeItem('token'); location.hash = '#/login' }
+  if (r.status === 401) { localStorage.removeItem('token'); if (location.pathname !== '/login') location.href = '/login' }
   const data = await r.json().catch(() => ({}))
   if (!r.ok) throw new Error(data.error || '请求失败')
   return data
 }
 
 export const api = {
+  site: () => req('/api/site'),
   register: (b) => req('/api/register', { method: 'POST', body: JSON.stringify(b) }),
   login: (b) => req('/api/login', { method: 'POST', body: JSON.stringify(b) }),
   me: () => req('/api/me'),

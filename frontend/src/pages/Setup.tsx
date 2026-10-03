@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Card, Badge } from '../components/ui/controls'
 import { ThemeToggle, LangToggle } from '../components/HeaderControls'
@@ -21,13 +22,13 @@ export default function Setup() {
     [t('setup.smtp'), `${host}:587`, t('setup.starttls'), t('setup.authHint')],
     [t('setup.pop3'), `${host}:110`, t('setup.plain'), t('setup.authHint')],
     [t('setup.imap'), `${host}:143`, t('setup.dkimReady'), t('setup.authHint')],
-    [t('setup.webmail'), `${host}/#/`, '—', t('setup.webmail')],
+    [t('setup.webmail'), `${host}/`, '—', t('setup.webmail')],
   ]
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <a href="#/" className="font-semibold">← Mailserver</a>
+        <Link to="/" className="font-semibold">← Mailserver</Link>
         <Badge>{t('setup.title')}</Badge>
         <div className="flex-1" />
         <LangToggle />

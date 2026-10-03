@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Card } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -20,11 +21,11 @@ export default function AdminPage() {
   }, [])
 
   const steps = [
-    { ok: !!settings?.mail_host, label: t('settings.mailDomain'), to: '#/admin/settings' },
-    { ok: providers.length > 0, label: t('providers.title'), to: '#/admin/providers' },
-    { ok: !!tls?.cert?.exists, label: t('ssl.title'), to: '#/admin/ssl' },
-    { ok: !!settings?.dkim_ready, label: t('settings.dkim'), to: '#/admin/settings' },
-    { ok: (ov?.users || 0) > 0, label: t('users.create'), to: '#/admin/users' },
+    { ok: !!settings?.mail_host, label: t('settings.mailDomain'), to: '/admin/settings' },
+    { ok: providers.length > 0, label: t('providers.title'), to: '/admin/providers' },
+    { ok: !!tls?.cert?.exists, label: t('ssl.title'), to: '/admin/ssl' },
+    { ok: !!settings?.dkim_ready, label: t('settings.dkim'), to: '/admin/settings' },
+    { ok: (ov?.users || 0) > 0, label: t('users.create'), to: '/admin/users' },
   ]
 
   return (
@@ -47,31 +48,31 @@ export default function AdminPage() {
         <b className="text-sm">{t('admin.checklist')}</b>
         <div className="mt-3 space-y-1">
           {steps.map((s, i) => (
-            <a key={i} href={s.to} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted text-sm">
+            <Link key={i} to={s.to} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted text-sm">
               {s.ok ? <CheckCircle2 size={16} className="text-green-600" /> : <Circle size={16} className="text-muted-foreground" />}
               <span className={s.ok ? 'text-muted-foreground line-through' : ''}>{s.label}</span>
-            </a>
+            </Link>
           ))}
         </div>
       </Card>
 
       <div className="grid sm:grid-cols-3 gap-3">
-        <QuickCard to="#/admin/settings" icon={Server} title={t('admin.host')} desc={t('admin.quickHost')} />
-        <QuickCard to="#/admin/ssl" icon={ShieldCheck} title={t('admin.ssl')} desc={t('admin.quickSsl')} />
-        <QuickCard to="#/admin/providers" icon={Cloud} title={t('admin.providers')} desc={t('admin.quickProviders')} />
+        <QuickCard to="/admin/settings" icon={Server} title={t('admin.host')} desc={t('admin.quickHost')} />
+        <QuickCard to="/admin/ssl" icon={ShieldCheck} title={t('admin.ssl')} desc={t('admin.quickSsl')} />
+        <QuickCard to="/admin/providers" icon={Cloud} title={t('admin.providers')} desc={t('admin.quickProviders')} />
       </div>
     </AdminShell>
   )
 }
 
-function QuickCard({ to, icon: Icon, title, desc }) {
+function QuickCard({ to, icon: Icon, title, desc }: any) {
   return (
-    <a href={to} className="block">
+    <Link to={to} className="block">
       <Card className="p-4 hover:bg-muted/50 transition-colors h-full">
         <Icon size={18} />
         <div className="font-medium mt-2">{title}</div>
         <div className="text-xs text-muted-foreground mt-0.5">{desc}</div>
       </Card>
-    </a>
+    </Link>
   )
 }

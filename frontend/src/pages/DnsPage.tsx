@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Select } from '../components/ui/controls'
 import { ThemeToggle, LangToggle } from '../components/HeaderControls'
@@ -45,7 +46,7 @@ export default function DnsPage() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <a href="#/" className="font-semibold">← Mailserver</a>
+        <Link to="/" className="font-semibold">← Mailserver</Link>
         <Badge><Globe size={12} /> {t('dns.title')}</Badge>
         <div className="flex-1" />
         <LangToggle />

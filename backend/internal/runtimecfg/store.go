@@ -5,6 +5,7 @@ package runtimecfg
 
 import (
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,17 +21,18 @@ import (
 
 // 配置键
 const (
-	KeyMailHost    = "mail_host"    // 邮件主机名（greeting / Message-ID / MX 目标）
-	KeyPublicIP    = "public_ip"    // 服务器公网 IPv4
-	KeyAdminEmails = "admin_emails" // 管理员邮箱，逗号分隔
-	KeyRelayHost   = "relay_host"
-	KeyRelayPort   = "relay_port"
-	KeyRelayUser   = "relay_user"
-	KeyRelayPass   = "relay_pass"
-	KeyRelayFrom   = "relay_from"
-	KeyDKIMDomain  = "dkim_domain"
-	KeyDKIMSel     = "dkim_selector"
-	KeyDKIMKeyEnc  = "dkim_key_enc" // AES-GCM 加密的 DKIM 私钥 PEM
+	KeyMailHost     = "mail_host"    // 邮件主机名（greeting / Message-ID / MX 目标）
+	KeyPublicIP     = "public_ip"    // 服务器公网 IPv4
+	KeyAdminEmails  = "admin_emails" // 管理员邮箱，逗号分隔
+	KeyRelayHost    = "relay_host"
+	KeyRelayPort    = "relay_port"
+	KeyRelayUser    = "relay_user"
+	KeyRelayPass    = "relay_pass"
+	KeyRelayFrom    = "relay_from"
+	KeyDKIMDomain   = "dkim_domain"
+	KeyDKIMSel      = "dkim_selector"
+	KeyDKIMKeyEnc   = "dkim_key_enc"         // AES-GCM 加密的 DKIM 私钥 PEM
+	KeyRegistration = "registration_enabled" // 是否开放注册（默认关闭；首个用户始终可注册）
 )
 
 // Relay 外发中继配置。
@@ -139,6 +141,17 @@ func (s *Store) MailHost() string    { return s.get(KeyMailHost) }
 func (s *Store) PublicIP() string    { return s.get(KeyPublicIP) }
 func (s *Store) AdminEmails() string { return s.get(KeyAdminEmails) }
 
+// RegistrationEnabled 是否开放注册（默认关闭）。
+func (s *Store) RegistrationEnabled() bool { return parseBool(s.get(KeyRegistration)) }
+
+func parseBool(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "on", "yes":
+		return true
+	}
+	return false
+}
+
 // Relay 返回当前外发中继配置。
 func (s *Store) Relay() Relay {
 	return Relay{
@@ -210,17 +223,18 @@ func (s *Store) Snapshot() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return map[string]any{
-		"mail_host":      s.vals[KeyMailHost],
-		"public_ip":      s.vals[KeyPublicIP],
-		"admin_emails":   s.vals[KeyAdminEmails],
-		"relay_host":     s.vals[KeyRelayHost],
-		"relay_port":     s.vals[KeyRelayPort],
-		"relay_user":     s.vals[KeyRelayUser],
-		"relay_from":     s.vals[KeyRelayFrom],
-		"relay_pass_set": s.vals[KeyRelayPass] != "",
-		"dkim_domain":    s.vals[KeyDKIMDomain],
-		"dkim_selector":  s.vals[KeyDKIMSel],
-		"dkim_ready":     s.signer.Load() != nil,
+		"mail_host":            s.vals[KeyMailHost],
+		"public_ip":            s.vals[KeyPublicIP],
+		"admin_emails":         s.vals[KeyAdminEmails],
+		"relay_host":           s.vals[KeyRelayHost],
+		"relay_port":           s.vals[KeyRelayPort],
+		"relay_user":           s.vals[KeyRelayUser],
+		"relay_from":           s.vals[KeyRelayFrom],
+		"relay_pass_set":       s.vals[KeyRelayPass] != "",
+		"dkim_domain":          s.vals[KeyDKIMDomain],
+		"dkim_selector":        s.vals[KeyDKIMSel],
+		"dkim_ready":           s.signer.Load() != nil,
+		"registration_enabled": parseBool(s.vals[KeyRegistration]),
 	}
 }
 

@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh 
 docker compose up -d --build
 ```
 
-然后在管理后台 `/#/dns` 添加域名 `example.com`，IP 填 `1.2.3.4` → 自动生成 NS/A/MX/SPF/DMARC/DKIM。
+然后在管理后台 `/dns` 添加域名 `example.com`，IP 填 `1.2.3.4` → 自动生成 NS/A/MX/SPF/DMARC/DKIM。
 
 > 端口：`HTTP_PORT`（Web，默认 80）、内置 DNS 默认 `:53`（Docker 内为 `:5353`）。
 

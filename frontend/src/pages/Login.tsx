@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card } from '../components/ui/controls'
@@ -13,6 +13,10 @@ export default function Login() {
   const [form, setForm] = useState({ email: '', name: '', password: '' })
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
+  const [regOpen, setRegOpen] = useState(false)
+
+  useEffect(() => { api.site().then((s: any) => setRegOpen(!!s.registration)).catch(() => {}) }, [])
+  useEffect(() => { if (!regOpen && mode === 'register') setMode('login') }, [regOpen, mode])
 
   async function submit(e) {
     e.preventDefault()
@@ -39,8 +43,10 @@ export default function Login() {
         </div>
         <div className="flex gap-2 text-sm">
           <button onClick={() => setMode('login')} className={mode === 'login' ? 'font-semibold text-primary' : 'text-muted-foreground'}>{t('login.login')}</button>
-          <span className="text-muted-foreground">/</span>
-          <button onClick={() => setMode('register')} className={mode === 'register' ? 'font-semibold text-primary' : 'text-muted-foreground'}>{t('login.register')}</button>
+          {regOpen && <>
+            <span className="text-muted-foreground">/</span>
+            <button onClick={() => setMode('register')} className={mode === 'register' ? 'font-semibold text-primary' : 'text-muted-foreground'}>{t('login.register')}</button>
+          </>}
         </div>
         <form onSubmit={submit} className="space-y-3">
           <Input type="text" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username"
@@ -55,7 +61,7 @@ export default function Login() {
             {loading ? <><Loader2 className="animate-spin" />{t('login.pleaseWait')}</> : mode === 'login' ? t('login.loginBtn') : t('login.registerBtn')}
           </Button>
         </form>
-        <p className="text-xs text-muted-foreground">{t('login.hint')}</p>
+        <p className="text-xs text-muted-foreground">{regOpen ? t('login.hint') : t('login.registerClosed')}</p>
       </Card>
     </div>
   )

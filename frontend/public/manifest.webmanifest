@@ -2,7 +2,7 @@
   "name": "Mailserver",
   "short_name": "Mailserver",
   "description": "Lightweight full-stack mail server webmail",
-  "start_url": "./#/",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",

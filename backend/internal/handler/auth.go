@@ -40,10 +40,15 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := strings.ToLower(strings.TrimSpace(in.Email))
-	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.MinCost) // 低内存用 MinCost
-	u := model.User{Email: email, Name: in.Name, PassHash: string(hash)}
 	var n int64
 	a.DB.Model(&model.User{}).Count(&n)
+	// 默认关闭注册；首个用户始终可注册（否则无人能进）
+	if n > 0 && (a.RT == nil || !a.RT.RegistrationEnabled()) {
+		writeJSON(w, 403, map[string]string{"error": "注册已关闭，请联系管理员开通账号"})
+		return
+	}
+	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.MinCost) // 低内存用 MinCost
+	u := model.User{Email: email, Name: in.Name, PassHash: string(hash)}
 	if n == 0 || isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 		u.Admin = true // 首个注册用户即管理员；名单命中也提权
 	}
@@ -53,6 +58,14 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	tok, _ := auth.Sign(u.ID, u.Email)
 	writeJSON(w, 201, map[string]any{"token": tok, "user": u})
+}
+
+// GET /api/site -> 公开站点配置（是否需要显示注册入口）
+func (a *Auth) Site(w http.ResponseWriter, r *http.Request) {
+	var n int64
+	a.DB.Model(&model.User{}).Count(&n)
+	open := n == 0 || (a.RT != nil && a.RT.RegistrationEnabled())
+	writeJSON(w, 200, map[string]any{"registration": open, "has_users": n > 0})
 }
 
 func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {

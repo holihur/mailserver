@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2 } from 'lucide-react'
+import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2, UserPlus } from 'lucide-react'
 
 export default function AdminSettings() {
   const { t } = useI18n()
@@ -28,6 +28,7 @@ export default function AdminSettings() {
         mail_host: s.mail_host || '', public_ip: s.public_ip || '', admin_emails: s.admin_emails || '',
         relay_host: s.relay_host || '', relay_port: s.relay_port || '',
         relay_user: s.relay_user || '', relay_from: s.relay_from || '',
+        registration_enabled: s.registration_enabled ? '1' : '0',
       }
       if (relayPass) body.relay_pass = relayPass
       const out = await api.settingsPatch(body)
@@ -108,6 +109,15 @@ export default function AdminSettings() {
             <Field label={t('settings.admins')} hint={t('settings.adminsHint')}>
               <Input placeholder="admin@example.com" value={s.admin_emails || ''} onChange={e => field('admin_emails', e.target.value)} />
             </Field>
+          </Card>
+
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center gap-2"><UserPlus size={16} /><b className="text-sm">{t('settings.registration')}</b></div>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-0.5" checked={!!s.registration_enabled}
+                onChange={e => field('registration_enabled', e.target.checked ? '1' : '0')} />
+              <span className="text-muted-foreground">{t('settings.registrationHint')}</span>
+            </label>
           </Card>
 
           {msg && <p className="text-sm flex items-center gap-1 text-muted-foreground"><CheckCircle2 size={14} />{msg}</p>}

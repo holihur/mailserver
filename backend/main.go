@@ -147,6 +147,7 @@ func main() {
 		fmt.Fprintf(w, `{"version":%q,"commit":%q,"date":%q}`, version, commit, date)
 	}))
 	mux.HandleFunc("/api/register", cors(au.Register))
+	mux.HandleFunc("/api/site", cors(au.Site))
 	mux.HandleFunc("/api/login", cors(au.Login))
 	mux.HandleFunc("/api/me", cors(au.Me))
 	mux.HandleFunc("/api/mails", cors(func(w http.ResponseWriter, r *http.Request) {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -46,7 +47,7 @@ export default function AdminSSL() {
 
       <Card className="p-4 space-y-3">
         <div className="flex items-center gap-2"><Wand2 size={16} /><b className="text-sm">{t('ssl.auto')}</b></div>
-        <p className="text-xs text-muted-foreground">{t('ssl.autoHint')} <a href="#/admin/providers" className="underline">{t('providers.title')}</a></p>
+        <p className="text-xs text-muted-foreground">{t('ssl.autoHint')} <Link to="/admin/providers" className="underline">{t('providers.title')}</Link></p>
         <AcmeForm providers={tls?.providers || []} defaultDomain={tls?.acme?.domain || mailHost} acme={tls?.acme}
           onMsg={setMsg} onDone={load} busy={busy} setBusy={setBusy} />
       </Card>

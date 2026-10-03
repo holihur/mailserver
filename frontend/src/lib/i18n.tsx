@@ -42,6 +42,7 @@ export const DICTS = {
     'login.loginBtn': '登录',
     'login.registerBtn': '注册并登录',
     'login.pleaseWait': '请稍候…',
+    'login.registerClosed': '注册已关闭，请联系管理员开通账号。',
     'login.hint': '首次注册的账号自动成为管理员；可填邮箱或用户名。',
 
     'mail.inbox': '收件箱',
@@ -157,6 +158,8 @@ export const DICTS = {
     'settings.dkimImport': '导入已有私钥',
     'settings.admins': '管理员邮箱',
     'settings.adminsHint': '逗号分隔；留空则只有 admin 标记的账号能进',
+    'settings.registration': '开放注册',
+    'settings.registrationHint': '关闭后仅管理员可创建账号（推荐）；首个用户始终可注册',
     'settings.saved': '已保存，配置立即生效',
 
     'ssl.title': 'SSL 证书',
@@ -264,6 +267,7 @@ export const DICTS = {
     'login.loginBtn': 'Sign in',
     'login.registerBtn': 'Sign up & sign in',
     'login.pleaseWait': 'Please wait…',
+    'login.registerClosed': 'Registration is closed. Please contact an admin.',
     'login.hint': 'The first registered account becomes admin; email or username is fine.',
 
     'mail.inbox': 'Inbox',
@@ -379,6 +383,8 @@ export const DICTS = {
     'settings.dkimImport': 'Import existing key',
     'settings.admins': 'Admin emails',
     'settings.adminsHint': 'Comma separated; blank means only accounts flagged as admin',
+    'settings.registration': 'Open registration',
+    'settings.registrationHint': 'When off, only admins can create accounts (recommended); the first user can always register',
     'settings.saved': 'Saved, takes effect immediately',
 
     'ssl.title': 'SSL certificate',

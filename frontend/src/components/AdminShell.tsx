@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
 import { ThemeToggle, LangToggle } from './HeaderControls'
@@ -7,40 +8,35 @@ import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail } from 'lucide
 import { cn } from '../lib/utils'
 
 export function useMe() {
-  const [me, setMe] = useState(null)
+  const [me, setMe] = useState<any>(null)
   useEffect(() => {
-    api.me().then(setMe).catch(() => { location.hash = '#/login' })
+    api.me().then(setMe).catch(() => { location.href = '/login' })
   }, [])
   return me
 }
 
 const NAV = [
-  { to: '#/admin', labelKey: 'admin.dashboard', icon: LayoutDashboard },
-  { to: '#/admin/settings', labelKey: 'admin.host', icon: Server },
-  { to: '#/admin/ssl', labelKey: 'admin.ssl', icon: ShieldCheck },
-  { to: '#/admin/providers', labelKey: 'admin.providers', icon: Cloud },
-  { to: '#/admin/users', labelKey: 'admin.users', icon: Users },
+  { to: '/admin', labelKey: 'admin.dashboard', icon: LayoutDashboard },
+  { to: '/admin/settings', labelKey: 'admin.host', icon: Server },
+  { to: '/admin/ssl', labelKey: 'admin.ssl', icon: ShieldCheck },
+  { to: '/admin/providers', labelKey: 'admin.providers', icon: Cloud },
+  { to: '/admin/users', labelKey: 'admin.users', icon: Users },
 ]
 
-export default function AdminShell({ title, desc, children }) {
+export default function AdminShell({ title, desc, children }: { title?: any; desc?: any; children?: any }) {
   const { t } = useI18n()
   const me = useMe()
-  const [hash, setHash] = useState(location.hash || '#/admin')
-  useEffect(() => {
-    const on = () => setHash(location.hash || '#/admin')
-    window.addEventListener('hashchange', on)
-    return () => window.removeEventListener('hashchange', on)
-  }, [])
+  const { pathname } = useLocation()
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <a href="#/" className="font-semibold flex items-center gap-2"><Mail size={16} />Mailserver</a>
+        <Link to="/" className="font-semibold flex items-center gap-2"><Mail size={16} />Mailserver</Link>
         <Badge className="hidden sm:inline-flex">{t('admin.title')}</Badge>
         <div className="flex-1" />
         <LangToggle />
         <ThemeToggle />
-        <a href="#/"><Button variant="ghost" size="sm">{t('admin.backToMail')}</Button></a>
+        <Link to="/"><Button variant="ghost" size="sm">{t('admin.backToMail')}</Button></Link>
       </header>
 
       {me && !me.admin ? (
@@ -53,11 +49,11 @@ export default function AdminShell({ title, desc, children }) {
           <aside className="mb-3 md:mb-0">
             <nav className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0 md:sticky md:top-16">
               {NAV.map(n => (
-                <a key={n.to} href={n.to}
+                <Link key={n.to} to={n.to}
                   className={cn('flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap shrink-0',
-                    hash === n.to ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
+                    pathname === n.to ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
                   <n.icon size={16} />{t(n.labelKey)}
-                </a>
+                </Link>
               ))}
             </nav>
           </aside>

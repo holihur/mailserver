@@ -3,7 +3,7 @@
 前端 React + TypeScript + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL
 
 > 纯 Go 构建（无 CGO），前端已内嵌，后端为单二进制；数据库使用 PostgreSQL。
-> **几乎所有配置都在管理后台 `/#/admin` 里改**，命令行只需引导项（数据库、JWT_SECRET）。
+> **几乎所有配置都在管理后台 `/admin` 里改**，命令行只需引导项（数据库、JWT_SECRET）。
 
 ## 目录
 
@@ -73,7 +73,7 @@ API 默认 `:8080`，SMTP 入站 `:2525`，前端 dev `:5173`。
 
 ## 管理后台（所有配置都在这里改）
 
-访问 `/#/admin`（仅管理员可见；首个注册用户自动为管理员，或 `ADMIN_EMAILS` / `admin=true`）。
+访问 `/admin`（仅管理员可见；首个注册用户自动为管理员，或 `ADMIN_EMAILS` / `admin=true`）。
 
 | 页面 | 能做什么 |
 |------|----------|

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge } from '../components/ui/controls'
 import { ThemeToggle, LangToggle } from '../components/HeaderControls'
@@ -18,6 +19,7 @@ const FOLDERS = [
 
 export default function MailApp() {
   const { t } = useI18n()
+  const nav = useNavigate()
   const [folder, setFolder] = useState('inbox')
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -33,7 +35,7 @@ export default function MailApp() {
       setItems(d.items); setTotal(d.total)
     } catch {}
   }
-  useEffect(() => { api.me().then(setMe).catch(() => location.hash = '#/login'); }, [])
+  useEffect(() => { api.me().then(setMe).catch(() => { location.href = '/login' }) }, [])
   useEffect(() => { setSel(null); setView('list'); load() }, [folder])
 
   async function open(id) {
@@ -43,7 +45,7 @@ export default function MailApp() {
     setItems(items.map(i => i.id === id ? { ...i, read: true } : i))
   }
 
-  function logout() { localStorage.removeItem('token'); location.hash = '#/login' }
+  function logout() { localStorage.removeItem('token'); nav('/login') }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -52,9 +54,9 @@ export default function MailApp() {
         <b className="sm:hidden">📮</b>
         {me && <Badge className="max-w-[38vw] truncate">{me.email}</Badge>}
         <div className="flex-1" />
-        <a href="#/dns" title={t('nav.dns')}><Button variant="ghost" size="icon" aria-label={t('nav.dns')}><Globe /></Button></a>
-        <a href="#/setup" title={t('nav.setup')} className="hidden sm:block"><Button variant="ghost" size="icon" aria-label={t('nav.setup')}><Settings /></Button></a>
-        {me?.admin && <a href="#/admin" title={t('nav.admin')}><Button variant="ghost" size="icon" aria-label={t('nav.admin')}><ShieldCheck /></Button></a>}
+        <Link to="/dns" title={t('nav.dns')}><Button variant="ghost" size="icon" aria-label={t('nav.dns')}><Globe /></Button></Link>
+        <Link to="/setup" title={t('nav.setup')} className="hidden sm:block"><Button variant="ghost" size="icon" aria-label={t('nav.setup')}><Settings /></Button></Link>
+        {me?.admin && <Link to="/admin" title={t('nav.admin')}><Button variant="ghost" size="icon" aria-label={t('nav.admin')}><ShieldCheck /></Button></Link>}
         <div className="hidden sm:flex items-center">
           <LangToggle />
           <ThemeToggle />

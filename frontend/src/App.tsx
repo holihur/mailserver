@@ -1,4 +1,4 @@
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import MailApp from './pages/MailApp'
 import DnsPage from './pages/DnsPage'
@@ -13,7 +13,7 @@ const authed = () => !!localStorage.getItem('token')
 
 export default function App() {
   return (
-    <HashRouter>
+    <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/" element={authed() ? <MailApp /> : <Navigate to="/login" />} />
@@ -25,6 +25,6 @@ export default function App() {
         <Route path="/admin/providers" element={authed() ? <AdminProviders /> : <Navigate to="/login" />} />
         <Route path="/admin/users" element={authed() ? <AdminUsers /> : <Navigate to="/login" />} />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   )
 }
