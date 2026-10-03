@@ -64,6 +64,17 @@ func TestExtractBinary(t *testing.T) {
 	}
 }
 
+func TestChecksumOverArchive(t *testing.T) {
+	// checksums.txt 是对归档(.tar.gz)的 sha256，不是解出的二进制
+	data := tarGzWith(t, "mailserver", []byte("BIN"))
+	sum := sha256Hex(data)
+	asset := AssetName("v1.0.0", "amd64")
+	got, err := ParseChecksums(sum+"  "+asset+"\n", asset)
+	if err != nil || got != sum {
+		t.Fatalf("got %q err %v", got, err)
+	}
+}
+
 func TestShaAndReplace(t *testing.T) {
 	if len(sha256Hex([]byte("x"))) != 64 {
 		t.Fatal("sha256 length")

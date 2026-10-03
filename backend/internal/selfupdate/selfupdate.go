@@ -76,14 +76,15 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return fmt.Errorf("下载 %s 失败: %w", asset, err)
 	}
+	// checksums.txt 是 GoReleaser 对归档(.tar.gz)算的 sha256，校验归档本身
+	if got := sha256Hex(data); !strings.EqualFold(got, want) {
+		return fmt.Errorf("校验失败：期望 %s，实际 %s", want, got)
+	}
+	o.log("校验通过（sha256 %s）", want[:12])
 	bin, err := ExtractBinary(data, binName)
 	if err != nil {
 		return err
 	}
-	if got := sha256Hex(bin); !strings.EqualFold(got, want) {
-		return fmt.Errorf("校验失败：期望 %s，实际 %s", want, got)
-	}
-	o.log("校验通过（sha256 %s）", want[:12])
 
 	exe, err := os.Executable()
 	if err != nil {
