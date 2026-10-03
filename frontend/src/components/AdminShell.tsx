@@ -27,12 +27,19 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
   const { t } = useI18n()
   const me = useMe()
   const { pathname } = useLocation()
+  const [ver, setVer] = useState<any>(null)
+  useEffect(() => { api.version().then(setVer).catch(() => {}) }, [])
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
         <Link to="/" className="font-semibold flex items-center gap-2"><Mail size={16} />Mailserver</Link>
         <Badge className="hidden sm:inline-flex">{t('admin.title')}</Badge>
+        {ver?.version && (
+          <Badge className="hidden sm:inline-flex" title={`commit ${ver.commit || '-'} · ${ver.date || '-'}`}>
+            v{String(ver.version).replace(/^v/, '')}
+          </Badge>
+        )}
         <div className="flex-1" />
         <LangToggle />
         <ThemeToggle />

@@ -15,6 +15,7 @@ async function req(path, opts = {}) {
 
 export const api = {
   site: () => req('/api/site'),
+  version: () => req('/api/version'),
   register: (b) => req('/api/register', { method: 'POST', body: JSON.stringify(b) }),
   login: (b) => req('/api/login', { method: 'POST', body: JSON.stringify(b) }),
   me: () => req('/api/me'),
