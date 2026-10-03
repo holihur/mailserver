@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Record 与具体服务商无关的一条解析记录。
@@ -41,6 +42,8 @@ type Provider interface {
 	ListZones(ctx context.Context) ([]Zone, error)
 	// EnsureRecords 在 zone 下创建/更新记录（同主机名+类型已存在则更新），返回逐条结果。
 	EnsureRecords(ctx context.Context, zone string, records []Record) ([]Result, error)
+	// DeleteRecord 删除匹配（name+type，value 非空时也需相等）的记录，不存在不报错。
+	DeleteRecord(ctx context.Context, zone, name, typ, value string) error
 }
 
 // New 根据类型与凭证构造客户端。creds 的键见各自的构造函数。
@@ -81,4 +84,36 @@ func normHost(s string) string {
 		out = out[:len(out)-1]
 	}
 	return string(out)
+}
+
+// MatchZone 从账号域名中找出最能匹配 target 的 zone（后缀最长者）。
+func MatchZone(zones []Zone, target string) (Zone, bool) {
+	target = normHost(target)
+	var best Zone
+	found := false
+	for _, z := range zones {
+		name := normHost(z.Name)
+		if name == "" {
+			continue
+		}
+		if target == name || strings.HasSuffix(target, "."+name) {
+			if !found || len(name) > len(normHost(best.Name)) {
+				best, found = z, true
+			}
+		}
+	}
+	return best, found
+}
+
+// RelativeName 把完整记录名转成相对 zone 的名字（zone 本身为 @）。
+func RelativeName(zone, fqdn string) string {
+	zone = normHost(zone)
+	fqdn = normHost(fqdn)
+	if fqdn == zone {
+		return "@"
+	}
+	if strings.HasSuffix(fqdn, "."+zone) {
+		return strings.TrimSuffix(fqdn, "."+zone)
+	}
+	return fqdn
 }

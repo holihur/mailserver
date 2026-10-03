@@ -51,7 +51,7 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 	tx := m.DB.Where("user_id = ? AND folder = ?", uid, folder).Order("id DESC")
 	if q != "" {
 		like := "%" + q + "%"
-		tx = tx.Where("subject LIKE ? OR `from` LIKE ? OR `to` LIKE ?", like, like, like)
+		tx = tx.Where("subject LIKE ? OR \"from\" LIKE ? OR \"to\" LIKE ?", like, like, like)
 	}
 	var total int64
 	tx.Model(&model.Mail{}).Count(&total)

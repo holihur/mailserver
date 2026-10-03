@@ -29,7 +29,7 @@ type msg struct {
 	deleted bool
 }
 
-func Serve(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
+func Serve(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		fmt.Println("pop3 listen fail:", err)
@@ -45,7 +45,7 @@ func Serve(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
 	}
 }
 
-func ServeTLS(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
+func ServeTLS(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
 	if tlsConf == nil {
 		fmt.Println("pop3s skipped: no cert")
 		return
@@ -70,7 +70,7 @@ type session struct {
 	r    *bufio.Reader
 	w    *bufio.Writer
 	db   *gorm.DB
-	host string
+	host func() string
 	tls  bool
 	user *model.User
 	name string
@@ -86,7 +86,7 @@ func (s *session) err(msg string) {
 	s.w.Flush()
 }
 
-func handle(conn net.Conn, host string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
+func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
 	defer conn.Close()
 	s := &session{conn: conn, r: bufio.NewReader(conn), w: bufio.NewWriter(conn), db: db, host: host, tls: encrypted}
 	s.ok("mailserver POP3 ready")
@@ -314,7 +314,7 @@ func (s *session) loadBox() {
 	s.db.Where("user_id = ? AND folder = ?", s.user.ID, "inbox").Order("id DESC").Limit(maxBox).Find(&mails)
 	s.box = s.box[:0]
 	for _, m := range mails {
-		raw := buildRaw(s.host, &m)
+		raw := buildRaw(s.host(), &m)
 		s.box = append(s.box, msg{id: m.ID, uid: fmt.Sprintf("%d-%d", m.ID, m.CreatedAt.Unix()), size: len(raw), raw: raw})
 	}
 }

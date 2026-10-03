@@ -1,27 +1,55 @@
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mailserver
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mailserver}
+      POSTGRES_DB: mailserver
+    volumes: [pgdata:/var/lib/postgresql/data]
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mailserver -d mailserver"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # API + 内嵌前端（单容器，Web 界面在 80 端口）
   api:
-    build: ./backend
-    ports: ["8080:8080", "2525:2525", "587:587", "110:110", "143:143"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["80:8080", "2525:2525", "25:2525", "587:587", "465:465", "110:110", "143:143", "995:995", "993:993"]
     environment:
       PORT: 8080
+      DATABASE_URL: postgres://mailserver:${POSTGRES_PASSWORD:-mailserver}@db:5432/mailserver?sslmode=disable
       DB_PATH: /data/mail.db
+      CERT_DIR: /data/certs
       JWT_SECRET: ${JWT_SECRET:-change-me-32chars-min}
       MAIL_HOST: ${MAIL_HOST:-mail.example.com}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      SMTP_PORT: 2525
+      SUBMIT_TLS_PORT: 465
+      POP3_TLS_PORT: 995
+      IMAP_TLS_PORT: 993
       SMTP_RELAY_HOST: ${SMTP_RELAY_HOST:-}
       SMTP_RELAY_PORT: ${SMTP_RELAY_PORT:-587}
       SMTP_RELAY_USER: ${SMTP_RELAY_USER:-}
       SMTP_RELAY_PASS: ${SMTP_RELAY_PASS:-}
       SMTP_RELAY_FROM: ${SMTP_RELAY_FROM:-}
-      TLS_CERT: ${TLS_CERT:-}
-      TLS_KEY: ${TLS_KEY:-}
-      DKIM_KEY: ${DKIM_KEY:-}
-      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-dkim}
-      DKIM_DOMAIN: ${DKIM_DOMAIN:-}
     volumes: [maildata:/data]
     restart: unless-stopped
-    mem_limit: 128m
-    healthcheck: { test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"], interval: 30s, timeout: 3s, retries: 3 }
+    mem_limit: 192m
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
   dns:
     build: ./dns
     ports: ["53:53/udp", "53:53/tcp"]
@@ -30,10 +58,5 @@ services:
     volumes: [maildata:/data]
     restart: unless-stopped
     mem_limit: 64m
-  web:
-    build: ./frontend
-    ports: ["80:80"]
-    depends_on: [api]
-    mem_limit: 32m
 
-volumes: { maildata: {} }
+volumes: { maildata: {}, pgdata: {} }

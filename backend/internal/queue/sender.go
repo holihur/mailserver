@@ -14,23 +14,17 @@ import (
 
 	"mailserver/internal/dkim"
 	"mailserver/internal/model"
+	"mailserver/internal/runtimecfg"
 
 	"gorm.io/gorm"
 )
 
-type RelayConf struct {
-	Host string
-	Port string
-	User string
-	Pass string
-	From string // envelope-from 兜底（部分中继要求与认证账号一致）
-	Name string // Message-ID 域名
-}
-
 const maxAttempts = 8
 
-func Start(db *gorm.DB, c RelayConf, signer *dkim.Signer) {
+func Start(db *gorm.DB, rt *runtimecfg.Store) {
 	run := func() {
+		c := rt.Relay()
+		signer := rt.Signer()
 		var mails []model.Mail
 		db.Where("folder = ? AND relayed = ? AND attempts < ?", "sent", false, maxAttempts).
 			Order("id").Limit(20).Find(&mails)
@@ -44,7 +38,7 @@ func Start(db *gorm.DB, c RelayConf, signer *dkim.Signer) {
 	}
 }
 
-func deliver(db *gorm.DB, c RelayConf, signer *dkim.Signer, m *model.Mail) {
+func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail) {
 	// 1) 本站：直接 inbox
 	var u model.User
 	if err := db.Where("email = ?", m.To).First(&u).Error; err == nil {

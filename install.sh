@@ -26,6 +26,7 @@ DIR="${MAILSERVER_DIR:-/opt/mailserver}"
 MAIL_HOST="${MAIL_HOST:-}"
 ADMIN_EMAILS="${ADMIN_EMAILS:-}"
 WITH_DNS="${WITH_DNS:-1}"           # 1 安装内置 DNS
+DATABASE_URL_IN="${DATABASE_URL:-}" # 二进制方式：指定后使用 PostgreSQL，否则 SQLite
 TAG=""                              # 解析后的版本号，如 v1.0.0
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,7 @@ usage() {
   --version TAG       指定版本，如 v1.0.0（默认 latest）
   --mail-host HOST    邮件域名，如 mail.example.com
   --admin EMAILS      管理员邮箱，逗号分隔
+  --database-url DSN  二进制方式使用 PostgreSQL（如 postgres://user:pass@host:5432/db?sslmode=disable）；不填则用 SQLite
   --no-dns            不安装内置权威 DNS
   -h, --help          显示帮助
 EOF
@@ -127,6 +129,7 @@ while [ $# -gt 0 ]; do
     --version) VERSION="${2:?--version 需要参数}"; shift ;;
     --mail-host) MAIL_HOST="${2:?--mail-host 需要参数}"; shift ;;
     --admin) ADMIN_EMAILS="${2:?--admin 需要参数}"; shift ;;
+    --database-url) DATABASE_URL_IN="${2:?--database-url 需要参数}"; shift ;;
     --no-dns) WITH_DNS=0 ;;
     -h|--help) usage; exit 0 ;;
     *) die "未知参数: $1（--help 查看用法）" ;;
@@ -170,6 +173,7 @@ install_docker() {
     cat > "${DIR}/.env" <<EOF
 # 由 install.sh 生成于 $(date -u +%Y-%m-%dT%H:%M:%SZ)
 JWT_SECRET=$(rand_secret)
+POSTGRES_PASSWORD=$(rand_secret)
 MAIL_HOST=${MAIL_HOST}
 ADMIN_EMAILS=${ADMIN_EMAILS}
 MAILSERVER_TAG=${TAG:-latest}
@@ -185,8 +189,7 @@ EOF
   ok "Docker 部署完成"
   ( cd "$DIR" && docker compose ps ) || true
   echo
-  log "Web 界面:   http://<服务器IP>/"
-  log "API:        http://<服务器IP>:8080/"
+  log "Web 界面/API:  http://<服务器IP>/"
   log "SMTP 入站:  25 / 2525   客户端提交: 587   取信: 110/143"
   if [ "$WITH_DNS" = "1" ]; then log "权威 DNS:   53/udp+tcp"; fi
   log "查看日志:   cd ${DIR} && docker compose logs -f"
@@ -207,35 +210,44 @@ install_binary() {
 
   log "下载二进制 (${TAG} / linux-${arch})…"
   download "${GH}/releases/download/${TAG}/mailserver_${TAG}_linux_${arch}.tar.gz" "${tmp}/api.tar.gz"
-  download "${GH}/releases/download/${TAG}/mailserver-web_${TAG}.tar.gz"       "${tmp}/web.tar.gz"
   if [ "$WITH_DNS" = "1" ]; then
     download "${GH}/releases/download/${TAG}/nsd_${TAG}_linux_${arch}.tar.gz"  "${tmp}/dns.tar.gz"
   fi
 
-  mkdir -p "${DIR}/bin" "${DIR}/web" "${DIR}/data" /etc/mailserver
+  mkdir -p "${DIR}/bin" "${DIR}/data" /etc/mailserver
 
-  tar -xzf "${tmp}/api.tar.gz" -C "${DIR}/bin"
-  tar -xzf "${tmp}/web.tar.gz" -C "${DIR}/web"
-  if [ -f "${DIR}/bin/.env.example" ]; then
-    mv "${DIR}/bin/.env.example" /etc/mailserver/mailserver.env.example
+  # mailserver 二进制已内嵌前端，单文件即可同时提供网页 + API
+  # 归档还含 .env.example/install.sh/compose，只取二进制与示例配置
+  mkdir -p "${tmp}/x"
+  tar -xzf "${tmp}/api.tar.gz" -C "${tmp}/x"
+  install -m 0755 "${tmp}/x/mailserver" "${DIR}/bin/mailserver"
+  if [ -f "${tmp}/x/.env.example" ]; then
+    cp "${tmp}/x/.env.example" /etc/mailserver/mailserver.env.example
   fi
   if [ "$WITH_DNS" = "1" ]; then
-    tar -xzf "${tmp}/dns.tar.gz" -C "${DIR}/bin"
+    mkdir -p "${tmp}/xd"
+    tar -xzf "${tmp}/dns.tar.gz" -C "${tmp}/xd"
+    install -m 0755 "${tmp}/xd/nsd" "${DIR}/bin/nsd"
   fi
-  chmod +x "${DIR}/bin/mailserver" "${DIR}/bin/nsd" 2>/dev/null || true
 
   if [ ! -f /etc/mailserver/mailserver.env ]; then
     log "生成 /etc/mailserver/mailserver.env …"
     cat > /etc/mailserver/mailserver.env <<EOF
-PORT=8080
+PORT=80
 DB_PATH=${DIR}/data/mail.db
+# 使用 PostgreSQL 时填写；留空则用轻量 SQLite
+DATABASE_URL=${DATABASE_URL_IN}
+CERT_DIR=${DIR}/data/certs
 JWT_SECRET=$(rand_secret)
 MAIL_HOST=${MAIL_HOST}
 ADMIN_EMAILS=${ADMIN_EMAILS}
 SMTP_PORT=2525
 SUBMIT_PORT=587
+SUBMIT_TLS_PORT=465
 POP3_PORT=110
+POP3_TLS_PORT=995
 IMAP_PORT=143
+IMAP_TLS_PORT=993
 EOF
     chmod 600 /etc/mailserver/mailserver.env
   else
@@ -285,28 +297,6 @@ WantedBy=multi-user.target
 EOF
   fi
 
-  # 前端静态资源：交给 nginx（如已安装）
-  if have nginx; then
-    log "配置 nginx…"
-    cat > /etc/nginx/conf.d/mailserver.conf <<EOF
-server {
-    listen 80;
-    server_name ${MAIL_HOST};
-    root ${DIR}/web;
-    index index.html;
-    location /api/ {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-    location / { try_files \$uri /index.html; }
-}
-EOF
-    nginx -t >/dev/null 2>&1 && systemctl reload nginx 2>/dev/null || warn "nginx 配置已写入但重载失败，请检查"
-  else
-    warn "未检测到 nginx，前端静态文件在 ${DIR}/web，请自行用 nginx 等托管（/api 反向代理到 127.0.0.1:8080）"
-  fi
-
   systemctl daemon-reload
   systemctl enable --now mailserver.service
   if [ "$WITH_DNS" = "1" ]; then systemctl enable --now mailserver-dns.service; fi
@@ -315,7 +305,7 @@ EOF
   ok "二进制部署完成（版本 ${TAG}）"
   systemctl --no-pager --lines=0 status mailserver.service || true
   echo
-  log "Web 界面:  http://<服务器IP>/（需 nginx）"
+  log "Web 界面:  http://<服务器IP>/（前端已内嵌，无需 nginx）"
   log "配置文件:  /etc/mailserver/mailserver.env"
   log "数据目录:  ${DIR}/data"
   log "查看日志:  journalctl -u mailserver -f"

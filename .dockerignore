@@ -1,0 +1,21 @@
+.git
+.gitignore
+.github
+
+# 依赖与构建产物
+**/node_modules
+frontend/dist
+backend/web
+backend/mailserver
+dns/nsd
+
+# 运行时数据/密钥
+data
+*.db
+*.db-*
+*.log
+.env
+*.env
+!*.env.example
+*.pem
+*.key

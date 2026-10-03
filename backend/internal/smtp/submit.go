@@ -19,7 +19,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func ServeSubmit(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
+func ServeSubmit(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		fmt.Println("submit listen fail:", err)
@@ -36,7 +36,7 @@ func ServeSubmit(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
 }
 
 // 465 隐式 TLS：连接即握手
-func ServeSubmitTLS(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
+func ServeSubmitTLS(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
 	if tlsConf == nil {
 		fmt.Println("submit-tls skipped: no cert")
 		return
@@ -57,22 +57,22 @@ func ServeSubmitTLS(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
 }
 
 type submitter struct {
-	r    *bufio.Reader
-	w    *bufio.Writer
-	db   *gorm.DB
-	host string
-	tls  bool // 已加密
-	user *model.User
-	from string
+	r     *bufio.Reader
+	w     *bufio.Writer
+	db    *gorm.DB
+	host  func() string
+	tls   bool // 已加密
+	user  *model.User
+	from  string
 	rcpts []string
 }
 
 func (s *submitter) reply(msg string) { s.w.WriteString(msg + "\r\n"); s.w.Flush() }
 
-func handleSubmit(conn net.Conn, host string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
+func handleSubmit(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
 	defer conn.Close()
 	s := &submitter{r: bufio.NewReader(conn), w: bufio.NewWriter(conn), db: db, host: host, tls: encrypted}
-	s.reply("220 " + host + " ESMTP mailserver")
+	s.reply("220 " + host() + " ESMTP mailserver")
 	var data strings.Builder
 	inData := false
 
@@ -103,7 +103,7 @@ func handleSubmit(conn net.Conn, host string, db *gorm.DB, tlsConf *tls.Config, 
 		cmd, arg := splitCmd(line)
 		switch cmd {
 		case "EHLO", "HELO":
-			s.reply("250-" + host + " Hello")
+			s.reply("250-" + host() + " Hello")
 			if tlsConf != nil && !s.tls {
 				s.reply("250-STARTTLS")
 			}

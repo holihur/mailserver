@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /app
 # 使用 pnpm（与本地/CI 一致）
 RUN npm i -g pnpm@11.25.0

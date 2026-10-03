@@ -1,21 +1,24 @@
 package main
 
 import (
-	"crypto/tls"
+	"context"
+	"embed"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/certstore"
 	"mailserver/internal/config"
 	"mailserver/internal/db"
-	"mailserver/internal/dkim"
 	"mailserver/internal/handler"
 	"mailserver/internal/imap"
 	"mailserver/internal/pop3"
 	"mailserver/internal/queue"
+	"mailserver/internal/runtimecfg"
 	"mailserver/internal/secret"
 	mailsmtp "mailserver/internal/smtp"
 
@@ -28,7 +31,7 @@ func main() {
 	auth.SetSecret(cfg.JWTSecret)
 	secret.SetKey(cfg.JWTSecret)
 
-	g, err := db.Open(cfg.DBPath)
+	g, err := db.Open(cfg.DBDriver, cfg.DBPath, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -36,47 +39,50 @@ func main() {
 	au := &handler.Auth{DB: g, AdminEmails: cfg.AdminEmails}
 	mb := &handler.MailBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DBPath)
-	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails}
-	ad.DNS = dns
 
-	var tlsConf *tls.Config
+	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
+	rt := runtimecfg.New(g, cfg)
+
+	// 动态 TLS 证书：支持后台手动上传或 ACME 自动签发后热生效
+	cert := certstore.New(cfg.CertDir)
+	_ = cert.Load()
 	if cfg.TLSCert != "" && cfg.TLSKey != "" {
-		if ce, err := tls.LoadX509KeyPair(cfg.TLSCert, cfg.TLSKey); err == nil {
-			tlsConf = &tls.Config{Certificates: []tls.Certificate{ce}}
+		cb, cerr := os.ReadFile(cfg.TLSCert)
+		kb, kerr := os.ReadFile(cfg.TLSKey)
+		if cerr == nil && kerr == nil {
+			if err := cert.Set(cb, kb, "env"); err != nil {
+				log.Println("tls cert load fail:", err)
+			}
 		} else {
-			log.Println("tls cert load fail, plain only:", err)
+			log.Println("tls cert read fail, plain only")
 		}
 	}
+	tlsConf := cert.TLSConfig()
 
-	var signer *dkim.Signer
-	if cfg.DKIMKey != "" {
-		if sg, err := dkim.Load(cfg.DKIMDomain, cfg.DKIMSelector, cfg.DKIMKey); err == nil {
-			signer = sg
-			log.Println("dkim ready:", sg.Selector+"._domainkey."+sg.Domain)
-		} else {
-			log.Println("dkim load fail:", err)
-		}
-	}
+	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails, DNS: dns, RT: rt, Cert: cert, CertDir: cfg.CertDir}
+	au.RT = rt
+	dns.RT = rt
+
+	host := rt.MailHost
 
 	go mailsmtp.Serve(":"+cfg.SMTPport, g)
-	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, cfg.Host, g, tlsConf)
-	go pop3.Serve(":"+cfg.Pop3Port, cfg.Host, g, tlsConf)
-	go imap.Serve(":"+cfg.ImapPort, cfg.Host, g, tlsConf)
+	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, host, g, tlsConf)
+	go pop3.Serve(":"+cfg.Pop3Port, host, g, tlsConf)
+	go imap.Serve(":"+cfg.ImapPort, host, g, tlsConf)
 	if cfg.ImapTLSPort != "" {
-		go imap.ServeTLS(":"+cfg.ImapTLSPort, cfg.Host, g, tlsConf)
+		go imap.ServeTLS(":"+cfg.ImapTLSPort, host, g, tlsConf)
 	}
 	if cfg.SubmitTLSPort != "" {
-		go mailsmtp.ServeSubmitTLS(":"+cfg.SubmitTLSPort, cfg.Host, g, tlsConf)
+		go mailsmtp.ServeSubmitTLS(":"+cfg.SubmitTLSPort, host, g, tlsConf)
 	}
 	if cfg.Pop3TLSPort != "" {
-		go pop3.ServeTLS(":"+cfg.Pop3TLSPort, cfg.Host, g, tlsConf)
+		go pop3.ServeTLS(":"+cfg.Pop3TLSPort, host, g, tlsConf)
 	}
-	dnsH := dns
-	dnsH.Signer = signer
-	go queue.Start(g, queue.RelayConf{
-		Host: cfg.RelayHost, Port: cfg.RelayPort, User: cfg.RelayUser,
-		Pass: cfg.RelayPass, From: cfg.RelayFrom, Name: cfg.Host,
-	}, signer)
+	go queue.Start(g, rt)
+
+	renewCtx, cancelRenew := context.WithCancel(context.Background())
+	defer cancelRenew()
+	go ad.AutoRenewLoop(renewCtx)
 
 	mux := http.NewServeMux()
 	// CORS（dev 联调）
@@ -112,7 +118,7 @@ func main() {
 	}))
 	mux.HandleFunc("/api/mails/", cors(mb.One))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
-	mux.HandleFunc("/api/dkim", cors(dnsH.DKIM))
+	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))
 	mux.HandleFunc("/api/domains/", cors(dns.DomainOne))
 	// 管理后台（仅管理员）
@@ -122,20 +128,52 @@ func main() {
 	mux.HandleFunc("/api/admin/domains", cors(ad.Domains))
 	mux.HandleFunc("/api/admin/providers", cors(ad.Providers))
 	mux.HandleFunc("/api/admin/providers/", cors(ad.ProviderOne))
+	mux.HandleFunc("/api/admin/settings", cors(ad.Settings))
+	mux.HandleFunc("/api/admin/tls", cors(ad.TLS))
+	mux.HandleFunc("/api/admin/tls/manual", cors(ad.TLSManual))
+	mux.HandleFunc("/api/admin/tls/acme", cors(ad.TLSAcme))
+	mux.HandleFunc("/api/admin/dkim/generate", cors(ad.DKIMGenerate))
+	mux.HandleFunc("/api/admin/dkim/upload", cors(ad.DKIMUpload))
 
-	// 静态托管前端（docker 镜像把 dist 拷到 ./web）
-	if _, err := os.Stat("./web"); err == nil {
-		mux.Handle("/", http.FileServer(http.Dir("./web")))
-	} else {
-		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, "/api") {
-				w.WriteHeader(404)
-				return
-			}
-			w.Write([]byte("mailserver api ok, see /api/health"))
-		})
-	}
+	// 静态托管前端：优先本地 ./web（开发/自定义），否则用编译时嵌入的前端，单二进制即可。
+	static := staticHandler()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api") {
+			w.WriteHeader(404)
+			return
+		}
+		if static != nil {
+			static.ServeHTTP(w, r)
+			return
+		}
+		w.Write([]byte("mailserver api ok, see /api/health"))
+	})
 
 	fmt.Println("api on :" + cfg.Port)
 	log.Fatal(http.ListenAndServe(":"+cfg.Port, mux))
+}
+
+//go:embed all:web
+var embeddedWeb embed.FS
+
+// spaFS 在文件不存在时回退到 index.html（前端里实际用的是 hash 路由）。
+type spaFS struct{ fs http.FileSystem }
+
+func (s spaFS) Open(name string) (http.File, error) {
+	f, err := s.fs.Open(name)
+	if err != nil {
+		return s.fs.Open("/index.html")
+	}
+	return f, nil
+}
+
+func staticHandler() http.Handler {
+	if st, err := os.Stat("./web"); err == nil && st.IsDir() {
+		return http.FileServer(http.Dir("./web"))
+	}
+	sub, err := fs.Sub(embeddedWeb, "web")
+	if err != nil {
+		return nil
+	}
+	return http.FileServer(spaFS{http.FS(sub)})
 }

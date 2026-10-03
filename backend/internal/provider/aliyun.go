@@ -274,6 +274,21 @@ func (a *aliyun) EnsureRecords(ctx context.Context, zone string, records []Recor
 	return out, nil
 }
 
+// DeleteRecord 删除匹配的记录（不存在也不报错）。
+func (a *aliyun) DeleteRecord(ctx context.Context, zone, name, typ, value string) error {
+	rec, err := a.findRecord(ctx, zone, Record{Name: name, Type: typ})
+	if err != nil {
+		return err
+	}
+	if rec == nil {
+		return nil
+	}
+	if value != "" && rec.Value != value {
+		return nil
+	}
+	return a.call(ctx, "DeleteDomainRecord", map[string]string{"RecordId": rec.RecordID}, nil)
+}
+
 // aliTTL 归一到阿里云常用取值（600~86400）。
 func aliTTL(ttl int) int {
 	for _, a := range []int{600, 1800, 3600, 43200, 86400} {

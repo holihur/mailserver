@@ -40,6 +40,24 @@ type DnsProvider struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// ACME/Let's Encrypt 自动签发配置（单例，通常仅一行）。
+// ProviderID 指向 DnsProvider，用于 DNS-01 质询（在服务商处自动写 _acme-challenge）。
+type AcmeConfig struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	Domain     string    `gorm:"size:255" json:"domain"`
+	ProviderID uint      `json:"provider_id"`
+	Email      string    `gorm:"size:255" json:"email"`
+	AutoRenew  bool      `json:"auto_renew"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// Setting 运行时可改配置（管理后台写入，DB 持久化 + 内存缓存）。
+type Setting struct {
+	Key       string    `gorm:"primaryKey;size:64" json:"key"`
+	Value     string    `gorm:"type:text" json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // folder: inbox / sent / draft / trash
 // Relayed: 发件队列状态（sent 文件夹有效），25 被封时走中继投递
 type Mail struct {

@@ -1,13 +1,35 @@
-# 使用 GHCR 预构建镜像的发布版 compose。
+# 使用 GHCR 预构建镜像的发布版 compose（PostgreSQL）。
+# api 镜像已内嵌前端，Web 界面直接由 api 在 80 端口提供，无需单独的 web 容器。
 # 由 install.sh 下载使用，或手动：
 #   docker compose -f docker-compose.release.yml up -d
 services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mailserver}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mailserver}
+      POSTGRES_DB: ${POSTGRES_DB:-mailserver}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mailserver}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   api:
     image: ghcr.io/holihur/mailserver-api:${MAILSERVER_TAG:-latest}
-    ports: ["8080:8080", "2525:2525", "25:2525", "587:587", "110:110", "143:143"]
+    depends_on:
+      db:
+        condition: service_healthy
+    ports: ["80:8080", "2525:2525", "25:2525", "587:587", "110:110", "143:143", "465:465", "993:993", "995:995"]
     environment:
       PORT: 8080
+      # 默认使用 PostgreSQL；留空 DATABASE_URL 并设置 DB_DRIVER=sqlite 可回退单文件
+      DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-mailserver}:${POSTGRES_PASSWORD:-mailserver}@db:5432/${POSTGRES_DB:-mailserver}?sslmode=disable}
       DB_PATH: /data/mail.db
+      CERT_DIR: /data/certs
       JWT_SECRET: ${JWT_SECRET:-change-me-32chars-min}
       MAIL_HOST: ${MAIL_HOST:-mail.example.com}
       SMTP_RELAY_HOST: ${SMTP_RELAY_HOST:-}
@@ -15,20 +37,21 @@ services:
       SMTP_RELAY_USER: ${SMTP_RELAY_USER:-}
       SMTP_RELAY_PASS: ${SMTP_RELAY_PASS:-}
       SMTP_RELAY_FROM: ${SMTP_RELAY_FROM:-}
-      TLS_CERT: ${TLS_CERT:-}
-      TLS_KEY: ${TLS_KEY:-}
-      DKIM_KEY: ${DKIM_KEY:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-dkim}
-      DKIM_DOMAIN: ${DKIM_DOMAIN:-}
+      # 隐式 TLS 端口（证书可在管理后台一键申请/上传）
+      SUBMIT_TLS_PORT: ${SUBMIT_TLS_PORT:-465}
+      IMAP_TLS_PORT: ${IMAP_TLS_PORT:-993}
+      POP3_TLS_PORT: ${POP3_TLS_PORT:-995}
     volumes: [maildata:/data]
     restart: unless-stopped
-    mem_limit: 128m
+    mem_limit: 192m
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"]
       interval: 30s
       timeout: 3s
       retries: 3
+
   dns:
     image: ghcr.io/holihur/mailserver-dns:${MAILSERVER_TAG:-latest}
     ports: ["53:53/udp", "53:53/tcp"]
@@ -37,11 +60,5 @@ services:
     volumes: [maildata:/data]
     restart: unless-stopped
     mem_limit: 64m
-  web:
-    image: ghcr.io/holihur/mailserver-web:${MAILSERVER_TAG:-latest}
-    ports: ["80:80"]
-    depends_on: [api]
-    restart: unless-stopped
-    mem_limit: 32m
 
-volumes: { maildata: {} }
+volumes: { maildata: {}, pgdata: {} }

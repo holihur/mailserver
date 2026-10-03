@@ -1,0 +1,66 @@
+# GoReleaser 配置：在 CI 中构建并发布版本（本地无需操作）。
+# 前端会先构建并嵌入 backend/web，因此 backend 产物是「含网页的单二进制」。
+version: 2
+
+project_name: mailserver
+
+before:
+  hooks:
+    - sh -c "cd frontend && pnpm install --frozen-lockfile && pnpm run build"
+    - sh -c "rm -rf backend/web && mkdir -p backend/web && touch backend/web/.keep && cp -r frontend/dist/. backend/web/"
+
+builds:
+  # 后端 + 内嵌前端（单二进制）
+  - id: mailserver
+    dir: backend
+    main: .
+    binary: mailserver
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    env:
+      - CGO_ENABLED=1
+    goos: [linux]
+    goarch: [amd64, arm64]
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CGO_ENABLED=1
+          - CC=aarch64-linux-gnu-gcc
+
+  # 自研权威 DNS（纯 Go）
+  - id: nsd
+    dir: dns
+    main: .
+    binary: nsd
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+    env:
+      - CGO_ENABLED=0
+    goos: [linux]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: mailserver
+    ids: [mailserver]
+    formats: [tar.gz]
+    name_template: "mailserver_{{ .Tag }}_linux_{{ .Arch }}"
+  - id: nsd
+    ids: [nsd]
+    formats: [tar.gz]
+    name_template: "nsd_{{ .Tag }}_linux_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+release:
+  draft: false
+  prerelease: auto
+  make_latest: true

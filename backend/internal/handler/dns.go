@@ -15,6 +15,7 @@ import (
 	"mailserver/internal/auth"
 	"mailserver/internal/dkim"
 	"mailserver/internal/model"
+	"mailserver/internal/runtimecfg"
 
 	"gorm.io/gorm"
 )
@@ -22,7 +23,15 @@ import (
 type DNS struct {
 	DB        *gorm.DB
 	ZonesPath string // zones.json 输出路径
-	Signer    *dkim.Signer
+	RT        *runtimecfg.Store
+}
+
+// signer 返回当前 DKIM 签名器（可能为 nil）。
+func (d *DNS) signer() *dkim.Signer {
+	if d.RT == nil {
+		return nil
+	}
+	return d.RT.Signer()
 }
 
 func zonesDefault(dbPath string) string {
@@ -105,9 +114,9 @@ func (d *DNS) Domains(w http.ResponseWriter, r *http.Request) {
 		}
 		// DKIM：签名域与当前域名一致时直接填入真实公钥，否则留占位
 		selector, dkimVal := "dkim", "v=DKIM1; k=rsa; p=PASTE_PUBLIC_KEY_HERE"
-		if d.Signer != nil && strings.EqualFold(d.Signer.Domain, in.Name) {
-			selector = d.Signer.Selector
-			if t := d.Signer.TXT(); t != "" {
+		if sg := d.signer(); sg != nil && strings.EqualFold(sg.Domain, in.Name) {
+			selector = sg.Selector
+			if t := sg.TXT(); t != "" {
 				dkimVal = t
 			}
 		}
@@ -328,14 +337,15 @@ func (d *DNS) DKIM(w http.ResponseWriter, r *http.Request) {
 	if _, ok := d.uid(w, r); !ok {
 		return
 	}
-	if d.Signer == nil {
-		writeJSON(w, 200, map[string]any{"ready": false, "hint": "未配 DKIM_KEY，先生成私钥（见 MAIL_CLIENTS.md）"})
+	if d.signer() == nil {
+		writeJSON(w, 200, map[string]any{"ready": false, "hint": "尚未生成 DKIM 密钥，可在管理后台一键生成"})
 		return
 	}
+	sg := d.signer()
 	if r.Method == "GET" {
 		writeJSON(w, 200, map[string]any{
-			"ready": true, "domain": d.Signer.Domain, "selector": d.Signer.Selector,
-			"name": d.Signer.Selector + "._domainkey", "txt": d.Signer.TXT(),
+			"ready": true, "domain": sg.Domain, "selector": sg.Selector,
+			"name": sg.Selector + "._domainkey", "txt": sg.TXT(),
 		})
 		return
 	}
@@ -346,25 +356,47 @@ func (d *DNS) DKIM(w http.ResponseWriter, r *http.Request) {
 		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in)
 		dom := strings.ToLower(strings.Trim(strings.TrimSpace(in.Domain), "."))
 		if dom == "" {
-			dom = d.Signer.Domain
+			dom = sg.Domain
 		}
 		var dm model.Domain
 		if err := d.DB.Where("name = ?", dom).First(&dm).Error; err != nil {
 			writeJSON(w, 404, map[string]string{"error": "域名不存在，先添加域名"})
 			return
 		}
-		recName := d.Signer.Selector + "._domainkey"
+		recName := sg.Selector + "._domainkey"
 		var rec model.DnsRecord
 		if err := d.DB.Where("domain_id = ? AND name = ? AND type = ?", dm.ID, recName, "TXT").First(&rec).Error; err == nil {
-			d.DB.Model(&rec).Update("value", d.Signer.TXT())
+			d.DB.Model(&rec).Update("value", sg.TXT())
 		} else {
-			d.DB.Create(&model.DnsRecord{DomainID: dm.ID, Name: recName, Type: "TXT", Value: d.Signer.TXT(), TTL: 3600})
+			d.DB.Create(&model.DnsRecord{DomainID: dm.ID, Name: recName, Type: "TXT", Value: sg.TXT(), TTL: 3600})
 		}
 		d.export()
-		writeJSON(w, 200, map[string]any{"ok": "true", "name": recName + "." + dom, "txt": d.Signer.TXT()})
+		writeJSON(w, 200, map[string]any{"ok": "true", "name": recName + "." + dom, "txt": sg.TXT()})
 		return
 	}
 	w.WriteHeader(405)
+}
+
+// publishDKIM 把当前签名器公钥写入该域的 selector._domainkey TXT 并导出。
+func (d *DNS) publishDKIM(domain string) (name, txt string, err error) {
+	sg := d.signer()
+	if sg == nil {
+		return "", "", fmt.Errorf("未配置 DKIM 密钥")
+	}
+	name = sg.Selector + "._domainkey"
+	txt = sg.TXT()
+	var dm model.Domain
+	if err := d.DB.Where("name = ?", domain).First(&dm).Error; err != nil {
+		return name, txt, fmt.Errorf("域名 %s 不存在，先添加域名", domain)
+	}
+	var rec model.DnsRecord
+	if err := d.DB.Where("domain_id = ? AND name = ? AND type = ?", dm.ID, name, "TXT").First(&rec).Error; err == nil {
+		d.DB.Model(&rec).Update("value", txt)
+	} else {
+		d.DB.Create(&model.DnsRecord{DomainID: dm.ID, Name: name, Type: "TXT", Value: txt, TTL: 3600})
+	}
+	d.export()
+	return name, txt, nil
 }
 
 // 预览 BIND 风格 zone（调试用，权威应答以 dns/ 服务为准）

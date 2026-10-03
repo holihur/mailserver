@@ -24,18 +24,27 @@ type Signer struct {
 	Key      *rsa.PrivateKey
 }
 
+// Load 从 PEM 文件加载 DKIM 私钥。
 func Load(domain, selector, keyPath string) (*Signer, error) {
 	if domain == "" || keyPath == "" {
 		return nil, errors.New("dkim: domain/keyPath required")
-	}
-	if selector == "" {
-		selector = "dkim"
 	}
 	b, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, err
 	}
-	blk, _ := pem.Decode(b)
+	return LoadPEM(domain, selector, b)
+}
+
+// LoadPEM 从 PEM 字节加载 DKIM 私钥（同时支持 PKCS#1 与 PKCS#8）。
+func LoadPEM(domain, selector string, pemBytes []byte) (*Signer, error) {
+	if domain == "" {
+		return nil, errors.New("dkim: domain required")
+	}
+	if selector == "" {
+		selector = "dkim"
+	}
+	blk, _ := pem.Decode(pemBytes)
 	if blk == nil {
 		return nil, errors.New("dkim: bad pem")
 	}
@@ -52,6 +61,15 @@ func Load(domain, selector, keyPath string) (*Signer, error) {
 		return nil, errors.New("dkim: parse key failed")
 	}
 	return &Signer{Domain: strings.ToLower(domain), Selector: selector, Key: key}, nil
+}
+
+// GeneratePEM 生成 2048 位 RSA 私钥（PKCS#1 PEM）。
+func GeneratePEM() ([]byte, error) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, err
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}), nil
 }
 
 // Match: 发件人域名与签名域一致才签（否则 d= 对不上，签了也无效）

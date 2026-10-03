@@ -12,18 +12,20 @@ permissions:
 
 env:
   PNPM_VERSION: "11.25.0"
-  NODE_VERSION: "20"
+  NODE_VERSION: "22"
   GO_VERSION: "1.22"
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1) 编译各平台二进制与前端静态资源，打包为 tar.gz
+  # 1) GoReleaser：构建「含前端」的后端单二进制 + DNS 二进制，创建 GitHub Release
   # ---------------------------------------------------------------------------
-  binaries:
-    name: Build binaries
+  goreleaser:
+    name: GoReleaser
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v5
         with:
@@ -37,30 +39,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu
 
-      - name: Build backend (linux amd64/arm64)
-        working-directory: backend
-        run: |
-          set -euxo pipefail
-          go mod download
-          mkdir -p ../dist/mailserver_amd64 ../dist/mailserver_arm64
-          CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=gcc \
-            go build -trimpath -ldflags="-s -w" -o ../dist/mailserver_amd64/mailserver .
-          CGO_ENABLED=1 GOOS=linux GOARCH=arm64 CC=aarch64-linux-gnu-gcc \
-            go build -trimpath -ldflags="-s -w" -o ../dist/mailserver_arm64/mailserver .
-          cp .env.example ../dist/mailserver_amd64/.env.example
-          cp .env.example ../dist/mailserver_arm64/.env.example
-
-      - name: Build DNS (linux amd64/arm64)
-        working-directory: dns
-        run: |
-          set -euxo pipefail
-          go mod download
-          mkdir -p ../dist/nsd_amd64 ../dist/nsd_arm64
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-            go build -trimpath -ldflags="-s -w" -o ../dist/nsd_amd64/nsd .
-          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-            go build -trimpath -ldflags="-s -w" -o ../dist/nsd_arm64/nsd .
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -73,72 +51,18 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Build frontend
-        working-directory: frontend
-        run: |
-          set -euxo pipefail
-          pnpm install --frozen-lockfile
-          pnpm run build
-          mkdir -p ../dist/web
-          cp -r dist/. ../dist/web/
-
-      - name: Package artifacts
-        run: |
-          set -euxo pipefail
-          VERSION="${GITHUB_REF_NAME}"
-          cd dist
-          for arch in amd64 arm64; do
-            tar -C "mailserver_${arch}" -czf "mailserver_${VERSION}_linux_${arch}.tar.gz" .
-            tar -C "nsd_${arch}"        -czf "nsd_${VERSION}_linux_${arch}.tar.gz" .
-          done
-          tar -C web -czf "mailserver-web_${VERSION}.tar.gz" .
-          cp ../install.sh .
-          cp ../docker-compose.release.yml .
-          sha256sum ./*.tar.gz > checksums.txt
-          ls -lh
-
-      - name: Upload release assets
-        uses: actions/upload-artifact@v4
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
         with:
-          name: release-assets
-          path: |
-            dist/*.tar.gz
-            dist/checksums.txt
-            dist/install.sh
-            dist/docker-compose.release.yml
-          retention-days: 3
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # 2) 创建 GitHub Release 并附加产物
-  # ---------------------------------------------------------------------------
-  release:
-    name: Publish GitHub Release
-    needs: binaries
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download assets
-        uses: actions/download-artifact@v4
-        with:
-          name: release-assets
-          path: dist
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          generate_release_notes: true
-          files: |
-            dist/*.tar.gz
-            dist/checksums.txt
-            dist/install.sh
-            dist/docker-compose.release.yml
-
-  # ---------------------------------------------------------------------------
-  # 3) 构建并推送多架构 Docker 镜像到 GHCR
-  #    ghcr.io/<owner>/<repo>-api | -dns | -web
+  # 2) 构建并推送多架构 Docker 镜像到 GHCR
+  #    api 镜像已内嵌前端；dns 为权威 DNS
   # ---------------------------------------------------------------------------
   docker:
     name: Publish Docker images
@@ -159,10 +83,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push api
+      - name: Build & push api (含前端)
         uses: docker/build-push-action@v6
         with:
-          context: ./backend
+          context: .
+          file: ./backend/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -178,13 +103,3 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}-dns:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}-dns:latest
-
-      - name: Build & push web
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}-web:${{ github.ref_name }}
-            ghcr.io/${{ github.repository }}-web:latest

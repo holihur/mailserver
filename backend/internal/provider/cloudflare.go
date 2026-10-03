@@ -239,6 +239,35 @@ func isPriorityType(t string) bool {
 	return t == "MX" || t == "SRV"
 }
 
+// DeleteRecord 删除匹配的记录（不存在也不报错）。
+func (c *cloudflare) DeleteRecord(ctx context.Context, zone, name, typ, value string) error {
+	zone = normHost(zone)
+	zid, err := c.zoneID(ctx, zone)
+	if err != nil {
+		return err
+	}
+	fqdn := recordFQDN(zone, name)
+	p := fmt.Sprintf("/zones/%s/dns_records?type=%s&name=%s&per_page=100",
+		zid, url.QueryEscape(strings.ToUpper(typ)), url.QueryEscape(fqdn))
+	env, err := c.do(ctx, "GET", p, nil)
+	if err != nil {
+		return err
+	}
+	var rs []cfRecord
+	if err := json.Unmarshal(env.Result, &rs); err != nil {
+		return err
+	}
+	for _, r := range rs {
+		if value != "" && r.Content != value {
+			continue
+		}
+		if _, err := c.do(ctx, "DELETE", "/zones/"+zid+"/dns_records/"+r.ID, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // cfTTL 把 TTL 归一到 Cloudflare 允许的取值。
 func cfTTL(ttl int) int {
 	if ttl <= 1 {

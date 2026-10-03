@@ -7,6 +7,7 @@ import (
 
 	"mailserver/internal/auth"
 	"mailserver/internal/model"
+	"mailserver/internal/runtimecfg"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -15,6 +16,7 @@ import (
 type Auth struct {
 	DB          *gorm.DB
 	AdminEmails string // 见 handler/admin.go isAdminEmail
+	RT          *runtimecfg.Store
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -42,7 +44,7 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 	u := model.User{Email: email, Name: in.Name, PassHash: string(hash)}
 	var n int64
 	a.DB.Model(&model.User{}).Count(&n)
-	if n == 0 || isAdminEmail(a.AdminEmails, email) {
+	if n == 0 || isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 		u.Admin = true // 首个注册用户即管理员；名单命中也提权
 	}
 	if err := a.DB.Create(&u).Error; err != nil {
@@ -75,7 +77,7 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 401, map[string]string{"error": "账号或密码错误"})
 		return
 	}
-	if !u.Admin && isAdminEmail(a.AdminEmails, u.Email) {
+	if !u.Admin && isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), u.Email) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}

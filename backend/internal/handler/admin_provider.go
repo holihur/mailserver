@@ -205,6 +205,9 @@ func (a *Admin) applyProvider(w http.ResponseWriter, r *http.Request, prov provi
 		return
 	}
 	ip := strings.TrimSpace(in.IP)
+	if ip == "" && a.RT != nil {
+		ip = a.RT.PublicIP()
+	}
 	if ip == "" {
 		v, err := detectPublicIP(r.Context())
 		if err != nil {
@@ -220,9 +223,11 @@ func (a *Admin) applyProvider(w http.ResponseWriter, r *http.Request, prov provi
 
 	// DKIM：签名域匹配时用真实公钥，否则占位
 	selector, dkimTXT := "dkim", ""
-	if a.DNS != nil && a.DNS.Signer != nil && strings.EqualFold(a.DNS.Signer.Domain, domain) {
-		selector = a.DNS.Signer.Selector
-		dkimTXT = a.DNS.Signer.TXT()
+	if a.DNS != nil {
+		if sg := a.DNS.signer(); sg != nil && strings.EqualFold(sg.Domain, domain) {
+			selector = sg.Selector
+			dkimTXT = sg.TXT()
+		}
 	}
 
 	recs := in.Records

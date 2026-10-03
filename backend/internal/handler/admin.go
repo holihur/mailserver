@@ -10,7 +10,9 @@ import (
 	"strings"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/certstore"
 	"mailserver/internal/model"
+	"mailserver/internal/runtimecfg"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -20,6 +22,19 @@ type Admin struct {
 	DB          *gorm.DB
 	AdminEmails string // ADMIN_EMAILS 逗号分隔，命中即管理员（兜底提权）
 	DNS         *DNS   // 复用自托管 DNS 的导出/域名落库能力（可为 nil）
+	RT          *runtimecfg.Store
+	Cert        *certstore.Store // 动态 TLS 证书
+	CertDir     string           // 证书 / ACME 账号缓存目录
+}
+
+// effectiveAdminEmails 优先使用后台配置，回退环境变量。
+func effectiveAdminEmails(rt *runtimecfg.Store, fallback string) string {
+	if rt != nil {
+		if v := rt.AdminEmails(); v != "" {
+			return v
+		}
+	}
+	return fallback
 }
 
 // isAdminEmail 命中预置管理员名单（大小写不敏感）
@@ -49,7 +64,7 @@ func (a *Admin) mustAdmin(w http.ResponseWriter, r *http.Request) (*model.User, 
 		return nil, false
 	}
 	// 名单命中顺手提权（改了环境变量无需手动进库）
-	if !u.Admin && isAdminEmail(a.AdminEmails, u.Email) {
+	if !u.Admin && isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), u.Email) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}
@@ -70,8 +85,9 @@ func (a *Admin) Overview(w http.ResponseWriter, r *http.Request) {
 	a.DB.Model(&model.Domain{}).Count(&domains)
 	a.DB.Model(&model.Mail{}).Count(&mails)
 	a.DB.Model(&model.Mail{}).Where("folder = ? AND relayed = ?", "sent", false).Count(&pending)
+	// 跨数据库（SQLite/PG）均可用；按字符计，仅作展示
 	a.DB.Model(&model.Mail{}).
-		Select("COALESCE(SUM(LENGTH(CAST(subject AS BLOB))+LENGTH(CAST(body AS BLOB))),0)").
+		Select("COALESCE(SUM(LENGTH(subject)+LENGTH(body)),0)").
 		Scan(&storage)
 	writeJSON(w, 200, map[string]any{
 		"users": users, "domains": domains, "mails": mails,
@@ -141,7 +157,7 @@ func (a *Admin) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.MinCost) // 与注册一致
 	u := model.User{Email: email, Name: name, PassHash: string(hash)}
-	if isAdminEmail(a.AdminEmails, email) {
+	if isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 		u.Admin = true
 	}
 	if err := a.DB.Create(&u).Error; err != nil {

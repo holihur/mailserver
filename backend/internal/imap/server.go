@@ -24,13 +24,13 @@ import (
 const maxSnap = 500
 
 type item struct {
-	id             uint32
-	date           time.Time
-	from, to       string
-	subject, body  string
-	read, starred  bool
-	deleted        bool
-	size           int // len(raw) 精确值
+	id            uint32
+	date          time.Time
+	from, to      string
+	subject, body string
+	read, starred bool
+	deleted       bool
+	size          int // len(raw) 精确值
 }
 
 func (it *item) raw(host string) string {
@@ -62,7 +62,7 @@ func toFolder(name string) (string, string, bool) {
 	return "", "", false
 }
 
-func Serve(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
+func Serve(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		fmt.Println("imap listen fail:", err)
@@ -78,7 +78,7 @@ func Serve(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
 	}
 }
 
-func ServeTLS(addr, host string, db *gorm.DB, tlsConf *tls.Config) {
+func ServeTLS(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
 	if tlsConf == nil {
 		fmt.Println("imaps skipped: no cert")
 		return
@@ -103,7 +103,7 @@ type session struct {
 	r        *bufio.Reader
 	w        *bufio.Writer
 	db       *gorm.DB
-	host     string
+	host     func() string
 	tlsConf  *tls.Config
 	tls      bool
 	user     *model.User
@@ -117,7 +117,7 @@ func (s *session) untagged(f string, a ...any) {
 	s.w.WriteString("* " + fmt.Sprintf(f, a...) + "\r\n")
 }
 
-func handle(conn net.Conn, host string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
+func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
 	defer conn.Close()
 	s := &session{conn: conn, r: bufio.NewReader(conn), w: bufio.NewWriter(conn),
 		db: db, host: host, tlsConf: tlsConf, tls: encrypted}
@@ -237,7 +237,7 @@ func handle(conn net.Conn, host string, db *gorm.DB, tlsConf *tls.Config, encryp
 			var unseen int64
 			var maxID uint32
 			s.db.Model(&model.Mail{}).Where("user_id = ? AND folder = ?", s.user.ID, folder).Count(&total)
-			s.db.Model(&model.Mail{}).Where("user_id = ? AND folder = ? AND `read` = ?", s.user.ID, folder, false).Count(&unseen)
+			s.db.Model(&model.Mail{}).Where("user_id = ? AND folder = ?", s.user.ID, folder).Where(map[string]any{"read": false}).Count(&unseen)
 			row := struct{ M uint32 }{0}
 			s.db.Model(&model.Mail{}).Select("COALESCE(MAX(id),0) AS m").Where("user_id = ? AND folder = ?", s.user.ID, folder).Scan(&row)
 			maxID = row.M
@@ -512,7 +512,7 @@ func (s *session) loadBox() {
 	for _, m := range mails {
 		it := item{id: uint32(m.ID), date: m.CreatedAt, from: m.From, to: m.To,
 			subject: m.Subject, body: m.Body, read: m.Read, starred: m.Starred}
-		it.size = len(it.raw(s.host))
+		it.size = len(it.raw(s.host()))
 		s.items = append(s.items, it)
 	}
 }
@@ -717,13 +717,13 @@ func (s *session) fetchAtts(seqs []int, atts string) {
 			case au == "RFC822.SIZE":
 				parts = append(parts, fmt.Sprintf("RFC822.SIZE %d", it.size))
 			case au == "ENVELOPE":
-				parts = append(parts, "ENVELOPE "+envelope(it, s.host))
+				parts = append(parts, "ENVELOPE "+envelope(it, s.host()))
 			case au == "BODYSTRUCTURE":
 				parts = append(parts, "BODYSTRUCTURE "+bodyStruct(it))
 			case strings.HasPrefix(au, "BODY[") || au == "BODY":
 				peek := strings.Contains(au, "PEEK")
 				sec, partial := parseBodySec(a)
-				raw := it.raw(s.host)
+				raw := it.raw(s.host())
 				chunk := bodySection(raw, sec)
 				chunk = applyPartial(chunk, partial)
 				litName = a
@@ -733,14 +733,14 @@ func (s *session) fetchAtts(seqs []int, atts string) {
 				}
 			case au == "RFC822":
 				litName = a
-				lit = it.raw(s.host)
+				lit = it.raw(s.host())
 				markSeen = true
 			case au == "RFC822.HEADER":
 				litName = a
-				lit, _ = splitHeadBody(it.raw(s.host))
+				lit, _ = splitHeadBody(it.raw(s.host()))
 			case au == "RFC822.TEXT":
 				litName = a
-				_, lit = splitHeadBody(it.raw(s.host))
+				_, lit = splitHeadBody(it.raw(s.host()))
 			}
 		}
 		if markSeen && !it.read && !s.readonly {
@@ -1365,4 +1365,3 @@ func uidsStr(v []uint32, _ bool) string {
 	}
 	return b.String()
 }
-
