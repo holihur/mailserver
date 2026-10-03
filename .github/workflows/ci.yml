@@ -55,11 +55,39 @@ jobs:
           CGO_ENABLED: "0"
         run: go build ./...
 
-      - name: Test
+      - name: Unit tests + coverage gate (core packages >= 90%)
         env:
           CGO_ENABLED: "0"
           TEST_DATABASE_URL: postgres://mailserver:mailserver@localhost:5432/mailserver_test?sslmode=disable
-        run: go test ./...
+        run: |
+          python3 - <<'PY'
+          import subprocess, sys
+          core = {
+              'mailserver/internal/auth', 'mailserver/internal/config',
+              'mailserver/internal/certstore', 'mailserver/internal/dkim',
+              'mailserver/internal/provider', 'mailserver/internal/runtimecfg',
+              'mailserver/internal/secret',
+          }
+          r = subprocess.run(['go', 'test', '-cover', './...'], capture_output=True, text=True)
+          sys.stdout.write(r.stdout)
+          sys.stderr.write(r.stderr)
+          if r.returncode != 0:
+              print('FAIL: go test 失败')
+              sys.exit(1)
+          bad = []
+          for line in r.stdout.splitlines():
+              if 'coverage:' not in line or not line.strip().startswith(('ok', 'FAIL')):
+                  continue
+              parts = line.split()
+              pkg = parts[1]
+              pct = float(line.split('coverage:')[1].split('%')[0])
+              if pkg in core and pct < 90:
+                  bad.append(f'{pkg} {pct}%')
+          if bad:
+              print('FAIL: 核心包覆盖率 <90%:', bad)
+              sys.exit(1)
+          print('OK: 核心包覆盖率均 >=90%')
+          PY
 
   dns:
     name: DNS (Go)

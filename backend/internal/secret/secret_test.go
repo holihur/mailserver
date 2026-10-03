@@ -58,3 +58,12 @@ func TestNilKey(t *testing.T) {
 	}
 	SetKey("restore")
 }
+
+func TestBadKeyLength(t *testing.T) {
+	if _, err := encryptWith([]byte("short"), []byte("x")); err == nil {
+		t.Fatal("bad key length should error on encrypt")
+	}
+	if _, err := decryptWith([]byte("short"), "AAAA"); err == nil {
+		t.Fatal("bad key length should error on decrypt")
+	}
+}

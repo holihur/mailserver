@@ -31,6 +31,18 @@ func Encrypt(plain []byte) (string, error) {
 	mu.RLock()
 	k := key
 	mu.RUnlock()
+	return encryptWith(k, plain)
+}
+
+// Decrypt 解密 Encrypt 的输出。
+func Decrypt(enc string) ([]byte, error) {
+	mu.RLock()
+	k := key
+	mu.RUnlock()
+	return decryptWith(k, enc)
+}
+
+func encryptWith(k, plain []byte) (string, error) {
 	if len(k) == 0 {
 		return "", errors.New("secret: key 未初始化")
 	}
@@ -49,11 +61,7 @@ func Encrypt(plain []byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(gcm.Seal(nonce, nonce, plain, nil)), nil
 }
 
-// Decrypt 解密 Encrypt 的输出。
-func Decrypt(enc string) ([]byte, error) {
-	mu.RLock()
-	k := key
-	mu.RUnlock()
+func decryptWith(k []byte, enc string) ([]byte, error) {
 	if len(k) == 0 {
 		return nil, errors.New("secret: key 未初始化")
 	}

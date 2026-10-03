@@ -83,6 +83,14 @@ func TestNewStoreDKIMFile(t *testing.T) {
 	}
 }
 
+func TestNewNilDB(t *testing.T) {
+	secret.SetKey("k")
+	s := New(nil, config.Config{Host: "mail.example.com", RelayPort: "587"})
+	if s.MailHost() != "mail.example.com" || s.Relay().Port != "587" {
+		t.Fatalf("New(nil) failed: %q %+v", s.MailHost(), s.Relay())
+	}
+}
+
 func TestStoreDKIM(t *testing.T) {
 	secret.SetKey("unit-key")
 	s := &Store{vals: map[string]string{}}
