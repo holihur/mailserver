@@ -1,9 +1,9 @@
 # Mailserver — 轻量全栈邮件系统
 
-前端 React + TypeScript + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL
+前端 React + TypeScript + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL + Redis
 
-> 纯 Go 构建（无 CGO），前端已内嵌，后端为单二进制；数据库使用 PostgreSQL。
-> **几乎所有配置都在管理后台 `/admin` 里改**，命令行只需引导项（数据库、JWT_SECRET）。
+> 纯 Go 构建（无 CGO），前端已内嵌，后端为单二进制；数据库用 PostgreSQL，限流用 Redis。
+> **几乎所有配置都在管理后台 `/admin` 里改**，命令行只需引导项（数据库、Redis、JWT_SECRET）。
 
 ## 目录
 

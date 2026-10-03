@@ -29,6 +29,7 @@ ADMIN_EMAILS="${ADMIN_EMAILS:-}"
 WITH_DNS="${WITH_DNS:-1}"           # 1 启用内置权威 DNS（DNS_ADDR=:53）
 WEB_PORT="${WEB_PORT:-}"            # Web/API 端口：二进制默认 80，Docker 默认宿主机 80
 DATABASE_URL_IN="${DATABASE_URL:-}" # 二进制方式：使用已有 PostgreSQL；为空则本机自动安装
+REDIS_URL_IN="${REDIS_URL:-}"       # 二进制方式：限流用 Redis；为空则本机自动安装
 TAG=""                              # 解析后的版本号，如 v1.0.0
 
 # ---------------------------------------------------------------------------
@@ -68,6 +69,7 @@ usage() {
   --mail-host HOST    邮件域名，如 mail.example.com
   --admin EMAILS      管理员邮箱，逗号分隔
   --database-url DSN  使用已有 PostgreSQL（如 postgres://user:pass@host:5432/db?sslmode=disable）；不填则本机自动安装
+  --redis-url URL     使用已有 Redis（默认本机 127.0.0.1:6379；限流必需）
   --port PORT         Web/API 端口（二进制默认 80，Docker 默认宿主机 80）
   --no-dns            不启用内置权威 DNS
   -h, --help          显示帮助
@@ -133,6 +135,7 @@ while [ $# -gt 0 ]; do
     --mail-host) MAIL_HOST="${2:?--mail-host 需要参数}"; shift ;;
     --admin) ADMIN_EMAILS="${2:?--admin 需要参数}"; shift ;;
     --database-url) DATABASE_URL_IN="${2:?--database-url 需要参数}"; shift ;;
+    --redis-url) REDIS_URL_IN="${2:?--redis-url 需要参数}"; shift ;;
     --no-dns) WITH_DNS=0 ;;
     --port) WEB_PORT="${2:?--port 需要参数}"; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -190,6 +193,25 @@ setup_postgres() {
   ok "PostgreSQL 已就绪"
 }
 
+# Redis（限流必需）
+setup_redis() {
+  [ -n "$REDIS_URL_IN" ] && return 0
+  if ! have redis-server; then
+    if have apt-get; then
+      apt-get install -y -qq redis-server >/dev/null
+    elif have dnf; then
+      dnf install -y -q redis >/dev/null
+    elif have yum; then
+      yum install -y -q redis >/dev/null
+    else
+      die "未找到包管理器，请用 --redis-url 指定已有 Redis"
+    fi
+  fi
+  systemctl enable --now redis-server >/dev/null 2>&1 || systemctl enable --now redis >/dev/null 2>&1 || true
+  REDIS_URL_IN="redis://127.0.0.1:6379/0"
+  ok "Redis 已就绪"
+}
+
 # ---------------------------------------------------------------------------
 # Docker 安装
 # ---------------------------------------------------------------------------
@@ -210,6 +232,7 @@ POSTGRES_PASSWORD=$(rand_secret)
 MAIL_HOST=${MAIL_HOST}
 ADMIN_EMAILS=${ADMIN_EMAILS}
 MAILSERVER_TAG=${TAG:-latest}
+REDIS_URL=redis://redis:6379/0
 # Web 端口：宿主机 HTTP_PORT，容器内 PORT
 HTTP_PORT=${WEB_PORT:-80}
 PORT=8080
@@ -260,10 +283,12 @@ install_binary() {
   if [ ! -f /etc/mailserver/mailserver.env ]; then
     log "生成 /etc/mailserver/mailserver.env …"
     setup_postgres
+    setup_redis
     cat > /etc/mailserver/mailserver.env <<EOF
 PORT=${WEB_PORT:-80}
 DATA_DIR=${DIR}/data
 DATABASE_URL=${DATABASE_URL_IN}
+REDIS_URL=${REDIS_URL_IN}
 CERT_DIR=${DIR}/data/certs
 DNS_ADDR=$([ "$WITH_DNS" = "1" ] && echo ":53" || echo "off")
 JWT_SECRET=$(rand_secret)

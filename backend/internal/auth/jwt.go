@@ -28,6 +28,9 @@ func UserID(r *http.Request) (uint, error) {
 		return 0, errors.New("no token")
 	}
 	tok, err := jwt.Parse(strings.TrimPrefix(h, "Bearer "), func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
 		return secret, nil
 	})
 	if err != nil || !tok.Valid {

@@ -24,6 +24,7 @@ type Config struct {
 	AdminEmails   string // ADMIN_EMAILS 逗号分隔，命中即管理员（兜底提权）
 	JWTSecret     string
 	DatabaseURL   string // PostgreSQL DSN（必填）
+	RedisURL      string // Redis DSN（限流用）
 	DataDir       string // 数据目录（zones.json、证书等）
 	CertDir       string // 证书 / ACME 缓存目录
 	DNSAddr       string // 内置权威 DNS 监听地址（:53）；off 则禁用
@@ -66,6 +67,7 @@ func Load() Config {
 		SMTPport:      getenv("SMTP_PORT", "2525"),
 		JWTSecret:     getenv("JWT_SECRET", "dev-secret-change-me-32chars!!"),
 		DatabaseURL:   dbURL,
+		RedisURL:      os.Getenv("REDIS_URL"),
 		DataDir:       dataDir,
 		CertDir:       certDir,
 		DNSAddr:       getenv("DNS_ADDR", ":53"),

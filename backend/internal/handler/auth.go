@@ -2,21 +2,37 @@ package handler
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"mailserver/internal/auth"
 	"mailserver/internal/model"
+	"mailserver/internal/ratelimit"
 	"mailserver/internal/runtimecfg"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
+const (
+	loginWindow   = 5 * time.Minute
+	loginMaxPerIP = 20
+)
+
+func clientIP(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 type Auth struct {
 	DB          *gorm.DB
 	AdminEmails string // 见 handler/admin.go isAdminEmail
 	RT          *runtimecfg.Store
+	RL          *ratelimit.Limiter
 }
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
@@ -35,6 +51,10 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "bad body"})
 		return
 	}
+	if a.RL != nil && !a.RL.Allow("register:"+clientIP(r), 5, time.Hour) {
+		writeJSON(w, 429, map[string]string{"error": "注册过于频繁，请稍后再试"})
+		return
+	}
 	if len(in.Pass) < 6 || in.Email == "" {
 		writeJSON(w, 400, map[string]string{"error": "email/password 非法"})
 		return
@@ -47,7 +67,7 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 403, map[string]string{"error": "注册已关闭，请联系管理员开通账号"})
 		return
 	}
-	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.MinCost) // 低内存用 MinCost
+	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.DefaultCost)
 	u := model.User{Email: email, Name: in.Name, PassHash: string(hash)}
 	if n == 0 || isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 		u.Admin = true // 首个注册用户即管理员；名单命中也提权
@@ -74,6 +94,10 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		Pass  string `json:"password"`
 	}
 	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
+	if a.RL != nil && !a.RL.Allow("login:"+clientIP(r), loginMaxPerIP, loginWindow) {
+		writeJSON(w, 429, map[string]string{"error": "尝试过于频繁，请稍后再试"})
+		return
+	}
 	var u model.User
 	if err := a.DB.Where("email = ?", in.Email).First(&u).Error; err != nil {
 		// 兼容历史大小写不一致的数据

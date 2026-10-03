@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"mailserver/internal/auth"
 	"mailserver/internal/certstore"
@@ -19,6 +20,7 @@ import (
 	"mailserver/internal/imap"
 	"mailserver/internal/pop3"
 	"mailserver/internal/queue"
+	"mailserver/internal/ratelimit"
 	"mailserver/internal/runtimecfg"
 	"mailserver/internal/secret"
 	"mailserver/internal/selfupdate"
@@ -64,6 +66,9 @@ func main() {
 	cfg := config.Load()
 	auth.SetSecret(cfg.JWTSecret)
 	secret.SetKey(cfg.JWTSecret)
+	if cfg.JWTSecret == "dev-secret-change-me-32chars!!" || len(cfg.JWTSecret) < 16 {
+		log.Println("⚠️  安全警告：JWT_SECRET 为默认值或过短；它同时用于登录令牌与凭证加密，请设置随机 32 位以上")
+	}
 
 	g, err := db.Open(cfg.DatabaseURL)
 	if err != nil {
@@ -71,6 +76,11 @@ func main() {
 	}
 
 	au := &handler.Auth{DB: g, AdminEmails: cfg.AdminEmails}
+	rl, err := ratelimit.New(cfg.RedisURL)
+	if err != nil {
+		log.Fatal("限流需要 Redis（REDIS_URL）：", err)
+	}
+	au.RL = rl
 	mb := &handler.MailBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
 
@@ -197,7 +207,27 @@ func main() {
 	})
 
 	fmt.Println("api on :" + cfg.Port)
-	log.Fatal(http.ListenAndServe(":"+cfg.Port, mux))
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           securityHeaders(mux),
+		ReadHeaderTimeout: 15 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
+}
+
+// securityHeaders 加常见安全响应头（防 MIME 探测、点击劫持、XSS）。
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "+
+				"script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.ipify.org; "+
+				"object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		next.ServeHTTP(w, r)
+	})
 }
 
 //go:embed all:web

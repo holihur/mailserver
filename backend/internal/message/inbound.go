@@ -29,7 +29,7 @@ func ParseInbound(raw string) (subject, body, attachments string) {
 	ct := msg.Header.Get("Content-Type")
 	mediaType, params, _ := mime.ParseMediaType(ct)
 	if strings.HasPrefix(mediaType, "multipart/") {
-		atts, text := parseMultipart(msg.Body, params["boundary"])
+		atts, text := parseMultipart(msg.Body, params["boundary"], 0)
 		body = text
 		attachments = marshalAtts(atts)
 	} else {
@@ -45,7 +45,11 @@ func ParseInbound(raw string) (subject, body, attachments string) {
 	return subject, body, attachments
 }
 
-func parseMultipart(r io.Reader, boundary string) ([]Attachment, string) {
+func parseMultipart(r io.Reader, boundary string, depth int) ([]Attachment, string) {
+	if depth > 5 {
+		b, _ := io.ReadAll(io.LimitReader(r, maxPart))
+		return nil, string(b)
+	}
 	if boundary == "" {
 		b, _ := io.ReadAll(io.LimitReader(r, maxPart))
 		return nil, string(b)
@@ -67,7 +71,7 @@ func parseMultipart(r io.Reader, boundary string) ([]Attachment, string) {
 		data, _ := io.ReadAll(io.LimitReader(p, maxPart))
 
 		if strings.HasPrefix(mt, "multipart/") {
-			subAt, subText := parseMultipart(bytes.NewReader(data), params["boundary"])
+			subAt, subText := parseMultipart(bytes.NewReader(data), params["boundary"], depth+1)
 			atts = append(atts, subAt...)
 			if text == "" {
 				text = subText

@@ -155,7 +155,7 @@ func (a *Admin) createUser(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		name = email[:at]
 	}
-	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.MinCost) // 与注册一致
+	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.DefaultCost)
 	u := model.User{Email: email, Name: name, PassHash: string(hash)}
 	if isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 		u.Admin = true
@@ -211,7 +211,7 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 			upd["name"] = strings.TrimSpace(*in.Name)
 		}
 		if in.Pass != nil && *in.Pass != "" {
-			hash, _ := bcrypt.GenerateFromPassword([]byte(*in.Pass), bcrypt.MinCost)
+			hash, _ := bcrypt.GenerateFromPassword([]byte(*in.Pass), bcrypt.DefaultCost)
 			upd["pass_hash"] = string(hash)
 		}
 		if in.Disabled != nil {

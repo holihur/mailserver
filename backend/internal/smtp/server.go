@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"mailserver/internal/message"
 	"mailserver/internal/model"
@@ -43,6 +44,7 @@ func handle(c net.Conn, db *gorm.DB) {
 	inData := false
 
 	for {
+		_ = c.SetReadDeadline(time.Now().Add(5 * time.Minute))
 		line, err := r.ReadString('\n')
 		if err != nil {
 			return
@@ -64,6 +66,10 @@ func handle(c net.Conn, db *gorm.DB) {
 			continue
 		}
 		up := strings.ToUpper(line)
+		if len(line) > 4096 {
+			reply("500 line too long")
+			return
+		}
 		switch {
 		case strings.HasPrefix(up, "EHLO"), strings.HasPrefix(up, "HELO"):
 			reply("250-Hello\r\n250 8BITMIME")
