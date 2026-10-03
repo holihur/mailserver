@@ -7,9 +7,11 @@ package queue
 
 import (
 	"crypto/tls"
+	"fmt"
 	"log"
 	"net"
 	"net/smtp"
+	"sort"
 	"strings"
 	"time"
 
@@ -63,16 +65,25 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail
 		return
 	}
 
-	// 2) 站外：必须有中继（25 被封，直投必失败，不尝试）
+	// 2) 站外：优先中继；未配中继且开启直连时，直连对方 MX:25
+	msg := buildMsg(c.Name, m, signer)
 	if c.Host == "" {
+		if c.Direct {
+			if err := sendDirect(m.From, external, msg); err != nil {
+				db.Model(m).Updates(map[string]any{"attempts": m.Attempts + 1, "relay_err": trimErr(err)})
+				log.Printf("queue: direct mail %d to %v fail: %v", m.ID, external, err)
+				return
+			}
+			db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
+			return
+		}
 		db.Model(m).Updates(map[string]any{
 			"attempts":  m.Attempts + 1,
-			"relay_err": "无外发中继：25 出站被封，请配 SMTP_RELAY_HOST（见 MAIL_CLIENTS.md）",
+			"relay_err": "无外发中继：25 出站被封，请配 SMTP_RELAY_HOST，或在后台开启「直连对方 MX」",
 		})
 		return
 	}
 	// 默认 envelope-from 用本人地址；若中继强制要求认证账号一致，失败后会自动用 RelayFrom 重试一次
-	msg := buildMsg(c.Name, m, signer)
 	if err := sendSMTP(c, m.From, external, msg); err != nil {
 		if c.From != "" {
 			if err2 := sendSMTP(c, c.From, external, msg); err2 == nil {
@@ -94,12 +105,16 @@ func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
 	if port == "" {
 		port = "587"
 	}
+	return smtpSession(host, port, c.User, c.Pass, c.Insecure, from, to, msg)
+}
+
+func smtpSession(host, port, user, pass string, insecure bool, from string, to []string, msg []byte) error {
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 15*time.Second)
 	if err != nil {
 		return err
 	}
 	if port == "465" || port == "8465" {
-		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: c.Insecure})
+		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure})
 	}
 	cl, err := smtp.NewClient(conn, host)
 	if err != nil {
@@ -107,13 +122,13 @@ func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
 	}
 	defer cl.Close()
 	if ok, _ := cl.Extension("STARTTLS"); ok {
-		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: c.Insecure}); err != nil {
+		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure}); err != nil {
 			return err
 		}
 	}
-	if c.User != "" {
+	if user != "" {
 		if ok, _ := cl.Extension("AUTH"); ok {
-			if err := cl.Auth(smtp.PlainAuth("", c.User, c.Pass, host)); err != nil {
+			if err := cl.Auth(smtp.PlainAuth("", user, pass, host)); err != nil {
 				return err
 			}
 		}
@@ -137,6 +152,49 @@ func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
 		return err
 	}
 	return cl.Quit()
+}
+
+// sendDirect 无中继时直连对方 MX:25 投递（需 25 出站放行）。
+func sendDirect(from string, to []string, msg []byte) error {
+	byDomain := map[string][]string{}
+	for _, rcpt := range to {
+		at := strings.LastIndex(rcpt, "@")
+		if at < 0 {
+			return fmt.Errorf("非法收件人: %s", rcpt)
+		}
+		d := strings.ToLower(rcpt[at+1:])
+		byDomain[d] = append(byDomain[d], rcpt)
+	}
+	var firstErr error
+	for dom, rcpts := range byDomain {
+		delivered := false
+		for _, h := range mxHosts(dom) {
+			if err := smtpSession(h, "25", "", "", false, from, rcpts, msg); err == nil {
+				delivered = true
+				break
+			} else if firstErr == nil {
+				firstErr = fmt.Errorf("%s: %w", h, err)
+			}
+		}
+		if !delivered && firstErr == nil {
+			firstErr = fmt.Errorf("投递到 %s 失败", dom)
+		}
+	}
+	return firstErr
+}
+
+// mxHosts 返回按优先级排序的 MX 主机；无 MX 时按 RFC 回退到域本身。
+func mxHosts(dom string) []string {
+	mxs, err := net.LookupMX(dom)
+	if err != nil || len(mxs) == 0 {
+		return []string{dom}
+	}
+	sort.Slice(mxs, func(i, j int) bool { return mxs[i].Pref < mxs[j].Pref })
+	out := make([]string, 0, len(mxs))
+	for _, mx := range mxs {
+		out = append(out, strings.TrimSuffix(mx.Host, "."))
+	}
+	return out
 }
 
 // 组装 RFC5322；发件域==签名域且配了私钥时加 DKIM-Signature（签的就是实际发出的头）

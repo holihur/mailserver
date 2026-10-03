@@ -31,6 +31,7 @@ export default function AdminSettings() {
         relay_user: s.relay_user || '', relay_from: s.relay_from || '',
         registration_enabled: s.registration_enabled ? '1' : '0',
         relay_insecure: s.relay_insecure ? '1' : '0',
+        direct_send: s.direct_send ? '1' : '0',
       }
       if (relayPass) body.relay_pass = relayPass
       const out = await api.settingsPatch(body)
@@ -104,6 +105,11 @@ export default function AdminSettings() {
               <input type="checkbox" className="mt-0.5" checked={!!s.relay_insecure}
                 onChange={e => field('relay_insecure', e.target.checked ? '1' : '0')} />
               <span>{t('settings.relayInsecureHint')}</span>
+            </label>
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" className="mt-0.5" checked={!!s.direct_send}
+                onChange={e => field('direct_send', e.target.checked ? '1' : '0')} />
+              <span>{t('settings.directSendHint')}</span>
             </label>
           </Card>
 

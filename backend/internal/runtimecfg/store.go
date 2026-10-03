@@ -30,6 +30,7 @@ const (
 	KeyRelayPass     = "relay_pass"
 	KeyRelayFrom     = "relay_from"
 	KeyRelayInsecure = "relay_insecure" // 跳过中继 TLS 证书校验（自签/域名不匹配）
+	KeyDirectSend    = "direct_send"    // 无中继时直连对方 MX:25 投递
 	KeyDKIMDomain    = "dkim_domain"
 	KeyDKIMSel       = "dkim_selector"
 	KeyDKIMKeyEnc    = "dkim_key_enc"         // AES-GCM 加密的 DKIM 私钥 PEM
@@ -45,6 +46,7 @@ type Relay struct {
 	From     string
 	Name     string
 	Insecure bool
+	Direct   bool
 }
 
 type Store struct {
@@ -164,6 +166,7 @@ func (s *Store) Relay() Relay {
 		From:     s.get(KeyRelayFrom),
 		Name:     s.MailHost(),
 		Insecure: parseBool(s.get(KeyRelayInsecure)),
+		Direct:   parseBool(s.get(KeyDirectSend)),
 	}
 }
 
@@ -235,6 +238,7 @@ func (s *Store) Snapshot() map[string]any {
 		"relay_from":           s.vals[KeyRelayFrom],
 		"relay_pass_set":       s.vals[KeyRelayPass] != "",
 		"relay_insecure":       parseBool(s.vals[KeyRelayInsecure]),
+		"direct_send":          parseBool(s.vals[KeyDirectSend]),
 		"dkim_domain":          s.vals[KeyDKIMDomain],
 		"dkim_selector":        s.vals[KeyDKIMSel],
 		"dkim_ready":           s.signer.Load() != nil,
