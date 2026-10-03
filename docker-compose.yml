@@ -1,0 +1,38 @@
+services:
+  api:
+    build: ./backend
+    ports: ["8080:8080", "2525:2525", "587:587", "110:110", "143:143"]
+    environment:
+      PORT: 8080
+      DB_PATH: /data/mail.db
+      JWT_SECRET: ${JWT_SECRET:-change-me-32chars-min}
+      MAIL_HOST: ${MAIL_HOST:-mail.example.com}
+      SMTP_RELAY_HOST: ${SMTP_RELAY_HOST:-}
+      SMTP_RELAY_PORT: ${SMTP_RELAY_PORT:-587}
+      SMTP_RELAY_USER: ${SMTP_RELAY_USER:-}
+      SMTP_RELAY_PASS: ${SMTP_RELAY_PASS:-}
+      SMTP_RELAY_FROM: ${SMTP_RELAY_FROM:-}
+      TLS_CERT: ${TLS_CERT:-}
+      TLS_KEY: ${TLS_KEY:-}
+      DKIM_KEY: ${DKIM_KEY:-}
+      DKIM_SELECTOR: ${DKIM_SELECTOR:-dkim}
+      DKIM_DOMAIN: ${DKIM_DOMAIN:-}
+    volumes: [maildata:/data]
+    restart: unless-stopped
+    mem_limit: 128m
+    healthcheck: { test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/health"], interval: 30s, timeout: 3s, retries: 3 }
+  dns:
+    build: ./dns
+    ports: ["53:53/udp", "53:53/tcp"]
+    environment:
+      ZONES_PATH: /data/zones.json
+    volumes: [maildata:/data]
+    restart: unless-stopped
+    mem_limit: 64m
+  web:
+    build: ./frontend
+    ports: ["80:80"]
+    depends_on: [api]
+    mem_limit: 32m
+
+volumes: { maildata: {} }

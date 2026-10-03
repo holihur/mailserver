@@ -1,0 +1,21 @@
+# 环境与密钥
+.env
+*.env
+!.env.example
+*.pem
+*.key
+data/
+zones.json
+mail.db*
+
+# 构建产物
+frontend/node_modules/
+frontend/dist/
+backend/mailserver
+backend/mailserver.exe
+dns/dns
+dns/dns.exe
+
+# 杂项
+.DS_Store
+*.log
