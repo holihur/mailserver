@@ -3,6 +3,7 @@ import Login from './pages/Login'
 import MailApp from './pages/MailApp'
 import DnsPage from './pages/DnsPage'
 import Setup from './pages/Setup'
+import AdminPage from './pages/AdminPage'
 
 const authed = () => !!localStorage.getItem('token')
 
@@ -14,6 +15,7 @@ export default function App() {
         <Route path="/" element={authed() ? <MailApp /> : <Navigate to="/login" />} />
         <Route path="/dns" element={authed() ? <DnsPage /> : <Navigate to="/login" />} />
         <Route path="/setup" element={authed() ? <Setup /> : <Navigate to="/login" />} />
+        <Route path="/admin" element={authed() ? <AdminPage /> : <Navigate to="/login" />} />
       </Routes>
     </HashRouter>
   )

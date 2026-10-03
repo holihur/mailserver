@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge } from '../components/ui/controls'
-import { Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut, Moon, Sun, RefreshCw, Globe, Settings } from 'lucide-react'
+import { Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut, Moon, Sun, RefreshCw, Globe, Settings, ShieldCheck } from 'lucide-react'
 import { cn } from '../lib/utils'
 
 const FOLDERS = [
@@ -47,6 +47,7 @@ export default function MailApp() {
         <div className="flex-1" />
         <a href="#/dns" title="域名 DNS"><Button variant="ghost" size="icon"><Globe /></Button></a>
         <a href="#/setup" title="客户端配置"><Button variant="ghost" size="icon"><Settings /></Button></a>
+        {me?.admin && <a href="#/admin" title="管理后台"><Button variant="ghost" size="icon"><ShieldCheck /></Button></a>}
         <Button variant="ghost" size="icon" onClick={() => setDark(!dark)}>{dark ? <Sun /> : <Moon />}</Button>
         <Button variant="ghost" size="icon" onClick={load}><RefreshCw /></Button>
         <Button variant="ghost" size="icon" onClick={logout}><LogOut /></Button>

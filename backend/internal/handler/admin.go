@@ -19,6 +19,7 @@ import (
 type Admin struct {
 	DB          *gorm.DB
 	AdminEmails string // ADMIN_EMAILS 逗号分隔，命中即管理员（兜底提权）
+	DNS         *DNS   // 复用自托管 DNS 的导出/域名落库能力（可为 nil）
 }
 
 // isAdminEmail 命中预置管理员名单（大小写不敏感）

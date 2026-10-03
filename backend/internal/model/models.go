@@ -7,8 +7,8 @@ type User struct {
 	Email     string    `gorm:"uniqueIndex;size:255" json:"email"`
 	Name      string    `gorm:"size:100" json:"name"`
 	PassHash  string    `gorm:"size:255" json:"-"`
-	Admin     bool      `json:"admin"`     // 管理员：可进 /api/admin 管理后台
-	Disabled  bool      `json:"disabled"`  // 禁用：Web/API/收发信全部拒绝
+	Admin     bool      `json:"admin"`    // 管理员：可进 /api/admin 管理后台
+	Disabled  bool      `json:"disabled"` // 禁用：Web/API/收发信全部拒绝
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -28,6 +28,16 @@ type DnsRecord struct {
 	Value    string `gorm:"size:1024" json:"value"`
 	TTL      int    `json:"ttl"`
 	Prio     int    `json:"prio"` // MX/SRV 优先级，存 Value 前缀亦可，此处单独列
+}
+
+// 第三方域名服务商账号（阿里云 DNS / Cloudflare），用于一键下发邮件解析。
+// Creds 存 AES-GCM 加密后的 JSON（key 由 JWT_SECRET 派生），json 不外泄。
+type DnsProvider struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Name      string    `gorm:"size:120" json:"name"`
+	Type      string    `gorm:"size:20;index" json:"type"` // aliyun | cloudflare
+	Creds     string    `gorm:"type:text" json:"-"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // folder: inbox / sent / draft / trash

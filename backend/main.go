@@ -16,6 +16,7 @@ import (
 	"mailserver/internal/imap"
 	"mailserver/internal/pop3"
 	"mailserver/internal/queue"
+	"mailserver/internal/secret"
 	mailsmtp "mailserver/internal/smtp"
 
 	"github.com/joho/godotenv"
@@ -25,6 +26,7 @@ func main() {
 	_ = godotenv.Load()
 	cfg := config.Load()
 	auth.SetSecret(cfg.JWTSecret)
+	secret.SetKey(cfg.JWTSecret)
 
 	g, err := db.Open(cfg.DBPath)
 	if err != nil {
@@ -35,6 +37,7 @@ func main() {
 	mb := &handler.MailBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DBPath)
 	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails}
+	ad.DNS = dns
 
 	var tlsConf *tls.Config
 	if cfg.TLSCert != "" && cfg.TLSKey != "" {
@@ -117,6 +120,8 @@ func main() {
 	mux.HandleFunc("/api/admin/users", cors(ad.Users))
 	mux.HandleFunc("/api/admin/users/", cors(ad.UserOne))
 	mux.HandleFunc("/api/admin/domains", cors(ad.Domains))
+	mux.HandleFunc("/api/admin/providers", cors(ad.Providers))
+	mux.HandleFunc("/api/admin/providers/", cors(ad.ProviderOne))
 
 	// 静态托管前端（docker 镜像把 dist 拷到 ./web）
 	if _, err := os.Stat("./web"); err == nil {

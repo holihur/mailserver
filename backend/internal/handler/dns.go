@@ -103,6 +103,14 @@ func (d *DNS) Domains(w http.ResponseWriter, r *http.Request) {
 		if ip == "" {
 			ip = "127.0.0.1" // 占位，前端会提示改成公网 IP
 		}
+		// DKIM：签名域与当前域名一致时直接填入真实公钥，否则留占位
+		selector, dkimVal := "dkim", "v=DKIM1; k=rsa; p=PASTE_PUBLIC_KEY_HERE"
+		if d.Signer != nil && strings.EqualFold(d.Signer.Domain, in.Name) {
+			selector = d.Signer.Selector
+			if t := d.Signer.TXT(); t != "" {
+				dkimVal = t
+			}
+		}
 		defs := []model.DnsRecord{
 			{DomainID: dm.ID, Name: "@", Type: "NS", Value: "ns1." + in.Name + ".", TTL: 3600},
 			{DomainID: dm.ID, Name: "@", Type: "A", Value: ip, TTL: 600},
@@ -111,7 +119,7 @@ func (d *DNS) Domains(w http.ResponseWriter, r *http.Request) {
 			{DomainID: dm.ID, Name: "@", Type: "MX", Value: "mail." + in.Name + ".", TTL: 3600, Prio: 10},
 			{DomainID: dm.ID, Name: "@", Type: "TXT", Value: "v=spf1 mx ~all", TTL: 3600},
 			{DomainID: dm.ID, Name: "_dmarc", Type: "TXT", Value: "v=DMARC1; p=none; rua=mailto:postmaster@" + in.Name, TTL: 3600},
-			{DomainID: dm.ID, Name: "dkim._domainkey", Type: "TXT", Value: "v=DKIM1; k=rsa; p=PASTE_PUBLIC_KEY_HERE", TTL: 3600},
+			{DomainID: dm.ID, Name: selector + "._domainkey", Type: "TXT", Value: dkimVal, TTL: 3600},
 		}
 		for _, rec := range defs {
 			d.DB.Create(&rec)
@@ -236,14 +244,17 @@ func fqdn(name, domain string) string {
 }
 
 // 导出给自研 dns 服务的 zones.json
-func (d *DNS) export() {
+func (d *DNS) export() { ExportZones(d.DB, d.ZonesPath) }
+
+// ExportZones 把全部托管域名导出为 zones.json（dns/ 服务文件热加载）。
+func ExportZones(db *gorm.DB, path string) {
 	var ds []model.Domain
-	d.DB.Find(&ds)
+	db.Find(&ds)
 	out := map[string]any{}
 	zones := []any{}
 	for _, dm := range ds {
 		var recs []model.DnsRecord
-		d.DB.Where("domain_id = ?", dm.ID).Find(&recs)
+		db.Where("domain_id = ?", dm.ID).Find(&recs)
 		var rs []any
 		for _, r := range recs {
 			rs = append(rs, map[string]any{
@@ -257,7 +268,58 @@ func (d *DNS) export() {
 	}
 	out["zones"] = zones
 	b, _ := json.MarshalIndent(out, "", "  ")
-	_ = os.WriteFile(d.ZonesPath, b, 0644)
+	_ = os.WriteFile(path, b, 0644)
+}
+
+// BuildMailRecords 生成发布到第三方 DNS 的邮件相关记录（不含自托管 NS/glue）。
+// mailHost 为空时用 mail.<domain>；dkimTXT 为空时用占位公钥。
+func BuildMailRecords(domain, ip, mailHost, selector, dkimTXT string) []model.DnsRecord {
+	domain = strings.ToLower(strings.Trim(strings.TrimSpace(domain), "."))
+	if selector == "" {
+		selector = "dkim"
+	}
+	if mailHost == "" {
+		mailHost = "mail." + domain
+	}
+	mailHost = strings.Trim(strings.TrimSpace(mailHost), ".")
+	if dkimTXT == "" {
+		dkimTXT = "v=DKIM1; k=rsa; p=PASTE_PUBLIC_KEY_HERE"
+	}
+	return []model.DnsRecord{
+		{Name: "mail", Type: "A", Value: ip, TTL: 600},
+		{Name: "@", Type: "MX", Value: mailHost, TTL: 3600, Prio: 10},
+		{Name: "@", Type: "TXT", Value: "v=spf1 mx ~all", TTL: 3600},
+		{Name: "_dmarc", Type: "TXT", Value: "v=DMARC1; p=none; rua=mailto:postmaster@" + domain, TTL: 3600},
+		{Name: selector + "._domainkey", Type: "TXT", Value: dkimTXT, TTL: 3600},
+	}
+}
+
+// UpsertDomainWithRecords 确保本地存在该域名及其记录（第三方 DNS 一键配置时同步一份供账号/展示用），
+// 同名同类型记录存在则更新，最后刷新 zones.json。
+func (d *DNS) UpsertDomainWithRecords(domain string, records []model.DnsRecord) (*model.Domain, error) {
+	domain = strings.ToLower(strings.Trim(strings.TrimSpace(domain), "."))
+	if domain == "" || strings.ContainsAny(domain, "/ ") {
+		return nil, fmt.Errorf("域名非法")
+	}
+	var dm model.Domain
+	if err := d.DB.Where("LOWER(name) = ?", domain).First(&dm).Error; err != nil {
+		dm = model.Domain{Name: domain}
+		if err := d.DB.Create(&dm).Error; err != nil {
+			return nil, err
+		}
+	}
+	for _, r := range records {
+		r.ID = 0
+		r.DomainID = dm.ID
+		var ex model.DnsRecord
+		if err := d.DB.Where("domain_id = ? AND name = ? AND type = ?", dm.ID, r.Name, r.Type).First(&ex).Error; err == nil {
+			d.DB.Model(&ex).Updates(map[string]any{"value": r.Value, "ttl": r.TTL, "prio": r.Prio})
+		} else {
+			d.DB.Create(&r)
+		}
+	}
+	d.export()
+	return &dm, nil
 }
 
 // GET /api/dkim -> {ready, domain, selector, name, txt}
@@ -325,13 +387,13 @@ func (d *DNS) zoneText(dm model.Domain) string {
 				var parts []string
 				for len(val) > 0 {
 					p := 200
-				if len(val) < p {
-					p = len(val)
+					if len(val) < p {
+						p = len(val)
+					}
+					parts = append(parts, fmt.Sprintf("\"%s\"", val[:p]))
+					val = val[p:]
 				}
-				parts = append(parts, fmt.Sprintf("\"%s\"", val[:p]))
-				val = val[p:]
-			}
-			fmt.Fprintf(&sb, "%s %d IN TXT (%s)\n", n, r.TTL, strings.Join(parts, " "))
+				fmt.Fprintf(&sb, "%s %d IN TXT (%s)\n", n, r.TTL, strings.Join(parts, " "))
 			} else {
 				fmt.Fprintf(&sb, "%s %d IN TXT \"%s\"\n", n, r.TTL, val)
 			}

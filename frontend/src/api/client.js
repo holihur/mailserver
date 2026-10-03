@@ -33,4 +33,11 @@ export const api = {
   dnsRecCreate: (id, b) => req(`/api/domains/${id}/records`, { method: 'POST', body: JSON.stringify(b) }),
   dnsRecDelete: (id, rid) => req(`/api/domains/${id}/records/${rid}`, { method: 'DELETE' }),
   dnsZone: async (id) => { const r = await fetch((import.meta.env.VITE_API || '') + `/api/domains/${id}/zone`, { headers: localStorage.getItem('token') ? { Authorization: 'Bearer ' + localStorage.getItem('token') } : {} }); return r.text() },
+  adminOverview: () => req('/api/admin/overview'),
+  providers: () => req('/api/admin/providers'),
+  providerCreate: (b) => req('/api/admin/providers', { method: 'POST', body: JSON.stringify(b) }),
+  providerDelete: (id) => req(`/api/admin/providers/${id}`, { method: 'DELETE' }),
+  providerTest: (id) => req(`/api/admin/providers/${id}/test`, { method: 'POST' }),
+  providerDomains: (id) => req(`/api/admin/providers/${id}/domains`),
+  providerApply: (id, b) => req(`/api/admin/providers/${id}/apply`, { method: 'POST', body: JSON.stringify(b) }),
 }

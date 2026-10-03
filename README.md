@@ -16,8 +16,9 @@ mailserver/
 │   │   ├── model/models.go
 │   │   ├── db/db.go
 │   │   ├── auth/jwt.go
-│   │   ├── handler/{auth,mail,dns,admin}.go
-│   │   ├── smtp/ pop3/ imap/ queue/ dkim/
+│   │   ├── handler/{auth,mail,dns,admin,admin_provider}.go
+│   │   ├── provider/           # 阿里云 / Cloudflare DNS 下发
+│   │   ├── smtp/ pop3/ imap/ queue/ dkim/ secret/
 │   ├── go.mod
 │   └── .env.example
 ├── dns/              # 自研权威 DNS (miekg/dns)
@@ -64,6 +65,26 @@ API 默认 `:8080`，SMTP 入站 `:2525`，前端 `:5173`。
 | POST | /api/mails | 发件/存草稿 `{to,subject,body,folder}` |
 | PATCH | /api/mails/:id | 星标/已读/移动文件夹 |
 | DELETE | /api/mails/:id | 移入 trash |
+
+## 管理后台 & 域名服务商一键配置
+
+访问 `/#/admin`（仅管理员可见，`ADMIN_EMAILS` 或 `admin=true` 用户）。
+
+- **概览**：用户 / 域名 / 邮件 / 待发出 / 存储量。
+- **域名服务商**：录入凭证后可一键下发邮件解析（开箱即用）。
+  - 已支持 **阿里云 DNS**（AccessKey ID + Secret）与 **Cloudflare**（API Token 或 Email + Global API Key）。
+  - 流程：录入凭证 → 自动校验 → 列出账号下域名 → 选择域名（可手填公网 IP，留空则自动探测）→ 自动创建/更新 `A(mail)`、`MX`、`SPF`、`DMARC`、`DKIM`。
+  - 凭证使用 `JWT_SECRET` 派生的密钥 AES-GCM 加密存储；更换 `JWT_SECRET` 后需重新录入。
+
+对应接口（均需管理员）：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | /api/admin/providers | 服务商列表 / 新增（新增时校验凭证） |
+| DELETE | /api/admin/providers/:id | 删除 |
+| POST | /api/admin/providers/:id/test | 测试连接 |
+| GET | /api/admin/providers/:id/domains | 列出账号下域名 |
+| POST | /api/admin/providers/:id/apply | 一键配齐解析 `{domain,ip,mail_host}` |
 
 ## 一键安装
 

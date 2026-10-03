@@ -17,7 +17,7 @@ func Open(path string) (*gorm.DB, error) {
 	}
 	sqlDB, _ := g.DB()
 	sqlDB.SetMaxOpenConns(1) // SQLite + 低内存关键
-	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}); err != nil {
+	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}, &model.DnsProvider{}); err != nil {
 		return nil, err
 	}
 	return g, nil
