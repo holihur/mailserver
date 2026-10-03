@@ -9,7 +9,7 @@ import (
 	"mailserver/internal/model"
 )
 
-func mail() *model.Mail {
+func sampleMail() *model.Mail {
 	return &model.Mail{
 		ID: 7, From: "a@example.com", To: "b@x.com, c@y.com", Cc: "d@z.com", Bcc: "e@secret.com",
 		Subject: "hi", Body: "line1\nline2", CreatedAt: time.Unix(1700000000, 0),
@@ -17,7 +17,7 @@ func mail() *model.Mail {
 }
 
 func TestRecipients(t *testing.T) {
-	got := Recipients(mail())
+	got := Recipients(sampleMail())
 	want := []string{"b@x.com", "c@y.com", "d@z.com", "e@secret.com"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v", got)
@@ -35,7 +35,7 @@ func TestRecipients(t *testing.T) {
 }
 
 func TestPartsPlainNoBcc(t *testing.T) {
-	hdrs, body := Parts("mail.example.com", mail())
+	hdrs, body := Parts("mail.example.com", sampleMail())
 	full := string(Serialize(hdrs, body))
 	if strings.Contains(full, "Bcc") || strings.Contains(full, "secret.com") {
 		t.Fatalf("Bcc must not appear in message:\n%s", full)
@@ -52,7 +52,7 @@ func TestPartsPlainNoBcc(t *testing.T) {
 }
 
 func TestPartsAttachments(t *testing.T) {
-	m := mail()
+	m := sampleMail()
 	atts := []Attachment{{Name: "a.txt", Type: "text/plain", Data: "aGVsbG8=", Size: 5}}
 	b, _ := json.Marshal(atts)
 	m.Attachments = string(b)
@@ -67,6 +67,56 @@ func TestPartsAttachments(t *testing.T) {
 	}
 	if strings.Contains(full, "secret.com") {
 		t.Fatal("Bcc leaked")
+	}
+}
+
+func TestParseInboundEncodedSubject(t *testing.T) {
+	raw := "From: a@b.c\r\nTo: x@y.z\r\nSubject: =?utf-8?b?5YWl56uZIFNNVFAg6Ieq5rWL?=\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nhello\r\n"
+	subj, body, atts := ParseInbound(raw)
+	if subj != "入站 SMTP 自测" {
+		t.Fatalf("subject=%q", subj)
+	}
+	if body != "hello\r\n" || atts != "" {
+		t.Fatalf("body=%q atts=%q", body, atts)
+	}
+}
+
+func TestParseInboundMultipartAttachment(t *testing.T) {
+	raw := strings.Join([]string{
+		"From: a@b.c",
+		"To: x@y.z",
+		"Subject: =?utf-8?q?hi?=",
+		"MIME-Version: 1.0",
+		`Content-Type: multipart/mixed; boundary="B"`,
+		"",
+		"--B",
+		"Content-Type: text/plain; charset=utf-8",
+		"",
+		"正文",
+		"--B",
+		`Content-Type: application/pdf; name="a.pdf"`,
+		`Content-Disposition: attachment; filename="a.pdf"`,
+		"Content-Transfer-Encoding: base64",
+		"",
+		"aGVsbG8=",
+		"--B--",
+		"",
+	}, "\r\n")
+	subj, body, atts := ParseInbound(raw)
+	if subj != "hi" || body != "正文" {
+		t.Fatalf("subj=%q body=%q", subj, body)
+	}
+	list := ParseAttachments(atts)
+	if len(list) != 1 || list[0].Name != "a.pdf" || list[0].Data != "aGVsbG8=" {
+		t.Fatalf("atts=%v", list)
+	}
+}
+
+func TestParseInboundQuotedPrintable(t *testing.T) {
+	raw := "Subject: t\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nh=C3=A9llo\r\n"
+	_, body, _ := ParseInbound(raw)
+	if strings.TrimRight(body, "\r\n") != "héllo" {
+		t.Fatalf("body=%q", body)
 	}
 }
 

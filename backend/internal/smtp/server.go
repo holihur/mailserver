@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 
+	"mailserver/internal/message"
 	"mailserver/internal/model"
 
 	"gorm.io/gorm"
@@ -105,13 +106,13 @@ func extractAddr(s string) string {
 }
 
 func saveMail(db *gorm.DB, from, to, raw string) {
-	subject, body := parseRaw(raw)
 	// 按收件人找本地用户，找不到则丢弃（防垃圾占库）
 	var u model.User
 	if err := db.Where("email = ?", to).First(&u).Error; err != nil {
 		return
 	}
-	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Subject: subject, Body: body, Folder: "inbox"})
+	subject, body, atts := message.ParseInbound(raw)
+	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Subject: subject, Body: body, Attachments: atts, Folder: "inbox"})
 }
 
 // recipientExists 判断收件人是否为本地已有用户（RCPT 阶段就拒绝未知收件人，避免静默丢信）。
@@ -123,24 +124,4 @@ func recipientExists(db *gorm.DB, addr string) bool {
 	var n int64
 	db.Model(&model.User{}).Where("LOWER(email) = ?", addr).Count(&n)
 	return n > 0
-}
-
-func parseRaw(raw string) (subject, body string) {
-	parts := strings.SplitN(raw, "\n\n", 2)
-	head, b := "", raw
-	if len(parts) == 2 {
-		head, b = parts[0], parts[1]
-	}
-	for _, l := range strings.Split(head, "\n") {
-		if strings.HasPrefix(strings.ToLower(l), "subject:") {
-			subject = strings.TrimSpace(l[8:])
-		}
-	}
-	if subject == "" {
-		subject = "(无主题)"
-	}
-	if len(b) > 20000 {
-		b = b[:20000] // 截断省内存
-	}
-	return subject, b
 }

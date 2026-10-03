@@ -13,6 +13,7 @@ import (
 	"net"
 	"strings"
 
+	"mailserver/internal/message"
 	"mailserver/internal/model"
 
 	"golang.org/x/crypto/bcrypt"
@@ -255,9 +256,9 @@ func (s *submitter) checkUser(email, pass string) bool {
 
 // 每个收件人存一封 sent（队列按单 To 投递），本地用户顺手投一份 inbox
 func (s *submitter) queueMail(raw string) {
-	subject, body := parseRaw(raw)
+	subject, body, atts := message.ParseInbound(raw)
 	for _, to := range s.rcpts {
-		m := model.Mail{UserID: s.user.ID, From: s.user.Email, To: to, Subject: subject, Body: body, Folder: "sent", Read: true}
+		m := model.Mail{UserID: s.user.ID, From: s.user.Email, To: to, Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true}
 		s.db.Create(&m)
 	}
 	s.reply(fmt.Sprintf("250 OK queued for %d rcpt(s)", len(s.rcpts)))
