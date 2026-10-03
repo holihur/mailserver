@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/message"
 	"mailserver/internal/model"
 
 	"gorm.io/gorm"
@@ -132,12 +133,15 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		To      string `json:"to"`
-		Subject string `json:"subject"`
-		Body    string `json:"body"`
-		Folder  string `json:"folder"`
+		To          string               `json:"to"`
+		Cc          string               `json:"cc"`
+		Bcc         string               `json:"bcc"`
+		Subject     string               `json:"subject"`
+		Body        string               `json:"body"`
+		Folder      string               `json:"folder"`
+		Attachments []message.Attachment `json:"attachments"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2<<20)).Decode(&in); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20)).Decode(&in); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "bad body"})
 		return
 	}
@@ -147,8 +151,21 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 	if folder != "draft" {
 		folder = "sent"
 	}
-	mail := model.Mail{UserID: uid, From: me.Email, To: in.To, Subject: in.Subject, Body: in.Body, Folder: folder, Read: true}
+	attJSON := ""
+	if len(in.Attachments) > 0 {
+		total := 0
+		for _, a := range in.Attachments {
+			total += len(a.Data) * 3 / 4
+		}
+		if total > 8<<20 {
+			writeJSON(w, 413, map[string]string{"error": "附件过大（上限 8MB）"})
+			return
+		}
+		b, _ := json.Marshal(in.Attachments)
+		attJSON = string(b)
+	}
+	mail := model.Mail{UserID: uid, From: me.Email, To: in.To, Cc: in.Cc, Bcc: in.Bcc,
+		Subject: in.Subject, Body: in.Body, Attachments: attJSON, Folder: folder, Read: true}
 	m.DB.Create(&mail)
-	// TODO: 若配置了中继，在此用 net/smtp 投递；本地 demo 只落库
 	writeJSON(w, 201, mail)
 }

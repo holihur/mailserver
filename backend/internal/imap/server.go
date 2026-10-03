@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"mailserver/internal/message"
 	"mailserver/internal/model"
 
 	"golang.org/x/crypto/bcrypt"
@@ -27,18 +28,17 @@ type item struct {
 	id            uint32
 	date          time.Time
 	from, to      string
+	cc            string
 	subject, body string
+	attachments   string
 	read, starred bool
 	deleted       bool
 	size          int // len(raw) 精确值
 }
 
 func (it *item) raw(host string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <%d@%s>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n",
-		it.from, it.to, subj(it.subject), it.date.Format(time.RFC1123Z), it.id, host)
-	b.WriteString(strings.ReplaceAll(it.body, "\n", "\r\n"))
-	return b.String()
+	return string(message.Build(host, &model.Mail{ID: uint(it.id), From: it.from, To: it.to, Cc: it.cc,
+		Subject: it.subject, Body: it.body, Attachments: it.attachments, CreatedAt: it.date}))
 }
 
 func subj(s string) string {
@@ -510,8 +510,8 @@ func (s *session) loadBox() {
 	s.db.Where("user_id = ? AND folder = ?", s.user.ID, s.folder).Order("id").Limit(maxSnap).Find(&mails)
 	s.items = s.items[:0]
 	for _, m := range mails {
-		it := item{id: uint32(m.ID), date: m.CreatedAt, from: m.From, to: m.To,
-			subject: m.Subject, body: m.Body, read: m.Read, starred: m.Starred}
+		it := item{id: uint32(m.ID), date: m.CreatedAt, from: m.From, to: m.To, cc: m.Cc,
+			subject: m.Subject, body: m.Body, attachments: m.Attachments, read: m.Read, starred: m.Starred}
 		it.size = len(it.raw(s.host()))
 		s.items = append(s.items, it)
 	}
@@ -875,20 +875,35 @@ func addrList(email string) string {
 
 func envelope(it *item, host string) string {
 	date := it.date.Format("Mon, 2 Jan 2006 15:04:05 -0700")
-	return fmt.Sprintf("(%s %s %s %s NIL NIL NIL NIL %s)",
-		qstr(date), qstr(subj(it.subject)), addrList(it.from), addrList(it.to),
+	return fmt.Sprintf("(%s %s %s NIL NIL %s %s NIL NIL %s)",
+		qstr(date), qstr(subj(it.subject)), addrList(it.from), addrList(it.to), addrList(it.cc),
 		qstr(fmt.Sprintf("<%d@%s>", it.id, host)))
 }
 
 func bodyStruct(it *item) string {
 	bc := strings.ReplaceAll(it.body, "\n", "\r\n")
-	lines := 1
-	for _, c := range it.body {
-		if c == '\n' {
-			lines++
-		}
+	lines := 1 + strings.Count(it.body, "\n")
+	atts := message.ParseAttachments(it.attachments)
+	if len(atts) == 0 {
+		return fmt.Sprintf("(\"TEXT\" \"PLAIN\" (\"CHARSET\" \"UTF-8\") NIL NIL \"8BIT\" %d %d)", len(bc), lines)
 	}
-	return fmt.Sprintf("(\"TEXT\" \"PLAIN\" (\"CHARSET\" \"UTF-8\") NIL NIL \"7BIT\" %d %d)", len(bc), lines)
+	parts := []string{
+		fmt.Sprintf("(\"TEXT\" \"PLAIN\" (\"CHARSET\" \"UTF-8\") NIL NIL \"8BIT\" %d %d)", len(bc), lines),
+	}
+	for _, a := range atts {
+		typ, sub := "APPLICATION", "OCTET-STREAM"
+		if a.Type != "" {
+			if i := strings.Index(a.Type, "/"); i > 0 {
+				typ = strings.ToUpper(a.Type[:i])
+				sub = strings.ToUpper(a.Type[i+1:])
+			} else {
+				typ = strings.ToUpper(a.Type)
+			}
+		}
+		parts = append(parts, fmt.Sprintf("(%q %q (\"NAME\" %q) NIL NIL \"BASE64\" %d NIL (\"ATTACHMENT\" (\"FILENAME\" %q)))",
+			typ, sub, a.Name, len(a.Data), a.Name))
+	}
+	return "(" + strings.Join(parts, " ") + " \"MIXED\")"
 }
 
 // ---- STORE ----

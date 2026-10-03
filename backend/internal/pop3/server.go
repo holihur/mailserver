@@ -11,8 +11,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
-	"time"
 
+	"mailserver/internal/message"
 	"mailserver/internal/model"
 
 	"golang.org/x/crypto/bcrypt"
@@ -320,15 +320,7 @@ func (s *session) loadBox() {
 }
 
 func buildRaw(host string, m *model.Mail) string {
-	subj := m.Subject
-	if subj == "" {
-		subj = "(无主题)"
-	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\r\nTo: %s\r\nSubject: %s\r\nDate: %s\r\nMessage-ID: <%d@%s>\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n",
-		m.From, m.To, subj, m.CreatedAt.Format(time.RFC1123Z), m.ID, host)
-	b.WriteString(strings.ReplaceAll(m.Body, "\n", "\r\n"))
-	return b.String()
+	return string(message.Build(host, m))
 }
 
 // dot-stuffing 后写出

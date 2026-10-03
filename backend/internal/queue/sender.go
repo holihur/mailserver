@@ -7,7 +7,6 @@ package queue
 
 import (
 	"crypto/tls"
-	"fmt"
 	"log"
 	"net"
 	"net/smtp"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"mailserver/internal/dkim"
+	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/runtimecfg"
 
@@ -41,13 +41,28 @@ func Start(db *gorm.DB, rt *runtimecfg.Store) {
 }
 
 func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail) {
-	// 1) 本站：直接 inbox
-	var u model.User
-	if err := db.Where("email = ?", m.To).First(&u).Error; err == nil {
-		db.Create(&model.Mail{UserID: u.ID, From: m.From, To: m.To, Subject: m.Subject, Body: m.Body, Folder: "inbox"})
+	recipients := message.Recipients(m)
+	if len(recipients) == 0 {
+		db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": "无收件人"})
+		return
+	}
+
+	// 1) 本站收件人直接投递到 inbox；其余需外发
+	var external []string
+	for _, rcpt := range recipients {
+		var u model.User
+		if err := db.Where("LOWER(email) = ?", strings.ToLower(rcpt)).First(&u).Error; err == nil {
+			db.Create(&model.Mail{UserID: u.ID, From: m.From, To: rcpt, Cc: m.Cc,
+				Subject: m.Subject, Body: m.Body, Attachments: m.Attachments, Folder: "inbox"})
+		} else {
+			external = append(external, rcpt)
+		}
+	}
+	if len(external) == 0 {
 		db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
 		return
 	}
+
 	// 2) 站外：必须有中继（25 被封，直投必失败，不尝试）
 	if c.Host == "" {
 		db.Model(m).Updates(map[string]any{
@@ -58,15 +73,15 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail
 	}
 	// 默认 envelope-from 用本人地址；若中继强制要求认证账号一致，失败后会自动用 RelayFrom 重试一次
 	msg := buildMsg(c.Name, m, signer)
-	if err := sendSMTP(c, m.From, []string{m.To}, msg); err != nil {
+	if err := sendSMTP(c, m.From, external, msg); err != nil {
 		if c.From != "" {
-			if err2 := sendSMTP(c, c.From, []string{m.To}, msg); err2 == nil {
+			if err2 := sendSMTP(c, c.From, external, msg); err2 == nil {
 				db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
 				return
 			}
 		}
 		db.Model(m).Updates(map[string]any{"attempts": m.Attempts + 1, "relay_err": trimErr(err)})
-		log.Printf("queue: mail %d to %s fail: %v", m.ID, m.To, err)
+		log.Printf("queue: mail %d to %v fail: %v", m.ID, external, err)
 		return
 	}
 	db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
@@ -126,34 +141,14 @@ func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
 
 // 组装 RFC5322；发件域==签名域且配了私钥时加 DKIM-Signature（签的就是实际发出的头）
 func buildMsg(host string, m *model.Mail, signer *dkim.Signer) []byte {
-	if host == "" {
-		host = "mailserver.local"
-	}
-	subj := m.Subject
-	if subj == "" {
-		subj = "(无主题)"
-	}
-	headers := [][2]string{
-		{"From", m.From},
-		{"To", m.To},
-		{"Subject", subj},
-		{"Date", m.CreatedAt.Format(time.RFC1123Z)},
-		{"Message-ID", fmt.Sprintf("<%d.%d@%s>", m.ID, time.Now().UnixNano(), host)},
-		{"MIME-Version", "1.0"},
-		{"Content-Type", "text/plain; charset=utf-8"},
-	}
-	var b strings.Builder
-	for _, h := range headers {
-		fmt.Fprintf(&b, "%s: %s\r\n", h[0], h[1])
-	}
+	hdrs, body := message.Parts(host, m)
+	var extra []string
 	if signer != nil && signer.Match(m.From) {
-		if sig := signer.Sign(headers, m.Body); sig != "" {
-			b.WriteString(sig + "\r\n")
+		if sig := signer.Sign(hdrs, body); sig != "" {
+			extra = append(extra, sig)
 		}
 	}
-	b.WriteString("\r\n")
-	b.WriteString(strings.ReplaceAll(m.Body, "\n", "\r\n"))
-	return []byte(b.String())
+	return message.Serialize(hdrs, body, extra...)
 }
 
 func trimErr(err error) string {

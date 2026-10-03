@@ -6,7 +6,7 @@ import { ThemeToggle, LangToggle } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import {
   Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut,
-  RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2,
+  RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 
@@ -131,6 +131,7 @@ export default function MailApp() {
                   <p className="text-xs text-muted-foreground mt-1">
                     {t('mail.fromTo', { from: sel.from, to: sel.to })} · {new Date(sel.created_at).toLocaleString()}
                   </p>
+                  {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
                   <div className="flex flex-wrap gap-2 mt-3">
                     <Button variant="outline" size="sm" onClick={async () => { await api.patch(sel.id, { starred: !sel.starred }); setSel({ ...sel, starred: !sel.starred }) }}>
                       {sel.starred ? t('mail.unstar') : t('mail.star')}
@@ -139,6 +140,19 @@ export default function MailApp() {
                     <Button variant="outline" size="sm" onClick={async () => { await api.trash(sel.id); setSel(null); setView('list'); load() }}>{t('mail.delete')}</Button>
                   </div>
                   <pre className="whitespace-pre-wrap text-sm mt-4 font-sans break-words">{sel.body}</pre>
+                  {attList(sel.attachments).length > 0 && (
+                    <div className="mt-4 border-t border-border pt-3">
+                      <b className="text-sm">{t('mail.attachments')}</b>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {attList(sel.attachments).map((a: any, i: number) => (
+                          <a key={i} href={`data:${a.type || 'application/octet-stream'};base64,${a.data}`} download={a.name}
+                            className="text-xs rounded-md border border-border px-2 py-1 hover:bg-muted">
+                            📎 {a.name} ({fmtSize(a.size)})
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </Card>
               </>
             )}
@@ -151,28 +165,73 @@ export default function MailApp() {
   )
 }
 
-function Compose({ init, onClose }) {
+function Compose({ init, onClose }: any) {
   const { t } = useI18n()
-  const [f, setF] = useState({ to: init.to || '', subject: init.subject || '', body: init.body || '' })
+  const [f, setF] = useState({ to: init.to || '', cc: init.cc || '', bcc: init.bcc || '', subject: init.subject || '', body: init.body || '' })
+  const [atts, setAtts] = useState<any[]>([])
+  const [showCC, setShowCC] = useState(!!(init.cc || init.bcc))
   const [saving, setSaving] = useState(false)
   useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') onClose() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
-  async function submit(folder) {
+
+  const total = atts.reduce((s, a) => s + (a.size || 0), 0)
+
+  function onFiles(e: any) {
+    const files: File[] = Array.from(e.target.files || [])
+    let cur = total
+    for (const file of files) {
+      if (cur + file.size > 8 * 1024 * 1024) { alert(t('mail.tooLarge')); break }
+      cur += file.size
+      const fr = new FileReader()
+      fr.onload = () => {
+        const data = String(fr.result || '').split(',')[1] || ''
+        setAtts(a => [...a, { name: file.name, type: file.type || 'application/octet-stream', data, size: file.size }])
+      }
+      fr.readAsDataURL(file)
+    }
+    e.target.value = ''
+  }
+
+  async function submit(folder: string) {
     setSaving(true)
-    try { await api.send({ ...f, folder }); onClose() } catch (e) { alert(e.message) }
+    try { await api.send({ ...f, attachments: atts, folder }); onClose() } catch (e: any) { alert(e.message) }
     finally { setSaving(false) }
   }
+
   return (
     <div className="fixed inset-0 bg-black/40 grid place-items-center sm:p-4 z-50" onClick={onClose} role="dialog" aria-modal="true" aria-label={t('mail.compose')}>
-      <Card className="w-full h-full sm:h-auto sm:max-w-lg p-4 space-y-3 rounded-none sm:rounded-lg" onClick={e => e.stopPropagation()}>
-        <b>{t('mail.compose')}</b>
+      <Card className="w-full h-full sm:h-auto sm:max-w-lg p-4 space-y-3 rounded-none sm:rounded-lg flex flex-col" onClick={(e: any) => e.stopPropagation()}>
+        <div className="flex items-center gap-2">
+          <b>{t('mail.compose')}</b>
+          <div className="flex-1" />
+          <Button variant="ghost" size="sm" onClick={() => setShowCC(v => !v)}>{t('mail.ccBcc')}</Button>
+        </div>
         <Input autoFocus placeholder={t('mail.to')} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} />
+        {showCC && <>
+          <Input placeholder={t('mail.cc')} value={f.cc} onChange={e => setF({ ...f, cc: e.target.value })} />
+          <Input placeholder={t('mail.bcc')} value={f.bcc} onChange={e => setF({ ...f, bcc: e.target.value })} />
+        </>}
         <Input placeholder={t('mail.subject')} value={f.subject} onChange={e => setF({ ...f, subject: e.target.value })} />
-        <Textarea rows={10} placeholder={t('mail.body')} value={f.body} onChange={e => setF({ ...f, body: e.target.value })} />
-        <div className="flex gap-2 justify-end">
+        <Textarea rows={8} placeholder={t('mail.body')} value={f.body} onChange={e => setF({ ...f, body: e.target.value })} />
+        {atts.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {atts.map((a, i) => (
+              <span key={i} className="inline-flex items-center gap-1 text-xs rounded-md border border-border px-2 py-1">
+                📎 {a.name} ({fmtSize(a.size)})
+                <button onClick={() => setAtts(atts.filter((_, j) => j !== i))} aria-label={t('common.delete')}><X size={12} /></button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-1 text-sm cursor-pointer text-muted-foreground hover:text-foreground">
+            <Paperclip size={16} />{t('mail.attach')}
+            <input type="file" multiple className="hidden" onChange={onFiles} />
+          </label>
+          <div className="flex-1" />
           <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
           <Button variant="outline" disabled={saving} onClick={() => submit('draft')}>{t('mail.saveDraft')}</Button>
           <Button disabled={saving} onClick={() => submit('sent')}>
@@ -182,4 +241,14 @@ function Compose({ init, onClose }) {
       </Card>
     </div>
   )
+}
+
+function attList(s: any): any[] {
+  try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a : [] } catch { return [] }
+}
+function fmtSize(n: number) {
+  if (!n) return '0B'
+  if (n < 1024) return n + 'B'
+  if (n < 1024 * 1024) return (n / 1024).toFixed(0) + 'KB'
+  return (n / 1024 / 1024).toFixed(1) + 'MB'
 }

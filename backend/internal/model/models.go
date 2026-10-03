@@ -61,17 +61,20 @@ type Setting struct {
 // folder: inbox / sent / draft / trash
 // Relayed: 发件队列状态（sent 文件夹有效），25 被封时走中继投递
 type Mail struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	UserID    uint      `gorm:"index" json:"-"`
-	From      string    `gorm:"size:255" json:"from"`
-	To        string    `gorm:"size:255" json:"to"`
-	Subject   string    `gorm:"size:500" json:"subject"`
-	Body      string    `gorm:"type:text" json:"body"`
-	Folder    string    `gorm:"size:20;index" json:"folder"`
-	Read      bool      `json:"read"`
-	Starred   bool      `json:"starred"`
-	Relayed   bool      `json:"relayed"`
-	RelayErr  string    `gorm:"size:500" json:"relay_err"`
-	Attempts  int       `json:"attempts"`
-	CreatedAt time.Time `json:"created_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	UserID      uint      `gorm:"index" json:"-"`
+	From        string    `gorm:"size:255" json:"from"`
+	To          string    `gorm:"size:255" json:"to"`
+	Cc          string    `gorm:"size:255" json:"cc"`
+	Bcc         string    `gorm:"size:255" json:"bcc"`
+	Subject     string    `gorm:"size:500" json:"subject"`
+	Body        string    `gorm:"type:text" json:"body"`
+	Attachments string    `gorm:"type:text" json:"attachments"` // JSON: [{name,type,data(base64),size}]
+	Folder      string    `gorm:"size:20;index" json:"folder"`
+	Read        bool      `json:"read"`
+	Starred     bool      `json:"starred"`
+	Relayed     bool      `json:"relayed"`
+	RelayErr    string    `gorm:"size:500" json:"relay_err"`
+	Attempts    int       `json:"attempts"`
+	CreatedAt   time.Time `json:"created_at"`
 }
