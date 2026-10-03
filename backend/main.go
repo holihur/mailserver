@@ -21,12 +21,45 @@ import (
 	"mailserver/internal/queue"
 	"mailserver/internal/runtimecfg"
 	"mailserver/internal/secret"
+	"mailserver/internal/selfupdate"
 	mailsmtp "mailserver/internal/smtp"
 
 	"github.com/joho/godotenv"
 )
 
+// 版本信息（GoReleaser 通过 -ldflags -X main.version=... 注入）
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
+	// 子命令：version / update / help；否则启动服务
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "version", "-v", "--version":
+			fmt.Printf("mailserver %s (commit %s, built %s)\n", version, commit, date)
+			return
+		case "update":
+			err := selfupdate.Run(context.Background(), selfupdate.Options{
+				Repo:    os.Getenv("MAILSERVER_REPO"),
+				Current: version,
+				Force:   os.Getenv("MAILSERVER_UPDATE_FORCE") == "1",
+			})
+			if err != nil {
+				log.Fatal("更新失败: ", err)
+			}
+			return
+		case "help", "-h", "--help":
+			fmt.Println("用法: mailserver [version|update]")
+			fmt.Println("  (无参数)  启动服务")
+			fmt.Println("  version  显示版本")
+			fmt.Println("  update   从 GitHub Release 更新到最新版并重启服务")
+			return
+		}
+	}
+
 	_ = godotenv.Load()
 	cfg := config.Load()
 	auth.SetSecret(cfg.JWTSecret)
@@ -109,6 +142,10 @@ func main() {
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"ok":true}`))
 	})
+	mux.HandleFunc("/api/version", cors(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"version":%q,"commit":%q,"date":%q}`, version, commit, date)
+	}))
 	mux.HandleFunc("/api/register", cors(au.Register))
 	mux.HandleFunc("/api/login", cors(au.Login))
 	mux.HandleFunc("/api/me", cors(au.Me))

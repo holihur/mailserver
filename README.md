@@ -1,6 +1,6 @@
 # Mailserver — 轻量全栈邮件系统
 
-前端 React + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL
+前端 React + TypeScript + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL
 
 > 纯 Go 构建（无 CGO），前端已内嵌，后端为单二进制；数据库使用 PostgreSQL。
 > **几乎所有配置都在管理后台 `/#/admin` 里改**，命令行只需引导项（数据库、JWT_SECRET）。
@@ -25,7 +25,7 @@ mailserver/
 │   │   ├── smtp/ pop3/ imap/ queue/ dkim/
 │   ├── go.mod
 │   └── .env.example
-├── frontend/         # React + Vite + Tailwind + shadcn 风格 ui/ (pnpm)
+├── frontend/         # React + TypeScript + Vite + Tailwind + shadcn 风格 ui/ (pnpm)
 │   ├── package.json
 │   ├── pnpm-lock.yaml
 │   ├── vite.config.js
@@ -134,6 +134,20 @@ curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh 
 | `--no-dns` | 不安装内置 DNS |
 
 安装后服务为 `mailserver.service`（配置在 `/etc/mailserver/mailserver.env`），Web 界面位于 `http://<服务器IP>/`。
+
+## 更新
+
+```bash
+# 二进制安装：拉取最新 Release，校验 sha256 后原子替换并重启服务
+sudo /opt/mailserver/bin/mailserver update
+
+sudo /opt/mailserver/bin/mailserver version   # 查看当前版本
+
+# 或直接重跑安装脚本
+curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | sudo bash
+```
+
+> `update` 会访问 GitHub Release；可用 `MAILSERVER_REPO` 指定仓库、`MAILSERVER_UPDATE_FORCE=1` 强制重装。
 
 ## CI / 发布
 

@@ -23,7 +23,7 @@ export default function MailApp() {
   const [total, setTotal] = useState(0)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(null)
-  const [showCompose, setShowCompose] = useState(false)
+  const [showCompose, setShowCompose] = useState<any>(false)
   const [me, setMe] = useState(null)
   const [view, setView] = useState('list') // 移动端：list | read
 

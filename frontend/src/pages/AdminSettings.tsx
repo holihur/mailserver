@@ -24,7 +24,7 @@ export default function AdminSettings() {
   async function save() {
     setBusy('save'); setMsg('')
     try {
-      const body = {
+      const body: Record<string, any> = {
         mail_host: s.mail_host || '', public_ip: s.public_ip || '', admin_emails: s.admin_emails || '',
         relay_host: s.relay_host || '', relay_port: s.relay_port || '',
         relay_user: s.relay_user || '', relay_from: s.relay_from || '',
@@ -123,7 +123,7 @@ export default function AdminSettings() {
   )
 }
 
-function Field({ label, hint, children }) {
+function Field({ label, hint, children }: { label: any; hint?: any; children: any }) {
   return (
     <label className="block space-y-1">
       <span className="text-sm font-medium">{label}</span>
