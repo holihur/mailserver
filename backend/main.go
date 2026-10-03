@@ -161,6 +161,7 @@ func main() {
 		}
 		w.WriteHeader(405)
 	}))
+	mux.HandleFunc("/api/mails/batch", cors(mb.Batch))
 	mux.HandleFunc("/api/mails/", cors(mb.One))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))

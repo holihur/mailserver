@@ -49,7 +49,17 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	size := 20
-	tx := m.DB.Where("user_id = ? AND folder = ?", uid, folder).Order("id DESC")
+	// 排序（白名单，防注入）
+	order := "id DESC"
+	switch r.URL.Query().Get("sort") {
+	case "oldest":
+		order = "id ASC"
+	case "subject":
+		order = "subject ASC, id DESC"
+	case "sender":
+		order = "\"from\" ASC, id DESC"
+	}
+	tx := m.DB.Where("user_id = ? AND folder = ?", uid, folder).Order(order)
 	if q != "" {
 		like := "%" + q + "%"
 		tx = tx.Where("subject LIKE ? OR \"from\" LIKE ? OR \"to\" LIKE ?", like, like, like)
@@ -124,6 +134,55 @@ func (m *MailBox) Outbox(w http.ResponseWriter, r *http.Request) {
 		items = []model.Mail{}
 	}
 	writeJSON(w, 200, items)
+}
+
+// POST /api/mails/batch {ids:[...], action:trash|delete|star|unstar|read|unread|move, folder?}
+func (m *MailBox) Batch(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(m.DB, w, r)
+	if !ok {
+		return
+	}
+	if r.Method != "POST" {
+		w.WriteHeader(405)
+		return
+	}
+	var in struct {
+		IDs    []uint `json:"ids"`
+		Action string `json:"action"`
+		Folder string `json:"folder"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil || len(in.IDs) == 0 {
+		writeJSON(w, 400, map[string]string{"error": "未选择邮件"})
+		return
+	}
+	if len(in.IDs) > 500 {
+		in.IDs = in.IDs[:500]
+	}
+	tx := m.DB.Where("user_id = ? AND id IN ?", uid, in.IDs)
+	switch in.Action {
+	case "delete":
+		tx.Delete(&model.Mail{})
+	case "trash":
+		tx.Model(&model.Mail{}).Update("folder", "trash")
+	case "star":
+		tx.Model(&model.Mail{}).Update("starred", true)
+	case "unstar":
+		tx.Model(&model.Mail{}).Update("starred", false)
+	case "read":
+		tx.Model(&model.Mail{}).Update("read", true)
+	case "unread":
+		tx.Model(&model.Mail{}).Update("read", false)
+	case "move":
+		if in.Folder == "" {
+			writeJSON(w, 400, map[string]string{"error": "缺少目标文件夹"})
+			return
+		}
+		tx.Model(&model.Mail{}).Update("folder", in.Folder)
+	default:
+		writeJSON(w, 400, map[string]string{"error": "不支持的操作"})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "count": len(in.IDs)})
 }
 
 // POST /api/mails  {to,subject,body,folder:sent|draft}

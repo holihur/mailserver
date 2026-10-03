@@ -19,12 +19,13 @@ export const api = {
   register: (b) => req('/api/register', { method: 'POST', body: JSON.stringify(b) }),
   login: (b) => req('/api/login', { method: 'POST', body: JSON.stringify(b) }),
   me: () => req('/api/me'),
-  list: (folder = 'inbox', q = '', page = 1) =>
-    req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}`),
+  list: (folder = 'inbox', q = '', page = 1, sort = 'newest') =>
+    req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}`),
   get: (id) => req(`/api/mails/${id}`),
   send: (b) => req('/api/mails', { method: 'POST', body: JSON.stringify(b) }),
   patch: (id, b) => req(`/api/mails/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   trash: (id) => req(`/api/mails/${id}`, { method: 'DELETE' }),
+  batch: (ids, action, folder = '') => req('/api/mails/batch', { method: 'POST', body: JSON.stringify({ ids, action, folder }) }),
   outbox: () => req('/api/outbox'),
   dkimGet: () => req('/api/dkim'),
   dkimPublish: (b) => req('/api/dkim', { method: 'POST', body: JSON.stringify(b) }),

@@ -27,15 +27,29 @@ export default function MailApp() {
   const [showCompose, setShowCompose] = useState<any>(false)
   const [me, setMe] = useState(null)
   const [view, setView] = useState('list') // 移动端：list | read
+  const [page, setPage] = useState(1)
+  const [sort, setSort] = useState('newest')
+  const pageSize = 20
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  async function load() {
+  async function load(p = page, s = sort) {
     try {
-      const d = await api.list(folder, q)
-      setItems(d.items); setTotal(d.total)
+      const d = await api.list(folder, q, p, s)
+      setItems(d.items); setTotal(d.total); setPage(d.page || p)
     } catch {}
   }
   useEffect(() => { api.me().then(setMe).catch(() => { location.href = '/login' }) }, [])
-  useEffect(() => { setSel(null); setView('list'); load() }, [folder])
+  useEffect(() => { setSel(null); setView('list'); setPage(1); load(1, sort) }, [folder])
+
+  const [selectMode, setSelectMode] = useState(false)
+  const [checked, setChecked] = useState<number[]>([])
+  function toggleCheck(id: number) { setChecked(c => c.includes(id) ? c.filter(x => x !== id) : [...c, id]) }
+  function toggleAll() { setChecked(c => c.length === items.length ? [] : items.map((m: any) => m.id)) }
+  async function batch(action: string) {
+    if (!checked.length) return
+    try { await api.batch(checked, action) } catch (e: any) { alert(e.message) }
+    setChecked([]); setSelectMode(false); load(page, sort)
+  }
 
   async function open(id) {
     const d = await api.get(id)
@@ -60,7 +74,7 @@ export default function MailApp() {
           <LangToggle />
           <ThemeToggle />
         </div>
-        <Button variant="ghost" size="icon" onClick={load} aria-label={t('common.refresh')}><RefreshCw /></Button>
+        <Button variant="ghost" size="icon" onClick={() => load()} aria-label={t('common.refresh')}><RefreshCw /></Button>
         <Button variant="ghost" size="icon" onClick={logout} aria-label={t('nav.logout')}><LogOut /></Button>
         <Button size="sm" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
       </header>
@@ -95,24 +109,51 @@ export default function MailApp() {
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-2 top-2.5 text-muted-foreground" />
                 <Input className="pl-7" placeholder={t('mail.search')} value={q}
-                  onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && load()} />
+                  onChange={e => setQ(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { setPage(1); load(1, sort) } }} />
               </div>
+              <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); load(1, e.target.value) }}
+                className="h-9 rounded-md border border-border bg-background text-xs px-2" aria-label={t('mail.sort')}>
+                <option value="newest">{t('mail.sortNewest')}</option>
+                <option value="oldest">{t('mail.sortOldest')}</option>
+                <option value="subject">{t('mail.sortSubject')}</option>
+                <option value="sender">{t('mail.sortSender')}</option>
+              </select>
+              <Button variant={selectMode ? 'default' : 'outline'} size="sm" className="shrink-0"
+                onClick={() => { setSelectMode(v => !v); setChecked([]) }}>
+                {selectMode ? t('mail.done') : t('mail.batch')}
+              </Button>
             </div>
+            {selectMode && (
+              <div className="p-2 border-b border-border flex items-center gap-2 text-xs">
+                <label className="flex items-center gap-1"><input type="checkbox" checked={checked.length > 0 && checked.length === items.length} onChange={toggleAll} />{t('mail.selectAll')}</label>
+                <span className="text-muted-foreground">{t('mail.selected', { n: checked.length })}</span>
+                <div className="flex-1" />
+                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('star')}><Star />{t('mail.batchStar')}</Button>
+                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('trash')}><Trash2 />{t('mail.batchDelete')}</Button>
+              </div>
+            )}
             <div className="flex-1 overflow-auto">
               {items.map(m => (
-                <button key={m.id} onClick={() => open(m.id)}
+                <button key={m.id} onClick={() => selectMode ? toggleCheck(m.id) : open(m.id)}
                   className={cn('w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60',
-                    sel?.id === m.id && 'bg-muted', !m.read && 'font-semibold')}>
+                    (selectMode ? checked.includes(m.id) : sel?.id === m.id) && 'bg-muted', !m.read && 'font-semibold')}>
                   <div className="flex items-center gap-2 text-sm">
+                    {selectMode && <input type="checkbox" readOnly checked={checked.includes(m.id)} className="pointer-events-none" />}
                     <span className="truncate flex-1">{folder === 'sent' ? m.to : m.from}</span>
-                    <Star size={14} className={m.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}
-                      onClick={async e => { e.stopPropagation(); await api.patch(m.id, { starred: !m.starred }); load() }} />
+                    {!selectMode && <Star size={14} className={m.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}
+                      onClick={async e => { e.stopPropagation(); await api.patch(m.id, { starred: !m.starred }); load() }} />}
                   </div>
                   <div className="text-sm truncate">{m.subject || t('mail.noSubject')}</div>
                   <div className="text-xs text-muted-foreground truncate">{m.body?.slice(0, 60)}</div>
                 </button>
               ))}
               {items.length === 0 && <p className="p-6 text-sm text-muted-foreground text-center">{t('mail.empty')}</p>}
+            </div>
+            <div className="border-t border-border p-2 flex items-center justify-between text-xs">
+              <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => load(page - 1, sort)}>‹ {t('mail.prev')}</Button>
+              <span className="text-muted-foreground">{page} / {totalPages}</span>
+              <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => load(page + 1, sort)}>{t('mail.next')} ›</Button>
             </div>
           </div>
 
