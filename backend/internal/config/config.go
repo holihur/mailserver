@@ -20,6 +20,7 @@ type Config struct {
 	TLSCert       string // 证书 pem，为空则 587/110 明文可用
 	TLSKey        string
 	Host          string // 本机邮件域名，用于 greeting/Message-ID
+	AdminEmails   string // ADMIN_EMAILS 逗号分隔，命中即管理员（兜底提权）
 	JWTSecret     string
 	DBPath        string
 	RelayHost     string // 25 被封时的外发中继（587+STARTTLS）
@@ -71,5 +72,6 @@ func Load() Config {
 		TLSCert:       os.Getenv("TLS_CERT"),
 		TLSKey:        os.Getenv("TLS_KEY"),
 		Host:          getenv("MAIL_HOST", "mail.example.com"),
+		AdminEmails:   os.Getenv("ADMIN_EMAILS"),
 	}
 }

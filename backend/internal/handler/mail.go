@@ -14,10 +14,19 @@ import (
 
 type MailBox struct{ DB *gorm.DB }
 
-func uidOf(w http.ResponseWriter, r *http.Request) (uint, bool) {
+func uidOf(db *gorm.DB, w http.ResponseWriter, r *http.Request) (uint, bool) {
 	uid, err := auth.UserID(r)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return 0, false
+	}
+	var u model.User
+	if err := db.Select("id", "disabled").First(&u, uid).Error; err != nil {
+		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return 0, false
+	}
+	if u.Disabled {
+		writeJSON(w, 403, map[string]string{"error": "账号已禁用"})
 		return 0, false
 	}
 	return uid, true
@@ -25,7 +34,7 @@ func uidOf(w http.ResponseWriter, r *http.Request) (uint, bool) {
 
 // GET /api/mails?folder=inbox&q=&page=1&pageSize=20
 func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
-	uid, ok := uidOf(w, r)
+	uid, ok := uidOf(m.DB, w, r)
 	if !ok {
 		return
 	}
@@ -56,7 +65,7 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/mails/:id  PATCH /api/mails/:id  DELETE /api/mails/:id
 func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
-	uid, ok := uidOf(w, r)
+	uid, ok := uidOf(m.DB, w, r)
 	if !ok {
 		return
 	}
@@ -104,7 +113,7 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/outbox  最近 20 封发件的投递状态（25 被封排障用）
 func (m *MailBox) Outbox(w http.ResponseWriter, r *http.Request) {
-	uid, ok := uidOf(w, r)
+	uid, ok := uidOf(m.DB, w, r)
 	if !ok {
 		return
 	}
@@ -118,7 +127,7 @@ func (m *MailBox) Outbox(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/mails  {to,subject,body,folder:sent|draft}
 func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
-	uid, ok := uidOf(w, r)
+	uid, ok := uidOf(m.DB, w, r)
 	if !ok {
 		return
 	}

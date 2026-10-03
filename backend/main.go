@@ -31,9 +31,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	au := &handler.Auth{DB: g}
+	au := &handler.Auth{DB: g, AdminEmails: cfg.AdminEmails}
 	mb := &handler.MailBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DBPath)
+	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails}
 
 	var tlsConf *tls.Config
 	if cfg.TLSCert != "" && cfg.TLSKey != "" {
@@ -111,6 +112,11 @@ func main() {
 	mux.HandleFunc("/api/dkim", cors(dnsH.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))
 	mux.HandleFunc("/api/domains/", cors(dns.DomainOne))
+	// 管理后台（仅管理员）
+	mux.HandleFunc("/api/admin/overview", cors(ad.Overview))
+	mux.HandleFunc("/api/admin/users", cors(ad.Users))
+	mux.HandleFunc("/api/admin/users/", cors(ad.UserOne))
+	mux.HandleFunc("/api/admin/domains", cors(ad.Domains))
 
 	// 静态托管前端（docker 镜像把 dist 拷到 ./web）
 	if _, err := os.Stat("./web"); err == nil {

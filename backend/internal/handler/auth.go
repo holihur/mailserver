@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"mailserver/internal/auth"
 	"mailserver/internal/model"
@@ -11,7 +12,10 @@ import (
 	"gorm.io/gorm"
 )
 
-type Auth struct{ DB *gorm.DB }
+type Auth struct {
+	DB          *gorm.DB
+	AdminEmails string // 见 handler/admin.go isAdminEmail
+}
 
 func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -33,8 +37,14 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "email/password 非法"})
 		return
 	}
+	email := strings.ToLower(strings.TrimSpace(in.Email))
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.MinCost) // 低内存用 MinCost
-	u := model.User{Email: in.Email, Name: in.Name, PassHash: string(hash)}
+	u := model.User{Email: email, Name: in.Name, PassHash: string(hash)}
+	var n int64
+	a.DB.Model(&model.User{}).Count(&n)
+	if n == 0 || isAdminEmail(a.AdminEmails, email) {
+		u.Admin = true // 首个注册用户即管理员；名单命中也提权
+	}
 	if err := a.DB.Create(&u).Error; err != nil {
 		writeJSON(w, 409, map[string]string{"error": "邮箱已注册"})
 		return
@@ -51,12 +61,23 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
 	var u model.User
 	if err := a.DB.Where("email = ?", in.Email).First(&u).Error; err != nil {
-		writeJSON(w, 401, map[string]string{"error": "账号或密码错误"})
+		// 兼容历史大小写不一致的数据
+		if err := a.DB.Where("LOWER(email) = ?", strings.ToLower(strings.TrimSpace(in.Email))).First(&u).Error; err != nil {
+			writeJSON(w, 401, map[string]string{"error": "账号或密码错误"})
+			return
+		}
+	}
+	if u.Disabled {
+		writeJSON(w, 401, map[string]string{"error": "账号已禁用，请联系管理员"})
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PassHash), []byte(in.Pass)) != nil {
 		writeJSON(w, 401, map[string]string{"error": "账号或密码错误"})
 		return
+	}
+	if !u.Admin && isAdminEmail(a.AdminEmails, u.Email) {
+		u.Admin = true
+		a.DB.Model(&u).Update("admin", true)
 	}
 	tok, _ := auth.Sign(u.ID, u.Email)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": u})
@@ -70,5 +91,9 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	}
 	var u model.User
 	a.DB.First(&u, uid)
+	if u.ID == 0 || u.Disabled {
+		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return
+	}
 	writeJSON(w, 200, u)
 }

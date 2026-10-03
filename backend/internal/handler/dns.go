@@ -48,6 +48,15 @@ func (d *DNS) uid(w http.ResponseWriter, r *http.Request) (uint, bool) {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return 0, false
 	}
+	var u model.User
+	if err := d.DB.Select("id", "disabled").First(&u, uid).Error; err != nil {
+		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return 0, false
+	}
+	if u.Disabled {
+		writeJSON(w, 403, map[string]string{"error": "账号已禁用"})
+		return 0, false
+	}
 	return uid, true
 }
 

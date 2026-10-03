@@ -151,6 +151,10 @@ func handle(conn net.Conn, host string, db *gorm.DB, tlsConf *tls.Config, encryp
 				s.err("auth failed")
 				continue
 			}
+			if u.Disabled {
+				s.err("account disabled")
+				continue
+			}
 			s.user = &u
 			s.loadBox()
 			s.ok("mailbox locked, %d message(s)", len(s.box))

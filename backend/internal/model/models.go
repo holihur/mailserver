@@ -7,6 +7,8 @@ type User struct {
 	Email     string    `gorm:"uniqueIndex;size:255" json:"email"`
 	Name      string    `gorm:"size:100" json:"name"`
 	PassHash  string    `gorm:"size:255" json:"-"`
+	Admin     bool      `json:"admin"`     // 管理员：可进 /api/admin 管理后台
+	Disabled  bool      `json:"disabled"`  // 禁用：Web/API/收发信全部拒绝
 	CreatedAt time.Time `json:"created_at"`
 }
 

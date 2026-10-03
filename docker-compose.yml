@@ -15,6 +15,7 @@ services:
       TLS_CERT: ${TLS_CERT:-}
       TLS_KEY: ${TLS_KEY:-}
       DKIM_KEY: ${DKIM_KEY:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-dkim}
       DKIM_DOMAIN: ${DKIM_DOMAIN:-}
     volumes: [maildata:/data]

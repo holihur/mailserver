@@ -246,6 +246,9 @@ func (s *submitter) checkUser(email, pass string) bool {
 	if bcrypt.CompareHashAndPassword([]byte(u.PassHash), []byte(pass)) != nil {
 		return false
 	}
+	if u.Disabled {
+		return false
+	}
 	s.user = &u
 	return true
 }
