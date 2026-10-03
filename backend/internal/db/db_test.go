@@ -13,7 +13,7 @@ func TestPostgresIntegration(t *testing.T) {
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL 未设置，跳过 PostgreSQL 集成测试")
 	}
-	g, err := Open("postgres", "", dsn)
+	g, err := Open(dsn)
 	if err != nil {
 		t.Fatalf("open postgres: %v", err)
 	}

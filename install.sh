@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 #
-# Mailserver 一键安装脚本
+# Mailserver 一键安装脚本（二进制，默认）
 #
-#   Docker 方式（推荐，自动拉取 GHCR 镜像）：
-#     curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | bash
+#   一键安装（自动下载预编译单二进制并安装为 systemd 服务，数据库用 PostgreSQL）：
+#     curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | sudo bash
 #
-#   二进制方式（systemd，需 root）：
-#     curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | sudo bash -s -- --binary
+#   Docker 方式（可选）：
+#     curl -fsSL .../install.sh | bash -s -- --docker
 #
-#   指定版本 / 目录 / 域名：
-#     curl -fsSL .../install.sh | bash -s -- --version v1.0.0 --mail-host mail.example.com
+#   指定版本 / 域名 / 已有数据库：
+#     curl -fsSL .../install.sh | sudo bash -s -- --version v0.2.0 --mail-host mail.example.com \
+#       --database-url "postgres://user:pass@127.0.0.1:5432/mailserver?sslmode=disable"
 #
 # 可用环境变量：MAILSERVER_VERSION MAILSERVER_DIR MAILSERVER_MODE MAIL_HOST ADMIN_EMAILS
 #
@@ -65,7 +66,7 @@ usage() {
   --version TAG       指定版本，如 v1.0.0（默认 latest）
   --mail-host HOST    邮件域名，如 mail.example.com
   --admin EMAILS      管理员邮箱，逗号分隔
-  --database-url DSN  二进制方式使用 PostgreSQL（如 postgres://user:pass@host:5432/db?sslmode=disable）；不填则用 SQLite
+  --database-url DSN  使用已有 PostgreSQL（如 postgres://user:pass@host:5432/db?sslmode=disable）；不填则本机自动安装
   --no-dns            不安装内置权威 DNS
   -h, --help          显示帮助
 EOF
@@ -137,13 +138,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-# 选择安装方式
+# 默认二进制安装（无需编译）；如要 Docker 请显式 --docker
 if [ -z "$MODE" ]; then
-  if have docker && docker compose version >/dev/null 2>&1; then
-    MODE=docker
-  else
-    MODE=binary
-  fi
+  MODE=binary
 fi
 
 # 收集域名
@@ -156,6 +153,39 @@ fi
 if [ "$VERSION" != "latest" ]; then TAG="$VERSION"; fi
 
 log "安装方式: ${MODE} | 安装目录: ${DIR} | 域名: ${MAIL_HOST}"
+
+# ---------------------------------------------------------------------------
+# PostgreSQL 准备（二进制方式）：未提供 DSN 时尝试本机安装并初始化
+# ---------------------------------------------------------------------------
+setup_postgres() {
+  [ -n "$DATABASE_URL_IN" ] && return 0
+  log "未提供数据库，尝试在本机安装并初始化 PostgreSQL…"
+  if ! have psql; then
+    if have apt-get; then
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -qq && apt-get install -y -qq postgresql >/dev/null
+    elif have dnf; then
+      dnf install -y -q postgresql-server postgresql >/dev/null && (postgresql-setup --initdb >/dev/null 2>&1 || true)
+    elif have yum; then
+      yum install -y -q postgresql-server postgresql >/dev/null && (postgresql-setup --initdb >/dev/null 2>&1 || true)
+    else
+      die "未找到包管理器，请用 --database-url 指定已有 PostgreSQL"
+    fi
+  fi
+  systemctl enable --now postgresql >/dev/null 2>&1 || service postgresql start >/dev/null 2>&1 || true
+  local i=0
+  until sudo -u postgres psql -tAc "SELECT 1" >/dev/null 2>&1; do
+    i=$((i + 1)); [ "$i" -ge 15 ] && die "PostgreSQL 启动失败，请用 --database-url 指定已有实例"
+    sleep 1
+  done
+  local pw; pw="$(rand_secret | cut -c1-24)"
+  sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='mailserver'" | grep -q 1 || \
+    sudo -u postgres psql -c "CREATE ROLE mailserver LOGIN PASSWORD '$pw'" >/dev/null
+  sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='mailserver'" | grep -q 1 || \
+    sudo -u postgres createdb -O mailserver mailserver
+  DATABASE_URL_IN="postgres://mailserver:${pw}@127.0.0.1:5432/mailserver?sslmode=disable"
+  ok "PostgreSQL 已就绪"
+}
 
 # ---------------------------------------------------------------------------
 # Docker 安装
@@ -232,10 +262,10 @@ install_binary() {
 
   if [ ! -f /etc/mailserver/mailserver.env ]; then
     log "生成 /etc/mailserver/mailserver.env …"
+    setup_postgres
     cat > /etc/mailserver/mailserver.env <<EOF
 PORT=80
-DB_PATH=${DIR}/data/mail.db
-# 使用 PostgreSQL 时填写；留空则用轻量 SQLite
+DATA_DIR=${DIR}/data
 DATABASE_URL=${DATABASE_URL_IN}
 CERT_DIR=${DIR}/data/certs
 JWT_SECRET=$(rand_secret)

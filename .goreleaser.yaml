@@ -10,7 +10,7 @@ before:
     - sh -c "rm -rf backend/web && mkdir -p backend/web && touch backend/web/.keep && cp -r frontend/dist/. backend/web/"
 
 builds:
-  # 后端 + 内嵌前端（单二进制）
+  # 后端 + 内嵌前端（单二进制，纯 Go）
   - id: mailserver
     dir: backend
     main: .
@@ -20,15 +20,9 @@ builds:
     ldflags:
       - -s -w
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos: [linux]
     goarch: [amd64, arm64]
-    overrides:
-      - goos: linux
-        goarch: arm64
-        env:
-          - CGO_ENABLED=1
-          - CC=aarch64-linux-gnu-gcc
 
   # 自研权威 DNS（纯 Go）
   - id: nsd

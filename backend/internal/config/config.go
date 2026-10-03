@@ -23,9 +23,8 @@ type Config struct {
 	Host          string // 本机邮件域名，用于 greeting/Message-ID
 	AdminEmails   string // ADMIN_EMAILS 逗号分隔，命中即管理员（兜底提权）
 	JWTSecret     string
-	DBDriver      string // sqlite | postgres（默认根据 DATABASE_URL 推断）
-	DBPath        string // sqlite 文件路径
-	DatabaseURL   string // postgres DSN，设置后默认使用 postgres
+	DatabaseURL   string // PostgreSQL DSN（必填）
+	DataDir       string // 数据目录（zones.json、证书等）
 	CertDir       string // 证书 / ACME 缓存目录
 	RelayHost     string // 25 被封时的外发中继（587+STARTTLS）
 	RelayPort     string
@@ -54,31 +53,18 @@ func getenv(k, def string) string {
 }
 
 func Load() Config {
-	dbPath := getenv("DB_PATH", "./mail.db")
+	dataDir := getenv("DATA_DIR", "./data")
 	dbURL := os.Getenv("DATABASE_URL")
-	dbDriver := strings.ToLower(strings.TrimSpace(os.Getenv("DB_DRIVER")))
-	if dbDriver == "" {
-		if dbURL != "" {
-			dbDriver = "postgres"
-		} else {
-			dbDriver = "sqlite"
-		}
-	}
 	certDir := os.Getenv("CERT_DIR")
 	if certDir == "" {
-		dir := filepath.Dir(dbPath)
-		if dir == "" || dir == "." {
-			dir = "."
-		}
-		certDir = filepath.Join(dir, "certs")
+		certDir = filepath.Join(dataDir, "certs")
 	}
 	return Config{
 		Port:          getenv("PORT", "8080"),
 		SMTPport:      getenv("SMTP_PORT", "2525"),
 		JWTSecret:     getenv("JWT_SECRET", "dev-secret-change-me-32chars!!"),
-		DBDriver:      dbDriver,
-		DBPath:        dbPath,
 		DatabaseURL:   dbURL,
+		DataDir:       dataDir,
 		CertDir:       certDir,
 		RelayHost:     os.Getenv("SMTP_RELAY_HOST"),
 		RelayPort:     getenv("SMTP_RELAY_PORT", "587"),

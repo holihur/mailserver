@@ -34,19 +34,18 @@ func (d *DNS) signer() *dkim.Signer {
 	return d.RT.Signer()
 }
 
-func zonesDefault(dbPath string) string {
+func zonesDefault(dataDir string) string {
 	if p := os.Getenv("ZONES_PATH"); p != "" {
 		return p
 	}
-	dir := filepath.Dir(dbPath)
-	if dir == "" || dir == "." {
-		dir = "."
+	if dataDir == "" {
+		dataDir = "."
 	}
-	return filepath.Join(dir, "zones.json")
+	return filepath.Join(dataDir, "zones.json")
 }
 
-func NewDNS(db *gorm.DB, dbPath string) *DNS {
-	d := &DNS{DB: db, ZonesPath: zonesDefault(dbPath)}
+func NewDNS(db *gorm.DB, dataDir string) *DNS {
+	d := &DNS{DB: db, ZonesPath: zonesDefault(dataDir)}
 	d.export() // 启动即导出，保证 dns/ 有文件可加载
 	return d
 }

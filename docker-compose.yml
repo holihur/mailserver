@@ -26,7 +26,7 @@ services:
     environment:
       PORT: 8080
       DATABASE_URL: postgres://mailserver:${POSTGRES_PASSWORD:-mailserver}@db:5432/mailserver?sslmode=disable
-      DB_PATH: /data/mail.db
+      DATA_DIR: /data
       CERT_DIR: /data/certs
       JWT_SECRET: ${JWT_SECRET:-change-me-32chars-min}
       MAIL_HOST: ${MAIL_HOST:-mail.example.com}

@@ -7,35 +7,20 @@ import (
 	"mailserver/internal/model"
 
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// Open 打开数据库。driver: sqlite | postgres。dsn 为 postgres 连接串。
-func Open(driver, path, dsn string) (*gorm.DB, error) {
-	driver = strings.ToLower(strings.TrimSpace(driver))
-	var dial gorm.Dialector
-	switch driver {
-	case "postgres", "postgresql", "pg":
-		if dsn == "" {
-			return nil, errors.New("postgres 模式需要 DATABASE_URL")
-		}
-		dial = postgres.Open(dsn)
-	case "", "sqlite", "sqlite3":
-		dial = sqlite.Open(path + "?cache=shared")
-	default:
-		return nil, errors.New("不支持的数据库类型: " + driver)
+// Open 打开 PostgreSQL（唯一数据库后端，纯 Go，无 CGO）。
+func Open(dsn string) (*gorm.DB, error) {
+	if strings.TrimSpace(dsn) == "" {
+		return nil, errors.New("需要 DATABASE_URL（PostgreSQL 连接串），例如 postgres://user:pass@host:5432/mailserver?sslmode=disable")
 	}
-
-	g, err := gorm.Open(dial, &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent), // 省内存少日志
+	g, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent), // 少日志
 	})
 	if err != nil {
 		return nil, err
-	}
-	if sqlDB, err := g.DB(); err == nil && driver != "postgres" && driver != "postgresql" && driver != "pg" {
-		sqlDB.SetMaxOpenConns(1) // SQLite + 低内存关键
 	}
 	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}, &model.DnsProvider{}, &model.AcmeConfig{}, &model.Setting{}); err != nil {
 		return nil, err

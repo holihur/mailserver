@@ -31,14 +31,14 @@ func main() {
 	auth.SetSecret(cfg.JWTSecret)
 	secret.SetKey(cfg.JWTSecret)
 
-	g, err := db.Open(cfg.DBDriver, cfg.DBPath, cfg.DatabaseURL)
+	g, err := db.Open(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	au := &handler.Auth{DB: g, AdminEmails: cfg.AdminEmails}
 	mb := &handler.MailBox{DB: g}
-	dns := handler.NewDNS(g, cfg.DBPath)
+	dns := handler.NewDNS(g, cfg.DataDir)
 
 	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
 	rt := runtimecfg.New(g, cfg)

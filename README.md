@@ -1,8 +1,8 @@
 # Mailserver — 轻量全栈邮件系统
 
-前端 React + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL / SQLite
+前端 React + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL
 
-> 默认使用 PostgreSQL（Docker 部署自带）；也可用 `DB_DRIVER=sqlite` 跑轻量单文件模式。
+> 纯 Go 构建（无 CGO），前端已内嵌，后端为单二进制；数据库使用 PostgreSQL。
 > **几乎所有配置都在管理后台 `/#/admin` 里改**，命令行只需引导项（数据库、JWT_SECRET）。
 
 ## 目录
@@ -45,7 +45,7 @@ mailserver/
 docker compose up -d --build
 
 # 本机开发：
-#  - Docker 起一个 PostgreSQL，或用 DB_DRIVER=sqlite 跑轻量模式
+#  - 需要 PostgreSQL（Docker 起一个即可）
 cd backend
 cp .env.example .env
 #   DATABASE_URL=postgres://user:pass@localhost:5432/mailserver?sslmode=disable
@@ -106,34 +106,34 @@ API 默认 `:8080`，SMTP 入站 `:2525`，前端 dev `:5173`。
 | GET/POST | /api/admin/users | 用户列表 / 创建 |
 | PATCH/DELETE | /api/admin/users/:id | 改密 / 禁用 / 删除 |
 
-## 一键安装
+## 一键安装（二进制）
 
-`install.sh` 会自动选择 Docker（已安装 Docker 时）或二进制 + systemd 方式部署。
+无需编译、无需 Docker：自动下载预编译的单二进制（已内嵌网页），用 systemd 运行。
+数据库使用 PostgreSQL；未提供 `--database-url` 时，脚本会尝试在本机自动安装并初始化 PostgreSQL。
 
 ```bash
-# 默认：自动选择（推荐 Docker）
-curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | bash
-
-# 显式指定方式 / 版本 / 域名
-curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh \
-  | bash -s -- --docker --version v1.0.0 --mail-host mail.example.com
-
-# 二进制 + systemd（需要 root）
-curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh \
-  | sudo bash -s -- --binary --mail-host mail.example.com
+curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | sudo bash
 ```
+
+指定域名 / 管理员 / 已有数据库：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh | sudo bash -s -- \
+  --mail-host mail.example.com --admin admin@example.com \
+  --database-url "postgres://user:pass@127.0.0.1:5432/mailserver?sslmode=disable"
+```
+
+常用可选参数（一般无需填写）：
 
 | 选项 | 说明 |
 |------|------|
-| `--docker` / `--binary` | 安装方式（默认已有 Docker 则用 docker） |
-| `--dir DIR` | 安装目录（默认 `/opt/mailserver`） |
-| `--version TAG` | 指定版本，如 `v1.0.0`（默认 latest） |
 | `--mail-host HOST` | 邮件域名，如 `mail.example.com` |
 | `--admin EMAILS` | 管理员邮箱，逗号分隔 |
-| `--database-url DSN` | 二进制方式使用 PostgreSQL；不填则用 SQLite |
-| `--no-dns` | 不安装内置权威 DNS |
+| `--database-url DSN` | 使用已有 PostgreSQL；不填则本机自动安装 |
+| `--version TAG` | 指定版本（默认 latest） |
+| `--no-dns` | 不安装内置 DNS |
 
-Docker 方式使用 GHCR 预构建镜像（`ghcr.io/holihur/mailserver-api` 已内嵌前端、`ghcr.io/holihur/mailserver-dns`），自动生成随机 `JWT_SECRET`；二进制方式为单二进制（内嵌前端）+ systemd 服务与 `/etc/mailserver/mailserver.env`。
+安装后服务为 `mailserver.service`（配置在 `/etc/mailserver/mailserver.env`），Web 界面位于 `http://<服务器IP>/`。
 
 ## CI / 发布
 
@@ -145,13 +145,14 @@ Docker 方式使用 GHCR 预构建镜像（`ghcr.io/holihur/mailserver-api` 已�
 发布新版本：
 
 ```bash
-git tag v1.0.0 && git push origin v1.0.0
+git tag v0.2.1 && git push origin v0.2.1
 ```
 
-本地构建（与 CI 一致）：
+本地构建（与 CI 一致，纯 Go 无需 CGO）：
 
 ```bash
-cd backend && CGO_ENABLED=1 go build -ldflags="-s -w" -o mailserver .
-cd dns     && CGO_ENABLED=0 go build -ldflags="-s -w" -o nsd .
 cd frontend && pnpm install --frozen-lockfile && pnpm run build
+rm -rf ../backend/web && mkdir -p ../backend/web && cp -r dist/. ../backend/web/
+cd ../backend && CGO_ENABLED=0 go build -ldflags="-s -w" -o mailserver .
+cd ../dns   && CGO_ENABLED=0 go build -ldflags="-s -w" -o nsd .
 ```
