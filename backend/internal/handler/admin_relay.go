@@ -31,15 +31,18 @@ func (a *Admin) RelayTest(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": false, "error": "未配置发件中继（relay_host 为空）"})
 		return
 	}
-	steps, err := testRelay(r.Context(), c.Host, c.Port, c.User, c.Pass)
+	steps, err := testRelay(r.Context(), c.Host, c.Port, c.User, c.Pass, c.Insecure)
 	resp := map[string]any{"ok": err == nil, "steps": steps, "host": c.Host, "port": c.Port}
 	if err != nil {
 		resp["error"] = err.Error()
+		if strings.Contains(err.Error(), "certificate") {
+			resp["hint"] = "证书与中继地址不一致：请确认 relay_host 填的是外部发信服务（如 smtpdm.aliyun.com），而不是自己的域名；确需忽略可勾选「跳过 TLS 证书校验」。"
+		}
 	}
 	writeJSON(w, 200, resp)
 }
 
-func testRelay(ctx context.Context, host, port, user, pass string) ([]string, error) {
+func testRelay(ctx context.Context, host, port, user, pass string, insecure bool) ([]string, error) {
 	var steps []string
 	host = strings.TrimSpace(host)
 	port = strings.TrimSpace(port)
@@ -53,7 +56,7 @@ func testRelay(ctx context.Context, host, port, user, pass string) ([]string, er
 	}
 	steps = append(steps, "TCP 连接成功")
 	if port == "465" || port == "8465" {
-		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12})
+		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure})
 	}
 	cl, err := smtp.NewClient(conn, host)
 	if err != nil {
@@ -61,7 +64,7 @@ func testRelay(ctx context.Context, host, port, user, pass string) ([]string, er
 	}
 	defer cl.Close()
 	if ok, _ := cl.Extension("STARTTLS"); ok {
-		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure}); err != nil {
 			return steps, fmt.Errorf("STARTTLS 失败：%w", err)
 		}
 		steps = append(steps, "STARTTLS 成功")

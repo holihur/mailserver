@@ -70,7 +70,12 @@ func handle(c net.Conn, db *gorm.DB) {
 			from = extractAddr(line)
 			reply("250 OK")
 		case strings.HasPrefix(up, "RCPT TO:"):
-			to = extractAddr(line)
+			addr := extractAddr(line)
+			if !recipientExists(db, addr) {
+				reply("550 5.1.1 User unknown")
+				continue
+			}
+			to = addr
 			reply("250 OK")
 		case strings.HasPrefix(up, "DATA"):
 			reply("354 End with .")
@@ -107,6 +112,17 @@ func saveMail(db *gorm.DB, from, to, raw string) {
 		return
 	}
 	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Subject: subject, Body: body, Folder: "inbox"})
+}
+
+// recipientExists 判断收件人是否为本地已有用户（RCPT 阶段就拒绝未知收件人，避免静默丢信）。
+func recipientExists(db *gorm.DB, addr string) bool {
+	addr = strings.ToLower(strings.TrimSpace(addr))
+	if addr == "" {
+		return false
+	}
+	var n int64
+	db.Model(&model.User{}).Where("LOWER(email) = ?", addr).Count(&n)
+	return n > 0
 }
 
 func parseRaw(raw string) (subject, body string) {

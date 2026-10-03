@@ -84,7 +84,7 @@ func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
 		return err
 	}
 	if port == "465" || port == "8465" {
-		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12})
+		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: c.Insecure})
 	}
 	cl, err := smtp.NewClient(conn, host)
 	if err != nil {
@@ -92,7 +92,7 @@ func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
 	}
 	defer cl.Close()
 	if ok, _ := cl.Extension("STARTTLS"); ok {
-		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: c.Insecure}); err != nil {
 			return err
 		}
 	}

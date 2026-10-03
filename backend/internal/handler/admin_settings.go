@@ -23,15 +23,16 @@ import (
 )
 
 var settingKeys = map[string]bool{
-	runtimecfg.KeyMailHost:     true,
-	runtimecfg.KeyPublicIP:     true,
-	runtimecfg.KeyAdminEmails:  true,
-	runtimecfg.KeyRelayHost:    true,
-	runtimecfg.KeyRelayPort:    true,
-	runtimecfg.KeyRelayUser:    true,
-	runtimecfg.KeyRelayPass:    true,
-	runtimecfg.KeyRelayFrom:    true,
-	runtimecfg.KeyRegistration: true,
+	runtimecfg.KeyMailHost:      true,
+	runtimecfg.KeyPublicIP:      true,
+	runtimecfg.KeyAdminEmails:   true,
+	runtimecfg.KeyRelayHost:     true,
+	runtimecfg.KeyRelayPort:     true,
+	runtimecfg.KeyRelayUser:     true,
+	runtimecfg.KeyRelayPass:     true,
+	runtimecfg.KeyRelayFrom:     true,
+	runtimecfg.KeyRelayInsecure: true,
+	runtimecfg.KeyRegistration:  true,
 }
 
 // GET /api/admin/settings   PATCH /api/admin/settings
@@ -61,7 +62,7 @@ func (a *Admin) Settings(w http.ResponseWriter, r *http.Request) {
 			if k == runtimecfg.KeyMailHost {
 				v = strings.Trim(strings.ToLower(v), ".")
 			}
-			if k == runtimecfg.KeyRegistration {
+			if k == runtimecfg.KeyRegistration || k == runtimecfg.KeyRelayInsecure {
 				if v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "on") {
 					v = "1"
 				} else {

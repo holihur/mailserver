@@ -30,6 +30,7 @@ export default function AdminSettings() {
         relay_host: s.relay_host || '', relay_port: s.relay_port || '',
         relay_user: s.relay_user || '', relay_from: s.relay_from || '',
         registration_enabled: s.registration_enabled ? '1' : '0',
+        relay_insecure: s.relay_insecure ? '1' : '0',
       }
       if (relayPass) body.relay_pass = relayPass
       const out = await api.settingsPatch(body)
@@ -51,7 +52,7 @@ export default function AdminSettings() {
     try {
       const r: any = await api.relayTest()
       const steps = (r.steps || []).join(' → ')
-      setRelayMsg((r.ok ? '✓ ' : '✗ ') + steps + (r.ok ? '' : ` (${r.error || ''})`))
+      setRelayMsg((r.ok ? '✓ ' : '✗ ') + steps + (r.ok ? '' : ` (${r.error || ''})`) + (r.hint ? ` — ${r.hint}` : ''))
     } catch (e: any) { setRelayMsg(e.message) } finally { setBusy('') }
   }
 
@@ -99,6 +100,11 @@ export default function AdminSettings() {
               </Button>
               {relayMsg && <span className="text-xs text-muted-foreground break-all">{relayMsg}</span>}
             </div>
+            <label className="flex items-start gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" className="mt-0.5" checked={!!s.relay_insecure}
+                onChange={e => field('relay_insecure', e.target.checked ? '1' : '0')} />
+              <span>{t('settings.relayInsecureHint')}</span>
+            </label>
           </Card>
 
           <Card className="p-4 space-y-3">
