@@ -164,8 +164,8 @@ func toRRs(z *Zone, qtype uint16) []dns.RR {
 			// value: "prio weight port target"
 			n, _ := splitSRV(r.Value)
 			if len(n) == 4 {
-				pr, we, po = atoi(n[0]), atoi(n[1]), atoi(n[2])
-				tgt = n[3]
+				pr, we, po := atoi(n[0]), atoi(n[1]), atoi(n[2])
+				tgt := n[3]
 				if !strings.HasSuffix(tgt, ".") {
 					tgt = fqdn(tgt, z.Domain)
 				}
@@ -273,7 +273,7 @@ func main() {
 	go watchZones()
 	dns.HandleFunc(".", handle)
 	go func() {
-		s := &dns.Server{Addr: addr, Net: "udp", UDPBufferSize: 4096}
+		s := &dns.Server{Addr: addr, Net: "udp", UDPSize: 4096}
 		log.Println("dns authoritative udp on", addr)
 		if err := s.ListenAndServe(); err != nil {
 			log.Fatal(err)

@@ -257,7 +257,7 @@ func handle(conn net.Conn, host string, db *gorm.DB, tlsConf *tls.Config, encryp
 			if !s.needSelected(tag) {
 				continue
 			}
-			sub, rest2 := cut2(rest)
+			sub, _, rest2 := cut2(rest)
 			sub = strings.ToUpper(sub)
 			switch sub {
 			case "FETCH":
@@ -946,8 +946,8 @@ func (s *session) applyStoreSeqs(seqs []int, flagstr string, silent bool) bool {
 		seen := it.read
 		flag := it.starred
 		del := it.deleted
-		set := func(flag string, v bool) {
-			switch flag {
+		set := func(name string, v bool) {
+			switch name {
 			case "\\SEEN":
 				seen = v
 			case "\\FLAGGED":

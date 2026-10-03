@@ -1,0 +1,5 @@
+.git
+data
+*.json
+nsd
+*.log

@@ -1,0 +1,7 @@
+# pnpm 默认不再自动执行依赖的构建脚本。
+# esbuild(vite 依赖) 需要执行安装脚本以链接平台二进制。
+allowBuilds:
+  esbuild: true
+# 兼容 pnpm 10（旧键名）
+onlyBuiltDependencies:
+  - esbuild
