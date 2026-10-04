@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Select } from '../components/ui/controls'
-import { ThemeToggle, LangToggle } from '../components/HeaderControls'
+import PageShell from '../components/PageShell'
+import { SkeletonList } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
 import { Plus, Trash2, Globe, Copy, CheckCircle2 } from 'lucide-react'
-import { BRAND } from '../lib/brand'
 
 const TYPES = ['A', 'AAAA', 'MX', 'TXT', 'CNAME', 'NS', 'SRV', 'CAA']
 
@@ -13,13 +12,14 @@ export default function DnsPage() {
   const { t } = useI18n()
   const [allowed, setAllowed] = useState<boolean | null>(null)
   const [domains, setDomains] = useState([])
+  const [loading, setLoading] = useState(true)
   const [sel, setSel] = useState(null)
   const [newDomain, setNewDomain] = useState({ name: '', ip: '' })
   const [newRec, setNewRec] = useState({ name: '', type: 'A', value: '', ttl: 600, prio: 10 })
   const [zone, setZone] = useState('')
 
   async function loadDomains() {
-    try { setDomains(await api.dnsList()) } catch {}
+    try { setDomains(await api.dnsList()) } catch {} finally { setLoading(false) }
   }
   // 自托管 DNS 仅管理员可用，非管理员直接回到邮箱
   useEffect(() => {
@@ -54,16 +54,8 @@ export default function DnsPage() {
   if (!allowed) return null
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <Link to="/" className="font-semibold">← {BRAND}</Link>
-        <Badge><Globe size={12} /> {t('dns.title')}</Badge>
-        <div className="flex-1" />
-        <LangToggle />
-        <ThemeToggle />
-      </header>
-
-      <div className="max-w-6xl mx-auto p-4 grid md:grid-cols-[260px_1fr] gap-4">
+    <PageShell title={t('dns.title')} icon={Globe} maxWidth="max-w-6xl">
+      <div className="grid md:grid-cols-[260px_1fr] gap-4">
         <Card className="p-4 space-y-3 h-fit">
           <b className="text-sm">{t('dns.myDomains')}</b>
           <form onSubmit={createDomain} className="space-y-2">
@@ -72,13 +64,14 @@ export default function DnsPage() {
             <Button className="w-full" size="sm"><Plus />{t('dns.addRecords')}</Button>
           </form>
           <div className="space-y-1">
-            {domains.map(d => (
+            {loading && <SkeletonList rows={3} />}
+            {!loading && domains.map(d => (
               <div key={d.id} className="flex items-center gap-1">
                 <button onClick={() => open(d.id)} className={'flex-1 text-left text-sm rounded-md px-3 py-2 hover:bg-muted ' + (sel?.domain.id === d.id ? 'bg-muted font-semibold' : '')}>{d.name}</button>
                 <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={async () => { if (confirm(t('dns.deleteConfirm', { name: d.name }))) { await api.dnsDelete(d.id); setSel(null); loadDomains() } }}><Trash2 /></Button>
               </div>
             ))}
-            {domains.length === 0 && <p className="text-xs text-muted-foreground">{t('dns.noDomains')}</p>}
+            {!loading && domains.length === 0 && <p className="text-xs text-muted-foreground">{t('dns.noDomains')}</p>}
           </div>
         </Card>
 
@@ -148,6 +141,6 @@ export default function DnsPage() {
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   )
 }

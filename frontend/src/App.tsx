@@ -14,6 +14,7 @@ import AdminRoutes from './pages/AdminRoutes'
 import Contacts from './pages/Contacts'
 import Rules from './pages/Rules'
 import Security from './pages/Security'
+import Privacy from './pages/Privacy'
 
 const authed = () => !!localStorage.getItem('token')
 
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/contacts" element={authed() ? <Contacts /> : <Navigate to="/login" />} />
         <Route path="/rules" element={authed() ? <Rules /> : <Navigate to="/login" />} />
         <Route path="/security" element={authed() ? <Security /> : <Navigate to="/login" />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="/admin" element={authed() ? <AdminPage /> : <Navigate to="/login" />} />
         <Route path="/admin/settings" element={authed() ? <AdminSettings /> : <Navigate to="/login" />} />
         <Route path="/admin/ssl" element={authed() ? <AdminSSL /> : <Navigate to="/login" />} />

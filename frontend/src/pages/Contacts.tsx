@@ -1,22 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card, Label } from '../components/ui/controls'
-import { ThemeToggle, LangToggle } from '../components/HeaderControls'
+import PageShell from '../components/PageShell'
+import { SkeletonList } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
-import { BRAND } from '../lib/brand'
 import { Plus, Trash2, Pencil, Check, X, Search, UserRound } from 'lucide-react'
 
 export default function Contacts() {
   const { t } = useI18n()
   const [list, setList] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [form, setForm] = useState({ name: '', email: '', note: '' })
   const [editId, setEditId] = useState<number | null>(null)
   const [edit, setEdit] = useState({ name: '', email: '', note: '' })
 
   async function load() {
-    try { setList(await api.contacts()) } catch {}
+    try { setList(await api.contacts()) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
 
@@ -48,17 +48,8 @@ export default function Contacts() {
   const filtered = list.filter(c => `${c.name} ${c.email} ${c.note}`.toLowerCase().includes(q.toLowerCase()))
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <Link to="/" className="font-semibold">← {BRAND}</Link>
-        <span className="flex items-center gap-1 text-sm text-muted-foreground"><UserRound size={15} />{t('contacts.title')}</span>
-        <div className="flex-1" />
-        <LangToggle />
-        <ThemeToggle />
-      </header>
-
-      <div className="max-w-3xl mx-auto p-4 space-y-4">
-        <Card className="p-4">
+    <PageShell title={t('contacts.title')} icon={UserRound}>
+      <Card className="p-4">
           <b className="text-sm">{t('contacts.add')}</b>
           <form onSubmit={add} className="grid sm:grid-cols-[1fr_1fr_1.2fr_auto] gap-2 mt-2 items-end">
             <div>
@@ -83,8 +74,9 @@ export default function Contacts() {
         </div>
 
         <Card className="divide-y divide-border">
-          {filtered.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('contacts.empty')}</p>}
-          {filtered.map(c => (
+          {loading && <SkeletonList rows={4} />}
+          {!loading && filtered.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('contacts.empty')}</p>}
+          {!loading && filtered.map(c => (
             <div key={c.id} className="p-3">
               {editId === c.id ? (
                 <div className="grid sm:grid-cols-[1fr_1fr_1.2fr_auto] gap-2 items-center">
@@ -110,7 +102,6 @@ export default function Contacts() {
             </div>
           ))}
         </Card>
-      </div>
-    </div>
+    </PageShell>
   )
 }

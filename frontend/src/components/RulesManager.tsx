@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge, Label, Select } from './ui/controls'
+import { SkeletonRows } from './Skeleton'
 import { useI18n } from '../lib/i18n'
 import { Plus, Trash2, Pencil, Check, X, FlaskConical } from 'lucide-react'
 
@@ -10,6 +11,7 @@ const EMPTY = { name: '', expression: '', action: 'trash', folder: 'trash', prio
 export function RulesManager({ site = false }: { site?: boolean }) {
   const { t } = useI18n()
   const [rules, setRules] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<any>({ ...EMPTY })
   const [editId, setEditId] = useState<number | null>(null)
   const [sample, setSample] = useState({ from: 'spam@example.com', subject: '你好', body: '' })
@@ -22,7 +24,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
   const apiTest = site ? api.adminRuleTest : api.ruleTest
 
   async function load() {
-    try { setRules(await apiList()) } catch {}
+    try { setRules(await apiList()) } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [site])
 
@@ -125,8 +127,9 @@ export function RulesManager({ site = false }: { site?: boolean }) {
       </Card>
 
       <Card className="divide-y divide-border">
-        {rules.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('rules.empty')}</p>}
-        {rules.map(r => (
+        {loading && <SkeletonRows rows={3} />}
+        {!loading && rules.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('rules.empty')}</p>}
+        {!loading && rules.map(r => (
           <div key={r.id} className="p-3 flex items-start gap-3">
             <input type="checkbox" className="mt-1" checked={r.enabled} onChange={() => toggle(r)} aria-label={t('rules.enabled')} />
             <div className="min-w-0 flex-1">

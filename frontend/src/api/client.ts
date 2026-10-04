@@ -24,6 +24,8 @@ export const api = {
   totpSetup: () => req('/api/totp/setup', { method: 'POST' }),
   totpEnable: (code) => req('/api/totp/enable', { method: 'POST', body: JSON.stringify({ code }) }),
   totpDisable: (code) => req('/api/totp/disable', { method: 'POST', body: JSON.stringify({ code }) }),
+  gdprExport: () => req('/api/gdpr/export'),
+  gdprDelete: (password) => req('/api/gdpr/delete', { method: 'POST', body: JSON.stringify({ password }) }),
   me: () => req('/api/me'),
   list: (folder = 'inbox', q = '', page = 1, sort = 'newest') =>
     req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}`),

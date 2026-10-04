@@ -86,6 +86,7 @@ func main() {
 	tb := &handler.TokenBox{DB: g}
 	contacts := &handler.ContactBox{DB: g}
 	totpBox := &handler.TOTPBox{DB: g}
+	gdpr := &handler.GDPRBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
 
 	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
@@ -182,6 +183,8 @@ func main() {
 	mux.HandleFunc("/api/totp/setup", cors(totpBox.Setup))
 	mux.HandleFunc("/api/totp/enable", cors(totpBox.Enable))
 	mux.HandleFunc("/api/totp/disable", cors(totpBox.Disable))
+	mux.HandleFunc("/api/gdpr/export", cors(gdpr.Export))
+	mux.HandleFunc("/api/gdpr/delete", cors(gdpr.Delete))
 	mux.HandleFunc("/api/me", cors(au.Me))
 	mux.HandleFunc("/api/mails", cors(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {

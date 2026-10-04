@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Card } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
+import { SkeletonCards } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
 import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe } from 'lucide-react'
 
@@ -30,6 +31,7 @@ export default function AdminPage() {
 
   return (
     <AdminShell title={t('admin.dashboard')} desc={t('settings.desc')}>
+      {!ov ? <SkeletonCards /> : (
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           [t('admin.users2'), ov?.users ?? '—', Users],
@@ -43,6 +45,7 @@ export default function AdminPage() {
           </Card>
         ))}
       </div>
+      )}
 
       <Card className="p-4">
         <b className="text-sm">{t('admin.checklist')}</b>

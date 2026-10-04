@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
-import { ThemeToggle, LangToggle } from '../components/HeaderControls'
+import PageShell from '../components/PageShell'
 import { useI18n } from '../lib/i18n'
-import { BRAND } from '../lib/brand'
-import { ShieldCheck, Copy, KeyRound, Check } from 'lucide-react'
+import { ShieldCheck, Copy, KeyRound, Check, Download, Trash2 } from 'lucide-react'
 
 export default function Security() {
   const { t } = useI18n()
@@ -39,17 +37,31 @@ export default function Security() {
   }
   function copy(s: string) { navigator.clipboard?.writeText(s) }
 
-  return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <Link to="/" className="font-semibold">← {BRAND}</Link>
-        <span className="flex items-center gap-1 text-sm text-muted-foreground"><ShieldCheck size={15} />{t('security.title')}</span>
-        <div className="flex-1" />
-        <LangToggle />
-        <ThemeToggle />
-      </header>
+  async function exportData() {
+    try {
+      const data = await api.gdprExport()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `sweetcorn-export-${Date.now()}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e: any) { alert(e.message) }
+  }
+  async function deleteAccount() {
+    if (!confirm(t('security.deleteConfirm'))) return
+    const pw = prompt(t('security.passwordPrompt'))
+    if (!pw) return
+    try {
+      await api.gdprDelete(pw)
+      localStorage.removeItem('token')
+      location.assign('/login')
+    } catch (e: any) { alert(e.message) }
+  }
 
-      <div className="max-w-2xl mx-auto p-4 space-y-4">
+  return (
+    <PageShell title={t('security.title')} icon={ShieldCheck} maxWidth="max-w-2xl">
         <Card className="p-4 space-y-3">
           <div className="flex items-center gap-2">
             <KeyRound size={16} />
@@ -92,7 +104,16 @@ export default function Security() {
             </div>
           )}
         </Card>
-      </div>
-    </div>
+
+        <Card className="p-4 space-y-3">
+          <b className="text-sm">{t('security.dataTitle')}</b>
+          <p className="text-sm text-muted-foreground">{t('security.exportHint')}</p>
+          <Button size="sm" variant="outline" onClick={exportData}><Download />{t('security.export')}</Button>
+          <div className="border-t border-border pt-3 space-y-2">
+            <p className="text-sm text-muted-foreground">{t('security.deleteHint')}</p>
+            <Button size="sm" variant="destructive" onClick={deleteAccount}><Trash2 />{t('security.deleteAccount')}</Button>
+          </div>
+        </Card>
+    </PageShell>
   )
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card } from '../components/ui/controls'
 import { LangToggle, ThemeToggle } from '../components/HeaderControls'
@@ -98,6 +99,7 @@ export default function Login() {
           </>
         )}
         <p className="text-xs text-muted-foreground">{regOpen ? t('login.hint') : t('login.registerClosed')}</p>
+        <p className="text-xs text-center"><Link to="/privacy" className="text-muted-foreground underline">{t('nav.privacy')}</Link></p>
       </Card>
     </div>
   )

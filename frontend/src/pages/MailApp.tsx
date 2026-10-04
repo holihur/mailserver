@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { Button, Input, Textarea, Card } from '../components/ui/controls'
 import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../components/Dropdown'
 import { RecipientInput } from '../components/RecipientInput'
+import { SkeletonList } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
 import { useTheme } from '../lib/theme'
 import {
@@ -29,6 +30,7 @@ export default function MailApp() {
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
   const [folder, setFolder] = useState('inbox')
   const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
   const [total, setTotal] = useState(0)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(null)
@@ -41,10 +43,11 @@ export default function MailApp() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   async function load(p = page, s = sort) {
+    setLoading(true)
     try {
       const d = await api.list(folder, q, p, s)
       setItems(d.items); setTotal(d.total); setPage(d.page || p)
-    } catch {}
+    } catch {} finally { setLoading(false) }
   }
   useEffect(() => { api.me().then(setMe).catch(() => { location.href = '/login' }) }, [])
   useEffect(() => { setSel(null); setView('list'); setPage(1); load(1, sort) }, [folder])
@@ -95,6 +98,7 @@ export default function MailApp() {
           <DropdownItem icon={Contact} onClick={() => navigate('/contacts')}>{t('nav.contacts')}</DropdownItem>
           <DropdownItem icon={Filter} onClick={() => navigate('/rules')}>{t('nav.rules')}</DropdownItem>
           <DropdownItem icon={KeyRound} onClick={() => navigate('/security')}>{t('nav.security')}</DropdownItem>
+          <DropdownItem icon={ShieldCheck} onClick={() => navigate('/privacy')}>{t('nav.privacy')}</DropdownItem>
           {me?.admin && <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>}
           {me?.admin && <DropdownItem icon={ShieldCheck} onClick={() => navigate('/admin')}>{t('nav.admin')}</DropdownItem>}
           <DropdownSeparator />
@@ -171,7 +175,8 @@ export default function MailApp() {
               </div>
             )}
             <div className="flex-1 overflow-auto">
-              {items.map(m => (
+              {loading && <SkeletonList rows={6} />}
+              {!loading && items.map(m => (
                 <button key={m.id} onClick={() => selectMode ? toggleCheck(m.id) : open(m.id)}
                   className={cn('w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60',
                     (selectMode ? checked.includes(m.id) : sel?.id === m.id) && 'bg-muted', !m.read && 'font-semibold')}>
@@ -185,7 +190,7 @@ export default function MailApp() {
                   <div className="text-xs text-muted-foreground truncate">{m.body?.slice(0, 60)}</div>
                 </button>
               ))}
-              {items.length === 0 && <p className="p-6 text-sm text-muted-foreground text-center">{t('mail.empty')}</p>}
+              {!loading && items.length === 0 && <p className="p-6 text-sm text-muted-foreground text-center">{t('mail.empty')}</p>}
             </div>
             <div className="border-t border-border p-2 flex items-center justify-between text-xs">
               <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => load(page - 1, sort)}>‹ {t('mail.prev')}</Button>
