@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Button, Input, Textarea, Card, Badge } from '../components/ui/controls'
-import { ThemeToggle, LangToggle } from '../components/HeaderControls'
+import { Button, Input, Textarea, Card } from '../components/ui/controls'
+import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../components/Dropdown'
 import { useI18n } from '../lib/i18n'
+import { useTheme } from '../lib/theme'
 import {
   Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
+  ChevronDown, Languages, Sun, Moon, Monitor,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
@@ -19,7 +21,10 @@ const FOLDERS = [
 ]
 
 export default function MailApp() {
-  const { t } = useI18n()
+  const { t, lang, setLang } = useI18n()
+  const navigate = useNavigate()
+  const { theme, cycle: cycleTheme } = useTheme()
+  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
   const [folder, setFolder] = useState('inbox')
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
@@ -72,18 +77,30 @@ export default function MailApp() {
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
         <b className="hidden sm:inline">📮 {BRAND}</b>
         <b className="sm:hidden">📮</b>
-        {me && <Badge className="max-w-[38vw] truncate">{me.email}</Badge>}
         <div className="flex-1" />
-        {me?.admin && <Link to="/dns" title={t('nav.dns')}><Button variant="ghost" size="icon" aria-label={t('nav.dns')}><Globe /></Button></Link>}
-        <Link to="/setup" title={t('nav.setup')}><Button variant="ghost" size="icon" aria-label={t('nav.setup')}><Settings /></Button></Link>
-        {me?.admin && <Link to="/admin" title={t('nav.admin')}><Button variant="ghost" size="icon" aria-label={t('nav.admin')}><ShieldCheck /></Button></Link>}
-        <div className="hidden sm:flex items-center">
-          <LangToggle />
-          <ThemeToggle />
-        </div>
-        <Button variant="ghost" size="icon" onClick={() => load()} aria-label={t('common.refresh')}><RefreshCw /></Button>
-        <Button variant="ghost" size="icon" onClick={logout} aria-label={t('nav.logout')}><LogOut /></Button>
         <Button size="sm" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
+        <Dropdown align="right" trigger={
+          <Button variant="ghost" size="sm" className="gap-1.5 px-1.5" aria-label={t('nav.account')}>
+            <span className="grid place-items-center size-7 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+              {((me?.email || '?')[0] || '?').toUpperCase()}
+            </span>
+            <ChevronDown size={15} className="text-muted-foreground" />
+          </Button>
+        }>
+          {me?.email && <DropdownLabel>{me.email}</DropdownLabel>}
+          <DropdownSeparator />
+          <DropdownItem icon={Settings} onClick={() => navigate('/setup')}>{t('nav.setup')}</DropdownItem>
+          {me?.admin && <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>}
+          {me?.admin && <DropdownItem icon={ShieldCheck} onClick={() => navigate('/admin')}>{t('nav.admin')}</DropdownItem>}
+          <DropdownSeparator />
+          <DropdownItem icon={Languages} onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}>
+            {lang === 'zh' ? 'English' : '中文'}
+          </DropdownItem>
+          <DropdownItem icon={ThemeIcon} onClick={cycleTheme}>{t('theme.' + theme)}</DropdownItem>
+          <DropdownSeparator />
+          <DropdownItem icon={RefreshCw} onClick={() => load()}>{t('common.refresh')}</DropdownItem>
+          <DropdownItem icon={LogOut} onClick={logout} className="text-red-500 hover:bg-red-500/10">{t('nav.logout')}</DropdownItem>
+        </Dropdown>
       </header>
 
       {/* 移动端：文件夹横向标签 */}

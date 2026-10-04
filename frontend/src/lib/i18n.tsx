@@ -32,6 +32,7 @@ export const DICTS = {
     'nav.dns': '域名 DNS',
     'nav.setup': '客户端配置',
     'nav.admin': '管理后台',
+    'nav.account': '账户菜单',
     'nav.logout': '退出登录',
 
     'login.title': '登录 / 注册',
@@ -313,6 +314,7 @@ export const DICTS = {
     'nav.dns': 'DNS',
     'nav.setup': 'Client setup',
     'nav.admin': 'Admin',
+    'nav.account': 'Account menu',
     'nav.logout': 'Sign out',
 
     'login.title': 'Sign in / Sign up',
