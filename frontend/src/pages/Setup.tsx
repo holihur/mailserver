@@ -1,40 +1,100 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
-import { Button, Card, Badge } from '../components/ui/controls'
+import { Button, Card, Badge, Input } from '../components/ui/controls'
 import { ThemeToggle, LangToggle } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { RefreshCw, CheckCircle2, Clock, XCircle } from 'lucide-react'
+import { RefreshCw, CheckCircle2, Clock, XCircle, KeyRound, Plus, Trash2, Copy } from 'lucide-react'
+import { BRAND } from '../lib/brand'
 
 export default function Setup() {
   const { t } = useI18n()
   const [outbox, setOutbox] = useState([])
   const [dkim, setDkim] = useState(null)
+  const [tokens, setTokens] = useState<any[]>([])
+  const [tokName, setTokName] = useState('')
+  const [newToken, setNewToken] = useState('')
   const host = location.hostname
 
   async function load() {
     try { setOutbox(await api.outbox()) } catch {}
     try { setDkim(await api.dkimGet()) } catch {}
+    try { setTokens(await api.tokens()) } catch {}
   }
   useEffect(() => { load() }, [])
 
+  async function createToken(e: any) {
+    e.preventDefault()
+    try {
+      const r = await api.tokenCreate(tokName)
+      setNewToken(r.token)
+      setTokName('')
+      setTokens(await api.tokens())
+    } catch (err: any) { alert(err.message) }
+  }
+  async function revokeToken(id: number) {
+    if (!confirm(t('token.confirmRevoke'))) return
+    try { await api.tokenDelete(id); setTokens(await api.tokens()) } catch (e: any) { alert(e.message) }
+  }
+  function copyText(s: string) { navigator.clipboard?.writeText(s) }
+
   const rows = [
     [t('setup.smtp'), `${host}:587`, t('setup.starttls'), t('setup.authHint')],
+    [t('setup.smtps'), `${host}:465`, t('setup.ssl'), t('setup.authHint')],
     [t('setup.pop3'), `${host}:110`, t('setup.plain'), t('setup.authHint')],
-    [t('setup.imap'), `${host}:143`, t('setup.dkimReady'), t('setup.authHint')],
+    [t('setup.pop3s'), `${host}:995`, t('setup.ssl'), t('setup.authHint')],
+    [t('setup.imap'), `${host}:143`, t('setup.starttls'), t('setup.authHint')],
+    [t('setup.imaps'), `${host}:993`, t('setup.ssl'), t('setup.authHint')],
     [t('setup.webmail'), `${host}/`, '—', t('setup.webmail')],
   ]
 
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <Link to="/" className="font-semibold">← Mailserver</Link>
+        <Link to="/" className="font-semibold">← {BRAND}</Link>
         <Badge>{t('setup.title')}</Badge>
         <div className="flex-1" />
         <LangToggle />
         <ThemeToggle />
       </header>
       <div className="max-w-3xl mx-auto p-4 space-y-4">
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <KeyRound size={16} />
+            <b className="text-sm">{t('token.title')}</b>
+            <Badge>{t('token.required')}</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground">{t('token.intro')}</p>
+          <form onSubmit={createToken} className="flex gap-2">
+            <Input placeholder={t('token.namePlaceholder')} value={tokName} onChange={e => setTokName(e.target.value)} />
+            <Button size="sm" type="submit" className="shrink-0"><Plus />{t('token.generate')}</Button>
+          </form>
+          {newToken && (
+            <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-2">
+              <p className="text-xs text-yellow-700 dark:text-yellow-400">{t('token.onceWarning')}</p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 break-all text-xs font-mono bg-background rounded px-2 py-1">{newToken}</code>
+                <Button size="sm" variant="outline" type="button" onClick={() => copyText(newToken)}><Copy />{t('common.copy')}</Button>
+              </div>
+            </div>
+          )}
+          {tokens.length > 0 && (
+            <div className="text-sm">
+              {tokens.map((tk: any) => (
+                <div key={tk.id} className="flex items-center gap-2 border-t border-border py-2">
+                  <span className="font-medium truncate max-w-[40%]">{tk.name}</span>
+                  <code className="text-xs text-muted-foreground">{tk.prefix}…</code>
+                  <span className="text-xs text-muted-foreground hidden sm:inline">
+                    {tk.last_used ? t('token.lastUsed', { t: new Date(tk.last_used).toLocaleDateString() }) : t('token.neverUsed')}
+                  </span>
+                  <div className="flex-1" />
+                  <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => revokeToken(tk.id)}><Trash2 /></Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
         <Card className="p-4 overflow-x-auto">
           <b className="text-sm">{t('setup.clientParams')}</b>
           <table className="w-full text-sm mt-2 min-w-[520px]">

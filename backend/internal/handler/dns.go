@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"mailserver/internal/auth"
 	"mailserver/internal/dkim"
 	"mailserver/internal/model"
 	"mailserver/internal/runtimecfg"
@@ -21,9 +20,10 @@ import (
 )
 
 type DNS struct {
-	DB        *gorm.DB
-	ZonesPath string // zones.json 输出路径
-	RT        *runtimecfg.Store
+	DB          *gorm.DB
+	ZonesPath   string // zones.json 输出路径
+	RT          *runtimecfg.Store
+	AdminEmails string // ADMIN_EMAILS 兜底提权名单（与 Admin 一致）
 }
 
 // signer 返回当前 DKIM 签名器（可能为 nil）。
@@ -50,22 +50,9 @@ func NewDNS(db *gorm.DB, dataDir string) *DNS {
 	return d
 }
 
-func (d *DNS) uid(w http.ResponseWriter, r *http.Request) (uint, bool) {
-	uid, err := auth.UserID(r)
-	if err != nil {
-		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
-		return 0, false
-	}
-	var u model.User
-	if err := d.DB.Select("id", "disabled").First(&u, uid).Error; err != nil {
-		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
-		return 0, false
-	}
-	if u.Disabled {
-		writeJSON(w, 403, map[string]string{"error": "账号已禁用"})
-		return 0, false
-	}
-	return uid, true
+// mustAdmin 自托管 DNS 属于全局控制面，仅管理员可读写。
+func (d *DNS) mustAdmin(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
+	return resolveAdmin(d.DB, d.RT, d.AdminEmails, w, r)
 }
 
 var validTypes = map[string]bool{
@@ -76,7 +63,7 @@ var validTypes = map[string]bool{
 // POST /api/domains {name, ip} -> 自动配齐 mail 所需记录
 // GET  /api/domains -> 列表
 func (d *DNS) Domains(w http.ResponseWriter, r *http.Request) {
-	if _, ok := d.uid(w, r); !ok {
+	if _, ok := d.mustAdmin(w, r); !ok {
 		return
 	}
 	if r.Method == "GET" {
@@ -141,7 +128,7 @@ func (d *DNS) Domains(w http.ResponseWriter, r *http.Request) {
 
 // /api/domains/{id} /records /zone 的统一分发
 func (d *DNS) DomainOne(w http.ResponseWriter, r *http.Request) {
-	if _, ok := d.uid(w, r); !ok {
+	if _, ok := d.mustAdmin(w, r); !ok {
 		return
 	}
 	rest := strings.TrimPrefix(r.URL.Path, "/api/domains/")
@@ -333,7 +320,7 @@ func (d *DNS) UpsertDomainWithRecords(domain string, records []model.DnsRecord) 
 // GET /api/dkim -> {ready, domain, selector, name, txt}
 // POST /api/dkim {domain} -> 公钥写入该域 selector._domainkey TXT 并导出（一键发布）
 func (d *DNS) DKIM(w http.ResponseWriter, r *http.Request) {
-	if _, ok := d.uid(w, r); !ok {
+	if _, ok := d.mustAdmin(w, r); !ok {
 		return
 	}
 	if d.signer() == nil {

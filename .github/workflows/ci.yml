@@ -68,7 +68,7 @@ jobs:
               'mailserver/internal/provider', 'mailserver/internal/runtimecfg',
               'mailserver/internal/secret',
           }
-          r = subprocess.run(['go', 'test', '-cover', './...'], capture_output=True, text=True)
+          r = subprocess.run(['go', 'test', '-p', '1', '-cover', './...'], capture_output=True, text=True)
           sys.stdout.write(r.stdout)
           sys.stderr.write(r.stderr)
           if r.returncode != 0:

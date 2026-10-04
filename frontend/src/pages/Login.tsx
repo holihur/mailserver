@@ -4,6 +4,7 @@ import { Button, Input, Card } from '../components/ui/controls'
 import { LangToggle, ThemeToggle } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import { Mail, Loader2 } from 'lucide-react'
+import { BRAND } from '../lib/brand'
 
 export default function Login() {
   const { t } = useI18n()
@@ -38,7 +39,7 @@ export default function Login() {
       <Card className="w-full max-w-sm p-6 space-y-4">
         <div className="flex items-center gap-2">
           <span className="grid place-items-center size-9 rounded-md bg-primary text-primary-foreground"><Mail size={18} /></span>
-          <div><h1 className="font-semibold">Mailserver</h1><p className="text-xs text-muted-foreground">{t('login.title')}</p></div>
+          <div><h1 className="font-semibold">{BRAND}</h1><p className="text-xs text-muted-foreground">{t('login.title')}</p></div>
         </div>
         <div className="flex gap-2 text-sm">
           <button onClick={() => setMode('login')} className={mode === 'login' ? 'font-semibold text-primary' : 'text-muted-foreground'}>{t('login.login')}</button>

@@ -8,6 +8,7 @@ import AdminSettings from './pages/AdminSettings'
 import AdminSSL from './pages/AdminSSL'
 import AdminProviders from './pages/AdminProviders'
 import AdminUsers from './pages/AdminUsers'
+import AdminAbout from './pages/AdminAbout'
 
 const authed = () => !!localStorage.getItem('token')
 
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/admin/ssl" element={authed() ? <AdminSSL /> : <Navigate to="/login" />} />
         <Route path="/admin/providers" element={authed() ? <AdminProviders /> : <Navigate to="/login" />} />
         <Route path="/admin/users" element={authed() ? <AdminUsers /> : <Navigate to="/login" />} />
+        <Route path="/admin/about" element={authed() ? <AdminAbout /> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   )

@@ -117,8 +117,14 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 		m.DB.Where("id = ? AND user_id = ?", id, uid).First(&mail)
 		writeJSON(w, 200, mail)
 	case "DELETE":
+		// 已在垃圾箱：彻底删除且不可恢复；否则移入垃圾箱（可恢复）。
+		if mail.Folder == "trash" {
+			m.DB.Delete(&mail)
+			writeJSON(w, 200, map[string]any{"ok": true, "deleted": true})
+			return
+		}
 		m.DB.Model(&mail).Update("folder", "trash")
-		writeJSON(w, 200, map[string]string{"ok": "true"})
+		writeJSON(w, 200, map[string]any{"ok": true, "deleted": false})
 	}
 }
 
@@ -136,7 +142,7 @@ func (m *MailBox) Outbox(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, items)
 }
 
-// POST /api/mails/batch {ids:[...], action:trash|delete|star|unstar|read|unread|move, folder?}
+// POST /api/mails/batch {ids:[...], action:trash|delete|star|unstar|read|unread|move|empty, folder?}
 func (m *MailBox) Batch(w http.ResponseWriter, r *http.Request) {
 	uid, ok := uidOf(m.DB, w, r)
 	if !ok {
@@ -151,7 +157,17 @@ func (m *MailBox) Batch(w http.ResponseWriter, r *http.Request) {
 		Action string `json:"action"`
 		Folder string `json:"folder"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil || len(in.IDs) == 0 {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "bad body"})
+		return
+	}
+	// 清空垃圾箱：无需选中邮件，直接彻底删除当前用户全部 trash。
+	if in.Action == "empty" {
+		res := m.DB.Where("user_id = ? AND folder = ?", uid, "trash").Delete(&model.Mail{})
+		writeJSON(w, 200, map[string]any{"ok": true, "count": res.RowsAffected})
+		return
+	}
+	if len(in.IDs) == 0 {
 		writeJSON(w, 400, map[string]string{"error": "未选择邮件"})
 		return
 	}

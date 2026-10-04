@@ -13,10 +13,10 @@ import (
 	"net"
 	"strings"
 
+	"mailserver/internal/auth"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -73,7 +73,7 @@ func (s *submitter) reply(msg string) { s.w.WriteString(msg + "\r\n"); s.w.Flush
 func handleSubmit(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
 	defer conn.Close()
 	s := &submitter{r: bufio.NewReader(conn), w: bufio.NewWriter(conn), db: db, host: host, tls: encrypted}
-	s.reply("220 " + host() + " ESMTP mailserver")
+	s.reply("220 " + host() + " ESMTP Sweetcorn")
 	var data strings.Builder
 	inData := false
 
@@ -240,17 +240,11 @@ func (s *submitter) doAuth(arg string) bool {
 }
 
 func (s *submitter) checkUser(email, pass string) bool {
-	var u model.User
-	if err := s.db.Where("email = ?", strings.TrimSpace(email)).First(&u).Error; err != nil {
+	u, err := auth.AuthenticateMail(s.db, email, pass)
+	if err != nil {
 		return false
 	}
-	if bcrypt.CompareHashAndPassword([]byte(u.PassHash), []byte(pass)) != nil {
-		return false
-	}
-	if u.Disabled {
-		return false
-	}
-	s.user = &u
+	s.user = u
 	return true
 }
 

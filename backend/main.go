@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log"
@@ -82,6 +83,7 @@ func main() {
 	}
 	au.RL = rl
 	mb := &handler.MailBox{DB: g}
+	tb := &handler.TokenBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
 
 	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
@@ -103,9 +105,11 @@ func main() {
 	}
 	tlsConf := cert.TLSConfig()
 
-	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails, DNS: dns, RT: rt, Cert: cert, CertDir: cfg.CertDir}
+	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails, DNS: dns, RT: rt, Cert: cert, CertDir: cfg.CertDir,
+		Version: version, Commit: commit, Date: date, Repo: os.Getenv("MAILSERVER_REPO")}
 	au.RT = rt
 	dns.RT = rt
+	dns.AdminEmails = cfg.AdminEmails
 
 	host := rt.MailHost
 
@@ -134,6 +138,11 @@ func main() {
 	defer cancelRenew()
 	go ad.AutoRenewLoop(renewCtx)
 
+	// 自动更新：默认每 10 分钟检查一次；后台可开关自动安装与调整间隔。
+	autoCtx, cancelAuto := context.WithCancel(context.Background())
+	defer cancelAuto()
+	go selfupdate.AutoLoop(autoCtx, os.Getenv("MAILSERVER_REPO"), version, rt.UpdateInterval, rt.AutoUpdate, log.Printf)
+
 	mux := http.NewServeMux()
 	// CORS（dev 联调）
 	cors := func(next http.HandlerFunc) http.HandlerFunc {
@@ -156,6 +165,10 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"version":%q,"commit":%q,"date":%q}`, version, commit, date)
 	}))
+	mux.HandleFunc("/api/changelog", cors(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(map[string]string{"markdown": changelogMD})
+	}))
 	mux.HandleFunc("/api/register", cors(au.Register))
 	mux.HandleFunc("/api/site", cors(au.Site))
 	mux.HandleFunc("/api/login", cors(au.Login))
@@ -173,12 +186,17 @@ func main() {
 	}))
 	mux.HandleFunc("/api/mails/batch", cors(mb.Batch))
 	mux.HandleFunc("/api/mails/", cors(mb.One))
+	mux.HandleFunc("/api/tokens", cors(tb.List))
+	mux.HandleFunc("/api/tokens/", cors(tb.One))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))
 	mux.HandleFunc("/api/domains/", cors(dns.DomainOne))
 	// 管理后台（仅管理员）
 	mux.HandleFunc("/api/admin/overview", cors(ad.Overview))
+	mux.HandleFunc("/api/admin/about", cors(ad.About))
+	mux.HandleFunc("/api/admin/update/check", cors(ad.UpdateCheck))
+	mux.HandleFunc("/api/admin/update", cors(ad.Update))
 	mux.HandleFunc("/api/admin/users", cors(ad.Users))
 	mux.HandleFunc("/api/admin/users/", cors(ad.UserOne))
 	mux.HandleFunc("/api/admin/domains", cors(ad.Domains))
@@ -232,6 +250,9 @@ func securityHeaders(next http.Handler) http.Handler {
 
 //go:embed all:web
 var embeddedWeb embed.FS
+
+//go:embed CHANGELOG.md
+var changelogMD string
 
 // spaFS 在文件不存在时回退到 index.html（前端里实际用的是 hash 路由）。
 type spaFS struct{ fs http.FileSystem }

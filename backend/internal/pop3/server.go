@@ -12,10 +12,10 @@ import (
 	"strconv"
 	"strings"
 
+	"mailserver/internal/auth"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -89,7 +89,7 @@ func (s *session) err(msg string) {
 func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
 	defer conn.Close()
 	s := &session{conn: conn, r: bufio.NewReader(conn), w: bufio.NewWriter(conn), db: db, host: host, tls: encrypted}
-	s.ok("mailserver POP3 ready")
+	s.ok("Sweetcorn POP3 ready")
 	for {
 		line, err := s.r.ReadString('\n')
 		if err != nil {
@@ -142,20 +142,12 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 				s.err("need USER first")
 				continue
 			}
-			var u model.User
-			if err := s.db.Where("email = ?", s.name).First(&u).Error; err != nil {
-				s.err("auth failed")
+			u, err := auth.AuthenticateMail(s.db, s.name, arg)
+			if err != nil {
+				s.err(err.Error())
 				continue
 			}
-			if bcrypt.CompareHashAndPassword([]byte(u.PassHash), []byte(arg)) != nil {
-				s.err("auth failed")
-				continue
-			}
-			if u.Disabled {
-				s.err("account disabled")
-				continue
-			}
-			s.user = &u
+			s.user = u
 			s.loadBox()
 			s.ok("mailbox locked, %d message(s)", len(s.box))
 		case "STAT":

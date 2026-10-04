@@ -100,3 +100,21 @@ func TestShaAndReplace(t *testing.T) {
 		t.Fatalf("not executable: %v", fi.Mode())
 	}
 }
+
+func TestDiffers(t *testing.T) {
+	cases := []struct {
+		cur, latest string
+		want        bool
+	}{
+		{"v0.3.14", "v0.3.14", false},
+		{"0.3.14", "v0.3.14", false},
+		{"v0.3.14", "v0.3.15", true},
+		{"dev", "v0.3.15", true},
+		{"v0.3.14", "", false},
+	}
+	for _, c := range cases {
+		if got := Differs(c.cur, c.latest); got != c.want {
+			t.Errorf("Differs(%q,%q)=%v want %v", c.cur, c.latest, got, c.want)
+		}
+	}
+}

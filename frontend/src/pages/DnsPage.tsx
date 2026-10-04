@@ -5,11 +5,13 @@ import { Button, Input, Card, Badge, Select } from '../components/ui/controls'
 import { ThemeToggle, LangToggle } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import { Plus, Trash2, Globe, Copy, CheckCircle2 } from 'lucide-react'
+import { BRAND } from '../lib/brand'
 
 const TYPES = ['A', 'AAAA', 'MX', 'TXT', 'CNAME', 'NS', 'SRV', 'CAA']
 
 export default function DnsPage() {
   const { t } = useI18n()
+  const [allowed, setAllowed] = useState<boolean | null>(null)
   const [domains, setDomains] = useState([])
   const [sel, setSel] = useState(null)
   const [newDomain, setNewDomain] = useState({ name: '', ip: '' })
@@ -19,7 +21,13 @@ export default function DnsPage() {
   async function loadDomains() {
     try { setDomains(await api.dnsList()) } catch {}
   }
-  useEffect(() => { loadDomains() }, [])
+  // 自托管 DNS 仅管理员可用，非管理员直接回到邮箱
+  useEffect(() => {
+    api.me()
+      .then(u => { if (u.admin) setAllowed(true); else location.replace('/') })
+      .catch(() => { location.href = '/login' })
+  }, [])
+  useEffect(() => { if (allowed) loadDomains() }, [allowed])
 
   async function open(id) {
     const d = await api.dnsGet(id)
@@ -43,10 +51,12 @@ export default function DnsPage() {
     open(sel.domain.id)
   }
 
+  if (!allowed) return null
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <Link to="/" className="font-semibold">← Mailserver</Link>
+        <Link to="/" className="font-semibold">← {BRAND}</Link>
         <Badge><Globe size={12} /> {t('dns.title')}</Badge>
         <div className="flex-1" />
         <LangToggle />

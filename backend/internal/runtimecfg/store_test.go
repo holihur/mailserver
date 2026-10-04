@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"mailserver/internal/config"
 	"mailserver/internal/dkim"
@@ -49,6 +50,41 @@ func TestStoreInMemory(t *testing.T) {
 	snap := s.Snapshot()
 	if snap["mail_host"] != "mail.example.com" || snap["dkim_ready"] != false {
 		t.Fatalf("snapshot=%+v", snap)
+	}
+}
+
+func TestStoreAutoUpdate(t *testing.T) {
+	s := &Store{vals: map[string]string{}}
+	// 默认：关闭自动更新，间隔 10 分钟
+	if s.AutoUpdate() {
+		t.Fatal("默认应关闭自动更新")
+	}
+	if got := s.UpdateInterval(); got != 10*time.Minute {
+		t.Fatalf("默认间隔应 10 分钟，得到 %v", got)
+	}
+	// 开启 + 自定义间隔
+	s.vals[KeyAutoUpdate] = "on"
+	s.vals[KeyUpdateInterval] = "30"
+	if !s.AutoUpdate() || s.UpdateInterval() != 30*time.Minute {
+		t.Fatalf("auto=%v interval=%v", s.AutoUpdate(), s.UpdateInterval())
+	}
+	// 非法/越界值回退到合法范围
+	for _, in := range []string{"0", "-5", "abc", "99999"} {
+		s.vals[KeyUpdateInterval] = in
+		if got := s.UpdateInterval(); got <= 0 || got > 24*time.Hour {
+			t.Fatalf("interval(%q)=%v 应回退到 1~1440 分钟", in, got)
+		}
+	}
+	s.vals[KeyUpdateInterval] = "1440"
+	if s.UpdateInterval() != 24*time.Hour {
+		t.Fatal("上限应为 1440 分钟")
+	}
+	// Snapshot 暴露字段
+	s.vals[KeyAutoUpdate] = "1"
+	s.vals[KeyUpdateInterval] = "15"
+	snap := s.Snapshot()
+	if snap["auto_update"] != true || snap["update_interval"] != 15 {
+		t.Fatalf("snapshot auto=%v interval=%v", snap["auto_update"], snap["update_interval"])
 	}
 }
 

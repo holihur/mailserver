@@ -4,8 +4,9 @@ import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
 import { ThemeToggle, LangToggle } from './HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail } from 'lucide-react'
+import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { BRAND } from '../lib/brand'
 
 export function useMe() {
   const [me, setMe] = useState<any>(null)
@@ -21,6 +22,7 @@ const NAV = [
   { to: '/admin/ssl', labelKey: 'admin.ssl', icon: ShieldCheck },
   { to: '/admin/providers', labelKey: 'admin.providers', icon: Cloud },
   { to: '/admin/users', labelKey: 'admin.users', icon: Users },
+  { to: '/admin/about', labelKey: 'admin.about', icon: Info },
 ]
 
 export default function AdminShell({ title, desc, children }: { title?: any; desc?: any; children?: any }) {
@@ -33,7 +35,7 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <Link to="/" className="font-semibold flex items-center gap-2"><Mail size={16} />Mailserver</Link>
+        <Link to="/" className="font-semibold flex items-center gap-2"><Mail size={16} />{BRAND}</Link>
         <Badge className="hidden sm:inline-flex">{t('admin.title')}</Badge>
         {ver?.version && (
           <Badge className="hidden sm:inline-flex" title={`commit ${ver.commit || '-'} · ${ver.date || '-'}`}>

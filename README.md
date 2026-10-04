@@ -1,4 +1,6 @@
-# Mailserver — 轻量全栈邮件系统
+# Sweetcorn — 轻量全栈邮件系统
+
+> 品牌名 **Sweetcorn**；仓库/二进制/服务名仍为 `mailserver`。
 
 前端 React + TypeScript + TailwindCSS + shadcn 风格 · 后端 Go + GORM · PostgreSQL + Redis
 
@@ -69,7 +71,13 @@ API 默认 `:8080`，SMTP 入站 `:2525`，前端 dev `:5173`。
 | GET | /api/mails/:id | 详情（自动标已读） |
 | POST | /api/mails | 发件/存草稿 `{to,subject,body,folder}` |
 | PATCH | /api/mails/:id | 星标/已读/移动文件夹 |
-| DELETE | /api/mails/:id | 移入 trash |
+| DELETE | /api/mails/:id | 垃圾箱内为彻底删除，否则移入 trash |
+| GET/POST | /api/tokens | 应用专用密码(PAT)列表 / 生成 |
+| DELETE | /api/tokens/:id | 吊销 PAT |
+
+> **邮件客户端接入**：IMAP/POP3/SMTP 使用「应用专用密码(PAT)」，**不能使用网页登录密码**。
+> 用户在 Web 邮箱右上角齿轮 →「客户端配置」(`/setup`) 生成 PAT 并查看服务器/端口；
+> 完整客户端配置与排障见 [`MAIL_CLIENTS.md`](./MAIL_CLIENTS.md)。
 
 ## 管理后台（所有配置都在这里改）
 

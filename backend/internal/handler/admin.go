@@ -4,15 +4,19 @@ package handler
 // 路由见 main.go：/api/admin/overview|users|users/:id|domains
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"mailserver/internal/auth"
 	"mailserver/internal/certstore"
 	"mailserver/internal/model"
 	"mailserver/internal/runtimecfg"
+	"mailserver/internal/selfupdate"
 
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -25,6 +29,10 @@ type Admin struct {
 	RT          *runtimecfg.Store
 	Cert        *certstore.Store // 动态 TLS 证书
 	CertDir     string           // 证书 / ACME 账号缓存目录
+	Version     string           // 当前版本（注入自 main）
+	Commit      string
+	Date        string
+	Repo        string // GitHub owner/repo（MAILSERVER_REPO，空则用默认）
 }
 
 // effectiveAdminEmails 优先使用后台配置，回退环境变量。
@@ -51,28 +59,33 @@ func isAdminEmail(list, email string) bool {
 	return false
 }
 
-// mustAdmin: token 有效 + 账号未禁用 + 是管理员
-func (a *Admin) mustAdmin(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
+// resolveAdmin: token 有效 + 账号未禁用 + 是管理员。Admin/DNS 等控制面共用。
+func resolveAdmin(db *gorm.DB, rt *runtimecfg.Store, adminEmails string, w http.ResponseWriter, r *http.Request) (*model.User, bool) {
 	uid, err := auth.UserID(r)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return nil, false
 	}
 	var u model.User
-	if err := a.DB.First(&u, uid).Error; err != nil || u.Disabled {
+	if err := db.First(&u, uid).Error; err != nil || u.Disabled {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return nil, false
 	}
 	// 名单命中顺手提权（改了环境变量无需手动进库）
-	if !u.Admin && isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), u.Email) {
+	if !u.Admin && isAdminEmail(effectiveAdminEmails(rt, adminEmails), u.Email) {
 		u.Admin = true
-		a.DB.Model(&u).Update("admin", true)
+		db.Model(&u).Update("admin", true)
 	}
 	if !u.Admin {
 		writeJSON(w, 403, map[string]string{"error": "需要管理员权限"})
 		return nil, false
 	}
 	return &u, true
+}
+
+// mustAdmin: Admin 控制面入口。
+func (a *Admin) mustAdmin(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
+	return resolveAdmin(a.DB, a.RT, a.AdminEmails, w, r)
 }
 
 // GET /api/admin/overview {users, domains, mails, pending, storage_bytes}
@@ -273,4 +286,59 @@ func (a *Admin) Domains(w http.ResponseWriter, r *http.Request) {
 		out = append(out, item{Domain: dm, UserCount: uc, RecordCount: rc})
 	}
 	writeJSON(w, 200, out)
+}
+
+func (a *Admin) repoName() string {
+	if a.Repo != "" {
+		return a.Repo
+	}
+	return selfupdate.DefaultRepo
+}
+
+// GET /api/admin/about -> 版本信息 + 仓库
+func (a *Admin) About(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.mustAdmin(w, r); !ok {
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"version": a.Version, "commit": a.Commit, "date": a.Date, "repo": a.repoName(),
+	})
+}
+
+// GET /api/admin/update/check -> 查询最新版本（不安装）
+func (a *Admin) UpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.mustAdmin(w, r); !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	latest, err := selfupdate.Latest(ctx, a.repoName())
+	if err != nil {
+		writeJSON(w, 200, map[string]any{"current": a.Version, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{
+		"current": a.Version, "latest": latest,
+		"update_available": selfupdate.Differs(a.Version, latest),
+	})
+}
+
+// POST /api/admin/update -> 立即更新到最新版（后台执行，服务会重启）
+func (a *Admin) Update(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.mustAdmin(w, r); !ok {
+		return
+	}
+	if r.Method != "POST" {
+		w.WriteHeader(405)
+		return
+	}
+	repo, cur := a.repoName(), a.Version
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		if err := selfupdate.Run(ctx, selfupdate.Options{Repo: repo, Current: cur, Log: log.Printf}); err != nil {
+			log.Println("self-update:", err)
+		}
+	}()
+	writeJSON(w, 202, map[string]any{"ok": true, "message": "已开始更新，服务将自动重启；若未重启请手动重启进程"})
 }

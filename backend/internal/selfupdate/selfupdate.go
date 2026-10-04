@@ -44,6 +44,20 @@ func (o *Options) log(format string, args ...any) {
 	}
 }
 
+// Latest 查询 GitHub 最新 release tag（供管理后台「检查更新」使用）。
+func Latest(ctx context.Context, repo string) (string, error) {
+	if repo == "" {
+		repo = DefaultRepo
+	}
+	return latestTag(ctx, &http.Client{Timeout: 20 * time.Second}, repo)
+}
+
+// Differs 判断两个版本号是否不同（忽略前缀 v 与首尾空白；latest 为空视为相同）。
+func Differs(current, latest string) bool {
+	l := normVer(latest)
+	return l != "" && normVer(current) != l
+}
+
 // Run 执行更新。
 func Run(ctx context.Context, o Options) error {
 	if o.Repo == "" {

@@ -5,6 +5,7 @@ package runtimecfg
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -21,20 +22,22 @@ import (
 
 // 配置键
 const (
-	KeyMailHost      = "mail_host"    // 邮件主机名（greeting / Message-ID / MX 目标）
-	KeyPublicIP      = "public_ip"    // 服务器公网 IPv4
-	KeyAdminEmails   = "admin_emails" // 管理员邮箱，逗号分隔
-	KeyRelayHost     = "relay_host"
-	KeyRelayPort     = "relay_port"
-	KeyRelayUser     = "relay_user"
-	KeyRelayPass     = "relay_pass"
-	KeyRelayFrom     = "relay_from"
-	KeyRelayInsecure = "relay_insecure" // 跳过中继 TLS 证书校验（自签/域名不匹配）
-	KeyDirectSend    = "direct_send"    // 无中继时直连对方 MX:25 投递
-	KeyDKIMDomain    = "dkim_domain"
-	KeyDKIMSel       = "dkim_selector"
-	KeyDKIMKeyEnc    = "dkim_key_enc"         // AES-GCM 加密的 DKIM 私钥 PEM
-	KeyRegistration  = "registration_enabled" // 是否开放注册（默认关闭；首个用户始终可注册）
+	KeyMailHost       = "mail_host"    // 邮件主机名（greeting / Message-ID / MX 目标）
+	KeyPublicIP       = "public_ip"    // 服务器公网 IPv4
+	KeyAdminEmails    = "admin_emails" // 管理员邮箱，逗号分隔
+	KeyRelayHost      = "relay_host"
+	KeyRelayPort      = "relay_port"
+	KeyRelayUser      = "relay_user"
+	KeyRelayPass      = "relay_pass"
+	KeyRelayFrom      = "relay_from"
+	KeyRelayInsecure  = "relay_insecure" // 跳过中继 TLS 证书校验（自签/域名不匹配）
+	KeyDirectSend     = "direct_send"    // 无中继时直连对方 MX:25 投递
+	KeyDKIMDomain     = "dkim_domain"
+	KeyDKIMSel        = "dkim_selector"
+	KeyDKIMKeyEnc     = "dkim_key_enc"         // AES-GCM 加密的 DKIM 私钥 PEM
+	KeyRegistration   = "registration_enabled" // 是否开放注册（默认关闭；首个用户始终可注册）
+	KeyAutoUpdate     = "auto_update"          // 是否自动安装更新（默认关闭，仅检查）
+	KeyUpdateInterval = "update_interval"      // 自动检查更新的间隔（分钟，默认 10）
 )
 
 // Relay 外发中继配置。
@@ -148,6 +151,26 @@ func (s *Store) AdminEmails() string { return s.get(KeyAdminEmails) }
 // RegistrationEnabled 是否开放注册（默认关闭）。
 func (s *Store) RegistrationEnabled() bool { return parseBool(s.get(KeyRegistration)) }
 
+// AutoUpdate 是否自动安装更新（默认关闭；关闭时仍会按间隔检查并记录日志）。
+func (s *Store) AutoUpdate() bool { return parseBool(s.get(KeyAutoUpdate)) }
+
+// UpdateInterval 自动检查更新的间隔，默认 10 分钟，范围 1~1440 分钟。
+func (s *Store) UpdateInterval() time.Duration {
+	return time.Duration(parseInterval(s.get(KeyUpdateInterval))) * time.Minute
+}
+
+// parseInterval 解析分钟数，非法/越界时回退默认 10 分钟。
+func parseInterval(v string) int {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n <= 0 {
+		return 10
+	}
+	if n > 1440 {
+		return 1440
+	}
+	return n
+}
+
 func parseBool(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "1", "true", "on", "yes":
@@ -243,6 +266,8 @@ func (s *Store) Snapshot() map[string]any {
 		"dkim_selector":        s.vals[KeyDKIMSel],
 		"dkim_ready":           s.signer.Load() != nil,
 		"registration_enabled": parseBool(s.vals[KeyRegistration]),
+		"auto_update":          parseBool(s.vals[KeyAutoUpdate]),
+		"update_interval":      parseInterval(s.vals[KeyUpdateInterval]),
 	}
 }
 

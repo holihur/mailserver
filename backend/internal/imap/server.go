@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"mailserver/internal/auth"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 
-	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -121,7 +121,7 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 	defer conn.Close()
 	s := &session{conn: conn, r: bufio.NewReader(conn), w: bufio.NewWriter(conn),
 		db: db, host: host, tlsConf: tlsConf, tls: encrypted}
-	s.w.WriteString("* OK mailserver IMAP4rev1 ready\r\n")
+	s.w.WriteString("* OK Sweetcorn IMAP4rev1 ready\r\n")
 	s.w.Flush()
 	for {
 		line, err := s.r.ReadString('\n')
@@ -449,17 +449,11 @@ func (s *session) needSelected(tag string) bool {
 }
 
 func (s *session) login(email, pass string) bool {
-	var u model.User
-	if err := s.db.Where("email = ?", strings.TrimSpace(email)).First(&u).Error; err != nil {
+	u, err := auth.AuthenticateMail(s.db, email, pass)
+	if err != nil {
 		return false
 	}
-	if bcrypt.CompareHashAndPassword([]byte(u.PassHash), []byte(pass)) != nil {
-		return false
-	}
-	if u.Disabled {
-		return false
-	}
-	s.user = &u
+	s.user = u
 	return true
 }
 

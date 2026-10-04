@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,17 +24,19 @@ import (
 )
 
 var settingKeys = map[string]bool{
-	runtimecfg.KeyMailHost:      true,
-	runtimecfg.KeyPublicIP:      true,
-	runtimecfg.KeyAdminEmails:   true,
-	runtimecfg.KeyRelayHost:     true,
-	runtimecfg.KeyRelayPort:     true,
-	runtimecfg.KeyRelayUser:     true,
-	runtimecfg.KeyRelayPass:     true,
-	runtimecfg.KeyRelayFrom:     true,
-	runtimecfg.KeyRelayInsecure: true,
-	runtimecfg.KeyDirectSend:    true,
-	runtimecfg.KeyRegistration:  true,
+	runtimecfg.KeyMailHost:       true,
+	runtimecfg.KeyPublicIP:       true,
+	runtimecfg.KeyAdminEmails:    true,
+	runtimecfg.KeyRelayHost:      true,
+	runtimecfg.KeyRelayPort:      true,
+	runtimecfg.KeyRelayUser:      true,
+	runtimecfg.KeyRelayPass:      true,
+	runtimecfg.KeyRelayFrom:      true,
+	runtimecfg.KeyRelayInsecure:  true,
+	runtimecfg.KeyDirectSend:     true,
+	runtimecfg.KeyRegistration:   true,
+	runtimecfg.KeyAutoUpdate:     true,
+	runtimecfg.KeyUpdateInterval: true,
 }
 
 // GET /api/admin/settings   PATCH /api/admin/settings
@@ -63,12 +66,22 @@ func (a *Admin) Settings(w http.ResponseWriter, r *http.Request) {
 			if k == runtimecfg.KeyMailHost {
 				v = strings.Trim(strings.ToLower(v), ".")
 			}
-			if k == runtimecfg.KeyRegistration || k == runtimecfg.KeyRelayInsecure || k == runtimecfg.KeyDirectSend {
+			if k == runtimecfg.KeyRegistration || k == runtimecfg.KeyRelayInsecure || k == runtimecfg.KeyDirectSend || k == runtimecfg.KeyAutoUpdate {
 				if v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "on") {
 					v = "1"
 				} else {
 					v = "0"
 				}
+			}
+			if k == runtimecfg.KeyUpdateInterval {
+				n, err := strconv.Atoi(v)
+				if err != nil || n <= 0 {
+					n = 10
+				}
+				if n > 1440 {
+					n = 1440
+				}
+				v = strconv.Itoa(n)
 			}
 			upd[k] = v
 		}

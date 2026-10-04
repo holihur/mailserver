@@ -9,6 +9,7 @@ import {
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { BRAND } from '../lib/brand'
 
 const FOLDERS = [
   { k: 'inbox', labelKey: 'mail.inbox', icon: Inbox },
@@ -51,6 +52,12 @@ export default function MailApp() {
     setChecked([]); setSelectMode(false); load(page, sort)
   }
 
+  async function emptyTrash() {
+    if (!confirm(t('mail.confirmPurge'))) return
+    try { await api.emptyTrash() } catch (e: any) { alert(e.message) }
+    setChecked([]); setSelectMode(false); setSel(null); load(1, sort)
+  }
+
   async function open(id) {
     const d = await api.get(id)
     setSel(d)
@@ -63,11 +70,11 @@ export default function MailApp() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <b className="hidden sm:inline">📮 Mailserver</b>
+        <b className="hidden sm:inline">📮 {BRAND}</b>
         <b className="sm:hidden">📮</b>
         {me && <Badge className="max-w-[38vw] truncate">{me.email}</Badge>}
         <div className="flex-1" />
-        <Link to="/dns" title={t('nav.dns')}><Button variant="ghost" size="icon" aria-label={t('nav.dns')}><Globe /></Button></Link>
+        {me?.admin && <Link to="/dns" title={t('nav.dns')}><Button variant="ghost" size="icon" aria-label={t('nav.dns')}><Globe /></Button></Link>}
         <Link to="/setup" title={t('nav.setup')} className="hidden sm:block"><Button variant="ghost" size="icon" aria-label={t('nav.setup')}><Settings /></Button></Link>
         {me?.admin && <Link to="/admin" title={t('nav.admin')}><Button variant="ghost" size="icon" aria-label={t('nav.admin')}><ShieldCheck /></Button></Link>}
         <div className="hidden sm:flex items-center">
@@ -123,6 +130,11 @@ export default function MailApp() {
                 onClick={() => { setSelectMode(v => !v); setChecked([]) }}>
                 {selectMode ? t('mail.done') : t('mail.batch')}
               </Button>
+              {folder === 'trash' && total > 0 && (
+                <Button variant="outline" size="sm" className="shrink-0" onClick={emptyTrash}>
+                  <Trash2 />{t('mail.emptyTrash')}
+                </Button>
+              )}
             </div>
             {selectMode && (
               <div className="p-2 border-b border-border flex items-center gap-2 text-xs">
@@ -130,7 +142,10 @@ export default function MailApp() {
                 <span className="text-muted-foreground">{t('mail.selected', { n: checked.length })}</span>
                 <div className="flex-1" />
                 <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('star')}><Star />{t('mail.batchStar')}</Button>
-                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('trash')}><Trash2 />{t('mail.batchDelete')}</Button>
+                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => {
+                  if (folder === 'trash' && !confirm(t('mail.confirmPurge'))) return
+                  batch(folder === 'trash' ? 'delete' : 'trash')
+                }}><Trash2 />{folder === 'trash' ? t('mail.purge') : t('mail.batchDelete')}</Button>
               </div>
             )}
             <div className="flex-1 overflow-auto">
@@ -177,7 +192,10 @@ export default function MailApp() {
                       {sel.starred ? t('mail.unstar') : t('mail.star')}
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => { setShowCompose({ to: sel.from, subject: 'Re: ' + sel.subject, body: '\n\n---\n' + sel.body }) }}>{t('mail.reply')}</Button>
-                    <Button variant="outline" size="sm" onClick={async () => { await api.trash(sel.id); setSel(null); setView('list'); load() }}>{t('mail.delete')}</Button>
+                    <Button variant="outline" size="sm" onClick={async () => {
+                      if (folder === 'trash' && !confirm(t('mail.confirmPurge'))) return
+                      await api.trash(sel.id); setSel(null); setView('list'); load()
+                    }}>{folder === 'trash' ? t('mail.purge') : t('mail.delete')}</Button>
                   </div>
                   <pre className="whitespace-pre-wrap text-sm mt-4 font-sans break-words">{sel.body}</pre>
                   {attList(sel.attachments).length > 0 && (

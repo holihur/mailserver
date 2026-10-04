@@ -1,7 +1,7 @@
 {
-  "name": "Mailserver",
-  "short_name": "Mailserver",
-  "description": "Lightweight full-stack mail server webmail",
+  "name": "Sweetcorn",
+  "short_name": "Sweetcorn",
+  "description": "Sweetcorn - lightweight full-stack mail server webmail",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

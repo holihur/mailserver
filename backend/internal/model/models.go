@@ -12,6 +12,19 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// MailToken 邮件客户端专用令牌（PAT，应用专用密码）。
+// IMAP/POP3/SMTP 客户端用它代替网页登录密码；明文只在创建时返回一次，
+// 库中仅存 sha256（令牌为 256bit 随机值，无需慢哈希），Prefix 供界面展示。
+type MailToken struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	UserID    uint       `gorm:"index" json:"user_id"`
+	Name      string     `gorm:"size:120" json:"name"`
+	Prefix    string     `gorm:"size:20;index" json:"prefix"`
+	Hash      string     `gorm:"size:64;uniqueIndex" json:"-"`
+	LastUsed  *time.Time `json:"last_used"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
 // ---- 自托管域名/DNS ----
 type Domain struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
