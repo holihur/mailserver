@@ -101,15 +101,18 @@ export default function Setup() {
           <p className="text-sm text-muted-foreground break-all">{t('token.mcpHint', { url: location.origin + '/mcp' })}</p>
         </Card>
 
-        {me?.quota_mb > 0 && (
+        {me && (
           <Card className="p-4 text-sm">
             <b className="text-sm">{t('setup.quota')}</b>
             <p className="text-muted-foreground mt-1">
-              {(me.quota_used / 1024 / 1024).toFixed(1)} MB / {me.quota_mb} MB
+              {(me.quota_used / 1024 / 1024).toFixed(1)} MB
+              {me.quota_mb > 0 ? ` / ${me.quota_mb} MB` : ` · ${t('users.unlimited')}`}
             </p>
-            <div className="mt-2 h-2 rounded bg-muted overflow-hidden">
-              <div className="h-full bg-primary" style={{ width: Math.min(100, (me.quota_used / (me.quota_mb * 1024 * 1024)) * 100) + '%' }} />
-            </div>
+            {me.quota_mb > 0 && (
+              <div className="mt-2 h-2 rounded bg-muted overflow-hidden">
+                <div className="h-full bg-primary" style={{ width: Math.min(100, (me.quota_used / (me.quota_mb * 1024 * 1024)) * 100) + '%' }} />
+              </div>
+            )}
           </Card>
         )}
 
