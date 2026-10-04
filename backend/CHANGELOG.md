@@ -7,6 +7,17 @@
 
 （暂无）
 
+## [v0.11.0] - 2026-10-04
+
+### 新增
+- **Sieve 支持**：内置 Sieve（RFC 5228 子集）解释器，收信时先执行用户的启用脚本（fileinto / redirect / discard / keep / addflag），支持 header / address / size / exists / allof / anyof / not 测试；未知 fileinto 目标自动创建文件夹。
+- **ManageSieve（4190）**：Thunderbird 等客户端可管理脚本（LISTSCRIPTS / GETSCRIPT / PUTSCRIPT / SETACTIVE / DELETESCRIPT / CHECKSCRIPT / RENAME），用「应用专用密码」(PAT) 授权。
+- **Sieve 管理页**：网页内编辑 / 语法检查 / 启用 / 删除脚本；接口 `/api/sieve`。
+- 解释器 **100% 行覆盖率** + **Fuzz 测试**（`FuzzSieve`）。
+
+### 文档
+- README 竞品对比新增「我们暂缺（后期补齐）」清单（JMAP / CalDAV / ActiveSync / 反垃圾 / 全文检索 / 配额 / LDAP / 共享邮箱 / 监控 / 备份等）。
+
 ## [v0.10.0] - 2026-10-04
 
 ### 新增

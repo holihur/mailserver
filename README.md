@@ -34,6 +34,27 @@
 
 Sweetcorn 的取舍：**不搭 Postfix/Dovecot 套件**，用单进程 + 单二进制换取部署简单、资源占用低，并内置网页邮箱、权威 DNS 与一键自动更新，覆盖自托管个人 / 小团队邮箱的核心需求。
 
+我们领先的地方：单二进制 / 内置权威 DNS / **CEL 收信规则** / **MCP（AI 客户端）** / **GDPR 数据导出与删除** / 后台自动更新。
+
+### 我们暂缺（后期补齐）
+
+以下为竞品已有、Sweetcorn 尚未实现或仍在完善的能力，按优先级逐步补齐：
+
+| 能力 | 说明 | 竞品参考 | 状态 |
+|------|------|----------|------|
+| Sieve / ManageSieve | 服务端过滤脚本（当前为常用子集） | mailcow / Mailu / iRedMail | ✅ 已支持子集，持续完善 |
+| JMAP | 现代 JSON 邮件协议 | Stalwart | 后期 |
+| CalDAV / CardDAV | 日历与联系人同步 | SOGo(mailcow)、Radicale(iRedMail) | 后期 |
+| ActiveSync (EAS) | 移动端原生邮件 / 日历 / 联系人 | Z-Push、SOGo | 后期 |
+| 反垃圾 / 反病毒 | Rspamd / SpamAssassin + ClamAV | mailcow / Mailu / iRedMail | 后期 |
+| 全文检索 | 索引式搜索（Solr / Xapian） | mailcow(Solr)、Mailu(Xapian) | 后期 |
+| 每用户配额 | 存储配额与告警 | mailcow / Mailu | 后期 |
+| LDAP / OIDC SSO | 目录服务与单点登录 | Mailu / iRedMail / Stalwart | 后期 |
+| IMAP ACL / 共享邮箱 | 委派与共享 | Dovecot 系 | 后期 |
+| 会话聚合 / HTML 渲染 | 邮件串、HTML 正文与远程图片拦截 | 主流 Webmail | 后期 |
+| 监控 / 指标 | Prometheus / Grafana、审计日志 | mailcow | 后期 |
+| 备份 / 恢复 | 一键备份与恢复 | mailcow | 后期 |
+
 ## 快速开始
 
 ```bash

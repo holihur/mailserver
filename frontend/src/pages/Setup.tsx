@@ -46,6 +46,7 @@ export default function Setup() {
     [t('setup.pop3s'), `${host}:995`, t('setup.ssl'), t('setup.authHint')],
     [t('setup.imap'), `${host}:143`, t('setup.starttls'), t('setup.authHint')],
     [t('setup.imaps'), `${host}:993`, t('setup.ssl'), t('setup.authHint')],
+    [t('setup.managesieve'), `${host}:4190`, t('setup.starttls'), t('setup.authHint')],
     [t('setup.webmail'), `${host}/`, '—', t('setup.webmail')],
   ]
 

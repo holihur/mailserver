@@ -12,7 +12,7 @@ import {
   Inbox, Send, FileEdit, Trash2, Trash, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
   ChevronDown, MoreVertical, Reply, ReplyAll, Forward, MailOpen, RotateCcw,
-  Contact, Filter, KeyRound, AtSign, Download, Folder, Plus,
+  Contact, Filter, KeyRound, AtSign, Download, Folder, Plus, FileCode,
 } from 'lucide-react'
 import { cn, linkify, setUnreadBadge, quoteMail } from '../lib/utils'
 import { BRAND } from '../lib/brand'
@@ -180,6 +180,7 @@ export default function MailApp() {
           <DropdownItem icon={Contact} onClick={() => navigate('/contacts')}>{t('nav.contacts')}</DropdownItem>
           <DropdownItem icon={AtSign} onClick={() => navigate('/accounts')}>{t('nav.accounts')}</DropdownItem>
           <DropdownItem icon={Filter} onClick={() => navigate('/rules')}>{t('nav.rules')}</DropdownItem>
+          <DropdownItem icon={FileCode} onClick={() => navigate('/sieve')}>{t('nav.sieve')}</DropdownItem>
           <DropdownItem icon={KeyRound} onClick={() => navigate('/security')}>{t('nav.security')}</DropdownItem>
           <DropdownItem icon={ShieldCheck} onClick={() => navigate('/privacy')}>{t('nav.privacy')}</DropdownItem>
           {me?.admin && <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>}

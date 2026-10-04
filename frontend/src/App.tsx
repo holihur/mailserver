@@ -16,6 +16,7 @@ import Contacts from './pages/Contacts'
 import Accounts from './pages/Accounts'
 import Rules from './pages/Rules'
 import Security from './pages/Security'
+import Sieve from './pages/Sieve'
 import Privacy from './pages/Privacy'
 
 const authed = () => !!localStorage.getItem('token')
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/accounts" element={authed() ? <Accounts /> : <Navigate to="/login" />} />
         <Route path="/rules" element={authed() ? <Rules /> : <Navigate to="/login" />} />
         <Route path="/security" element={authed() ? <Security /> : <Navigate to="/login" />} />
+        <Route path="/sieve" element={authed() ? <Sieve /> : <Navigate to="/login" />} />
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/admin" element={authed() ? <AdminPage /> : <Navigate to="/login" />} />
         <Route path="/admin/settings" element={authed() ? <AdminSettings /> : <Navigate to="/login" />} />

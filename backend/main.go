@@ -21,6 +21,7 @@ import (
 	"mailserver/internal/handler"
 	"mailserver/internal/imap"
 	"mailserver/internal/mailqueue"
+	"mailserver/internal/managesieve"
 	"mailserver/internal/mcp"
 	"mailserver/internal/pop3"
 	"mailserver/internal/ratelimit"
@@ -89,6 +90,7 @@ func main() {
 	contacts := &handler.ContactBox{DB: g}
 	extBox := &handler.ExternalBox{DB: g}
 	folderBox := &handler.FolderBox{DB: g}
+	sieveBox := &handler.SieveBox{DB: g}
 	totpBox := &handler.TOTPBox{DB: g}
 	gdpr := &handler.GDPRBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
@@ -148,6 +150,9 @@ func main() {
 	}
 	if cfg.Pop3TLSPort != "" {
 		go pop3.ServeTLS(":"+cfg.Pop3TLSPort, host, g, tlsConf)
+	}
+	if cfg.ManageSievePort != "" {
+		go managesieve.Serve(":"+cfg.ManageSievePort, g, tlsConf)
 	}
 
 	// 内置权威 DNS（与 API 同一进程/二进制；DNS_ADDR=off 可禁用）
@@ -228,6 +233,9 @@ func main() {
 	mux.HandleFunc("/api/external/", cors(extBox.One))
 	mux.HandleFunc("/api/folders", cors(folderBox.List))
 	mux.HandleFunc("/api/folders/", cors(folderBox.One))
+	mux.HandleFunc("/api/sieve", cors(sieveBox.List))
+	mux.HandleFunc("/api/sieve/check", cors(sieveBox.Check))
+	mux.HandleFunc("/api/sieve/", cors(sieveBox.One))
 	mux.HandleFunc("/mcp", cors(mcpSrv.Handler))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))

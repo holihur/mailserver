@@ -120,6 +120,16 @@ type MailFolder struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// SieveScript 用户的 Sieve 脚本（RFC 5228 子集）。同一用户可有多个脚本，至多一个 active。
+type SieveScript struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index" json:"user_id"`
+	Name      string    `gorm:"size:120" json:"name"`
+	Script    string    `gorm:"type:text" json:"script"`
+	Active    bool      `json:"active"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Contact 用户联系人（通讯录）。Note 为备注，可随时修改。
 type Contact struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
