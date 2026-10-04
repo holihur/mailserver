@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,7 +22,9 @@ import (
 	"mailserver/internal/dnsserver"
 	"mailserver/internal/external"
 	"mailserver/internal/handler"
+	"mailserver/internal/health"
 	"mailserver/internal/imap"
+	"mailserver/internal/jmap"
 	"mailserver/internal/mailqueue"
 	"mailserver/internal/managesieve"
 	"mailserver/internal/mcp"
@@ -134,6 +137,11 @@ func main() {
 
 	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails, DNS: dns, RT: rt, Cert: cert, CertDir: cfg.CertDir,
 		Version: version, Commit: commit, Date: date, Repo: os.Getenv("MAILSERVER_REPO")}
+	hc := health.New(cfg.DataDir)
+	hc.Start(20 * time.Second)
+	ad.Health = hc
+	jmapSrv := &jmap.Server{DB: g, MQ: mq, BlobDir: filepath.Join(cfg.DataDir, "blobs")}
+	metricsBox := &handler.MetricsBox{DB: g, Health: hc, Version: version, Commit: commit}
 	au.RT = rt
 	dns.RT = rt
 	dns.AdminEmails = cfg.AdminEmails
@@ -243,12 +251,17 @@ func main() {
 	mux.HandleFunc("/api/sieve/", cors(sieveBox.One))
 	mux.HandleFunc("/api/proxy/image", cors(proxyBox.Image))
 	mux.HandleFunc("/mcp", cors(mcpSrv.Handler))
+	mux.HandleFunc("/jmap", cors(jmapSrv.Handler))
+	mux.HandleFunc("/jmap/", cors(jmapSrv.Handler))
+	mux.HandleFunc("/.well-known/jmap", cors(jmapSrv.Handler))
+	mux.HandleFunc("/metrics", metricsBox.Serve)
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))
 	mux.HandleFunc("/api/domains/", cors(dns.DomainOne))
 	// 管理后台（仅管理员）
 	mux.HandleFunc("/api/admin/overview", cors(ad.Overview))
+	mux.HandleFunc("/api/admin/health", cors(ad.HealthStatus))
 	mux.HandleFunc("/api/admin/about", cors(ad.About))
 	mux.HandleFunc("/api/admin/update/check", cors(ad.UpdateCheck))
 	mux.HandleFunc("/api/admin/update", cors(ad.Update))

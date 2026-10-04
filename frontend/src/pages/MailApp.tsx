@@ -219,12 +219,22 @@ export default function MailApp() {
       {/* 移动端：文件夹横向标签 */}
       <div className="md:hidden flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
         {allFolders.map(f => (
-          <button key={f.k} onClick={() => setFolder(f.k)}
-            className={cn('flex items-center gap-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
-              folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
-            <f.icon size={15} />{f.labelKey ? t(f.labelKey) : f.label}
-            {unread[f.k] > 0 && <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
-          </button>
+          <div key={f.k} className="flex items-center gap-0.5 shrink-0">
+            <button onClick={() => setFolder(f.k)}
+              className={cn('flex items-center gap-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
+                folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
+              <f.icon size={15} />{f.labelKey ? t(f.labelKey) : f.label}
+              {unread[f.k] > 0 && <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
+            </button>
+            {f.custom && (
+              <Dropdown align="right" trigger={
+                <button className="px-1 text-muted-foreground" aria-label={t('common.edit')}><MoreVertical size={13} /></button>
+              }>
+                <DropdownItem icon={PenLine} onClick={() => renameFolder(f)}>{t('folders.rename')}</DropdownItem>
+                <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
+              </Dropdown>
+            )}
+          </div>
         ))}
         <button onClick={createFolder} className="flex items-center rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted" aria-label={t('folders.new')}><Plus size={15} /></button>
       </div>
@@ -241,7 +251,7 @@ export default function MailApp() {
               </button>
               {f.custom && (
                 <Dropdown align="right" trigger={
-                  <button className="opacity-0 group-hover:opacity-100 px-1 py-2 text-muted-foreground" aria-label={t('common.edit')}><MoreVertical size={14} /></button>
+                  <button className="px-1 py-2 text-muted-foreground" aria-label={t('common.edit')}><MoreVertical size={14} /></button>
                 }>
                   <DropdownItem icon={PenLine} onClick={() => renameFolder(f)}>{t('folders.rename')}</DropdownItem>
                   <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
@@ -273,12 +283,12 @@ export default function MailApp() {
                 <option value="subject">{t('mail.sortSubject')}</option>
                 <option value="sender">{t('mail.sortSender')}</option>
               </select>
-              <Button variant={selectMode ? 'default' : 'outline'} size="sm" className="shrink-0"
+              <Button variant={selectMode ? 'default' : 'outline'} size="default" className="h-9 shrink-0"
                 onClick={() => { setSelectMode(v => !v); setChecked([]) }}>
                 {selectMode ? t('mail.done') : t('mail.batch')}
               </Button>
               {folder === 'trash' && total > 0 && (
-                <Button variant="outline" size="sm" className="shrink-0" onClick={emptyTrash}>
+                <Button variant="outline" size="default" className="h-9 shrink-0" onClick={emptyTrash}>
                   <Trash2 />{t('mail.emptyTrash')}
                 </Button>
               )}

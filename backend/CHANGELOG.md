@@ -7,6 +7,18 @@
 
 （暂无）
 
+## [v0.14.0] - 2026-10-04
+
+### 新增
+- **JMAP**（RFC 8620 / 8621 标准方法集）：Session、Mailbox/get|query|changes|set、Email/get|query|changes|set|copy|import、Thread、Identity、EmailSubmission、SearchSnippet，以及 Blob 上传/下载；PAT 鉴权。**单元测试覆盖率 100%**。
+- **Prometheus 指标**：`GET /metrics`（CPU/内存/磁盘、用户/邮件/待发/未读、Goroutine/堆、构建信息）。
+- **系统健康告警**：内存 / 磁盘 / CPU 按 **80% / 90%** 分级预警，管理后台概览页实时展示（20s 采样，30s 刷新）。
+
+### 改进
+- 自定义文件夹的「⋯」菜单改为**常显**，并支持**手机端**重命名 / 删除。
+- 邮件列表批量按钮与搜索/排序**高度对齐**。
+- README **重新整理**（特性分组、协议端口表、竞品对比、暂缺清单）。
+
 ## [v0.13.1] - 2026-10-04
 
 ### 改进

@@ -5,11 +5,13 @@ import { Card } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { SkeletonCards } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
-import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe } from 'lucide-react'
+import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe, Activity } from 'lucide-react'
+import { cn } from '../lib/utils'
 
 export default function AdminPage() {
   const { t } = useI18n()
   const [ov, setOv] = useState(null)
+  const [health, setHealth] = useState<any>(null)
   const [tls, setTls] = useState(null)
   const [settings, setSettings] = useState(null)
   const [providers, setProviders] = useState([])
@@ -19,6 +21,10 @@ export default function AdminPage() {
     api.tlsGet().then(setTls).catch(() => {})
     api.settingsGet().then(setSettings).catch(() => {})
     api.providers().then(setProviders).catch(() => {})
+    const loadHealth = () => api.adminHealth().then(setHealth).catch(() => {})
+    loadHealth()
+    const id = setInterval(loadHealth, 30000)
+    return () => clearInterval(id)
   }, [])
 
   const steps = [

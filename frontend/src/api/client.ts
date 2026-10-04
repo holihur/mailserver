@@ -95,6 +95,7 @@ export const api = {
   dnsRecDelete: (id, rid) => req(`/api/domains/${id}/records/${rid}`, { method: 'DELETE' }),
   dnsZone: async (id) => { const r = await fetch((import.meta.env.VITE_API || '') + `/api/domains/${id}/zone`, { headers: localStorage.getItem('token') ? { Authorization: 'Bearer ' + localStorage.getItem('token') } : {} }); return r.text() },
   adminOverview: () => req('/api/admin/overview'),
+  adminHealth: () => req('/api/admin/health'),
   adminAbout: () => req('/api/admin/about'),
   adminUpdateCheck: () => req('/api/admin/update/check'),
   adminUpdate: () => req('/api/admin/update', { method: 'POST' }),

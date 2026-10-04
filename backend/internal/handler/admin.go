@@ -14,6 +14,7 @@ import (
 
 	"mailserver/internal/auth"
 	"mailserver/internal/certstore"
+	"mailserver/internal/health"
 	"mailserver/internal/model"
 	"mailserver/internal/runtimecfg"
 	"mailserver/internal/selfupdate"
@@ -33,6 +34,7 @@ type Admin struct {
 	Commit      string
 	Date        string
 	Repo        string // GitHub owner/repo（MAILSERVER_REPO，空则用默认）
+	Health      *health.Collector
 }
 
 // effectiveAdminEmails 优先使用后台配置，回退环境变量。
@@ -296,6 +298,18 @@ func (a *Admin) Domains(w http.ResponseWriter, r *http.Request) {
 		out = append(out, item{Domain: dm, UserCount: uc, RecordCount: rc})
 	}
 	writeJSON(w, 200, out)
+}
+
+// GET /api/admin/health -> 系统健康（CPU/内存/磁盘 + 80/90 告警）
+func (a *Admin) HealthStatus(w http.ResponseWriter, r *http.Request) {
+	if _, ok := a.mustAdmin(w, r); !ok {
+		return
+	}
+	if a.Health == nil {
+		writeJSON(w, 200, map[string]any{"alerts": []any{}})
+		return
+	}
+	writeJSON(w, 200, a.Health.Current())
 }
 
 func (a *Admin) repoName() string {
