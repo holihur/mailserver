@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
@@ -37,7 +38,7 @@ export default function AdminSSL() {
               <Clock size={12} />{t('ssl.validUntil', { date: fmt(cert.not_after), days: daysLeft(cert.not_after) })}
             </div>
             <Button variant="outline" size="sm" className="mt-1" onClick={async () => {
-              if (confirm(t('ssl.deleteCert'))) { await api.tlsDelete(); load() }
+              if (await confirmAsync(t('ssl.deleteCert'))) { await api.tlsDelete(); load() }
             }}><Trash2 />{t('ssl.deleteCert')}</Button>
           </div>
         ) : (

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label, Select } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -32,7 +33,7 @@ export default function AdminRoutes() {
       else await api.adminRouteCreate(form)
       reset()
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   function startEdit(r: any) {
     setEditId(r.id)
@@ -43,8 +44,8 @@ export default function AdminRoutes() {
     })
   }
   async function del(id: number) {
-    if (!confirm(t('routes.confirmDelete'))) return
-    try { await api.adminRouteDelete(id); load() } catch (err: any) { alert(err.message) }
+    if (!await confirmAsync(t('routes.confirmDelete'))) return
+    try { await api.adminRouteDelete(id); load() } catch (err: any) { toast(err.message) }
   }
   async function toggle(r: any) {
     try {
@@ -53,7 +54,7 @@ export default function AdminRoutes() {
         relay_user: r.relay_user, relay_from: r.relay_from, insecure: r.insecure, priority: r.priority, enabled: !r.enabled,
       })
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   async function runTest() {
     setTestResult(null)

@@ -84,11 +84,25 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	id := strings.TrimPrefix(r.URL.Path, "/api/mails/")
-	id = strings.Split(id, "/")[0]
+	rest := strings.TrimPrefix(r.URL.Path, "/api/mails/")
+	id := strings.Split(rest, "/")[0]
 	var mail model.Mail
 	if err := m.DB.Where("id = ? AND user_id = ?", id, uid).First(&mail).Error; err != nil {
 		writeJSON(w, 404, map[string]string{"error": "not found"})
+		return
+	}
+	// POST /api/mails/{id}/undo：撤销发送（仅限尚未真正发出的邮件）
+	if strings.HasSuffix(rest, "/undo") {
+		if r.Method != "POST" {
+			w.WriteHeader(405)
+			return
+		}
+		if mail.Relayed || mail.Status == "sent" || mail.Status == "sending" {
+			writeJSON(w, 409, map[string]string{"error": "已发出，无法撤销"})
+			return
+		}
+		m.DB.Delete(&mail) // 定时任务触发时找不到邮件会自动跳过
+		writeJSON(w, 200, map[string]any{"ok": true})
 		return
 	}
 	switch r.Method {
@@ -103,8 +117,13 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 			Read    *bool   `json:"read"`
 			Starred *bool   `json:"starred"`
 			Folder  *string `json:"folder"`
+			To      *string `json:"to"`
+			Cc      *string `json:"cc"`
+			Bcc     *string `json:"bcc"`
+			Subject *string `json:"subject"`
+			Body    *string `json:"body"`
 		}
-		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
+		json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20)).Decode(&in)
 		upd := map[string]any{}
 		if in.Read != nil {
 			upd["read"] = *in.Read
@@ -115,16 +134,36 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 		if in.Folder != nil {
 			upd["folder"] = *in.Folder
 		}
+		if in.To != nil {
+			upd["to"] = *in.To
+		}
+		if in.Cc != nil {
+			upd["cc"] = *in.Cc
+		}
+		if in.Bcc != nil {
+			upd["bcc"] = *in.Bcc
+		}
+		if in.Subject != nil {
+			upd["subject"] = *in.Subject
+		}
+		if in.Body != nil {
+			upd["body"] = *in.Body
+		}
 		if len(upd) > 0 {
 			m.DB.Model(&mail).Updates(upd)
 		}
 		m.DB.Where("id = ? AND user_id = ?", id, uid).First(&mail)
 		writeJSON(w, 200, mail)
 	case "DELETE":
-		// 已在垃圾箱：彻底删除且不可恢复；否则移入垃圾箱（可恢复）。
-		if mail.Folder == "trash" {
+		// 已在「已删除」：彻底删除；在垃圾箱：移入「已删除」；否则：移入垃圾箱。
+		if mail.Folder == "deleted" {
 			m.DB.Delete(&mail)
 			writeJSON(w, 200, map[string]any{"ok": true, "deleted": true})
+			return
+		}
+		if mail.Folder == "trash" {
+			m.DB.Model(&mail).Update("folder", "deleted")
+			writeJSON(w, 200, map[string]any{"ok": true, "deleted": false})
 			return
 		}
 		m.DB.Model(&mail).Update("folder", "trash")
@@ -186,9 +225,9 @@ func (m *MailBox) Batch(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "bad body"})
 		return
 	}
-	// 清空垃圾箱：无需选中邮件，直接彻底删除当前用户全部 trash。
+	// 清空垃圾箱：移入「已删除」（软删除，可再恢复或彻底删除）。
 	if in.Action == "empty" {
-		res := m.DB.Where("user_id = ? AND folder = ?", uid, "trash").Delete(&model.Mail{})
+		res := m.DB.Model(&model.Mail{}).Where("user_id = ? AND folder = ?", uid, "trash").Update("folder", "deleted")
 		writeJSON(w, 200, map[string]any{"ok": true, "count": res.RowsAffected})
 		return
 	}
@@ -202,6 +241,8 @@ func (m *MailBox) Batch(w http.ResponseWriter, r *http.Request) {
 	tx := m.DB.Where("user_id = ? AND id IN ?", uid, in.IDs)
 	switch in.Action {
 	case "delete":
+		tx.Model(&model.Mail{}).Update("folder", "deleted")
+	case "purge":
 		tx.Delete(&model.Mail{})
 	case "trash":
 		tx.Model(&model.Mail{}).Update("folder", "trash")

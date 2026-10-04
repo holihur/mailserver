@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -27,7 +28,7 @@ export default function Contacts() {
       await api.contactCreate(form)
       setForm({ name: '', email: '', note: '' })
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   function startEdit(c: any) {
     setEditId(c.id)
@@ -38,11 +39,11 @@ export default function Contacts() {
       await api.contactPatch(editId, edit)
       setEditId(null)
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   async function del(id: number) {
-    if (!confirm(t('contacts.confirmDelete'))) return
-    try { await api.contactDelete(id); load() } catch (err: any) { alert(err.message) }
+    if (!await confirmAsync(t('contacts.confirmDelete'))) return
+    try { await api.contactDelete(id); load() } catch (err: any) { toast(err.message) }
   }
 
   const filtered = list.filter(c => `${c.name} ${c.email} ${c.note}`.toLowerCase().includes(q.toLowerCase()))

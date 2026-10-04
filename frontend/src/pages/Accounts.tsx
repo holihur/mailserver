@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -35,7 +36,7 @@ export default function Accounts() {
       else await api.externalCreate(form)
       reset()
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   function startEdit(a: any) {
     setEditId(a.id)
@@ -47,16 +48,16 @@ export default function Accounts() {
     })
   }
   async function del(id: number) {
-    if (!confirm(t('accounts.confirmDelete'))) return
-    try { await api.externalDelete(id); load() } catch (err: any) { alert(err.message) }
+    if (!await confirmAsync(t('accounts.confirmDelete'))) return
+    try { await api.externalDelete(id); load() } catch (err: any) { toast(err.message) }
   }
   async function test(id: number) {
     setBusy(true)
     try {
       const r = await api.externalTest(id)
-      alert(r.ok ? t('accounts.testOk') : r.error)
+      toast(r.ok ? t('accounts.testOk') : r.error)
       load()
-    } catch (err: any) { alert(err.message) } finally { setBusy(false) }
+    } catch (err: any) { toast(err.message) } finally { setBusy(false) }
   }
 
   return (

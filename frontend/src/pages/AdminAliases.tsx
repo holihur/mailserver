@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import { RecipientInput } from '../components/RecipientInput'
@@ -39,18 +40,18 @@ export default function AdminAliases() {
       else await api.adminAliasCreate(form)
       reset()
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   function startEdit(a: any) {
     setEditId(a.id)
     setForm({ source: a.source, targets: a.targets, keep: a.keep, enabled: a.enabled })
   }
   async function del(id: number) {
-    if (!confirm(t('aliases.confirmDelete'))) return
-    try { await api.adminAliasDelete(id); load() } catch (err: any) { alert(err.message) }
+    if (!await confirmAsync(t('aliases.confirmDelete'))) return
+    try { await api.adminAliasDelete(id); load() } catch (err: any) { toast(err.message) }
   }
   async function toggle(a: any) {
-    try { await api.adminAliasPatch(a.id, { enabled: !a.enabled }); load() } catch (err: any) { alert(err.message) }
+    try { await api.adminAliasPatch(a.id, { enabled: !a.enabled }); load() } catch (err: any) { toast(err.message) }
   }
 
   return (

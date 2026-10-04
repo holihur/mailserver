@@ -87,6 +87,7 @@ func main() {
 	tb := &handler.TokenBox{DB: g}
 	contacts := &handler.ContactBox{DB: g}
 	extBox := &handler.ExternalBox{DB: g}
+	folderBox := &handler.FolderBox{DB: g}
 	totpBox := &handler.TOTPBox{DB: g}
 	gdpr := &handler.GDPRBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
@@ -223,6 +224,8 @@ func main() {
 	mux.HandleFunc("/api/directory", cors(contacts.Directory))
 	mux.HandleFunc("/api/external", cors(extBox.List))
 	mux.HandleFunc("/api/external/", cors(extBox.One))
+	mux.HandleFunc("/api/folders", cors(folderBox.List))
+	mux.HandleFunc("/api/folders/", cors(folderBox.One))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))

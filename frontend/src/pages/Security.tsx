@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -19,21 +20,21 @@ export default function Security() {
 
   async function beginSetup() {
     setBusy(true)
-    try { setSetup(await api.totpSetup()) } catch (e: any) { alert(e.message) } finally { setBusy(false) }
+    try { setSetup(await api.totpSetup()) } catch (e: any) { toast(e.message) } finally { setBusy(false) }
   }
   async function enable() {
     setBusy(true)
     try {
       await api.totpEnable(code)
       setSetup(null); setCode(''); await load()
-    } catch (e: any) { alert(e.message) } finally { setBusy(false) }
+    } catch (e: any) { toast(e.message) } finally { setBusy(false) }
   }
   async function disable() {
     setBusy(true)
     try {
       await api.totpDisable(code)
       setCode(''); await load()
-    } catch (e: any) { alert(e.message) } finally { setBusy(false) }
+    } catch (e: any) { toast(e.message) } finally { setBusy(false) }
   }
   function copy(s: string) { navigator.clipboard?.writeText(s) }
 
@@ -47,17 +48,17 @@ export default function Security() {
       a.download = `sweetcorn-export-${Date.now()}.json`
       a.click()
       URL.revokeObjectURL(url)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast(e.message) }
   }
   async function deleteAccount() {
-    if (!confirm(t('security.deleteConfirm'))) return
+    if (!await confirmAsync(t('security.deleteConfirm'))) return
     const pw = prompt(t('security.passwordPrompt'))
     if (!pw) return
     try {
       await api.gdprDelete(pw)
       localStorage.removeItem('token')
       location.assign('/login')
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast(e.message) }
   }
 
   return (

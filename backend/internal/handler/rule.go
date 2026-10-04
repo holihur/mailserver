@@ -83,8 +83,8 @@ func (in ruleInput) normalize(partial bool) (map[string]any, error) {
 		switch action {
 		case "move":
 			folder := strings.TrimSpace(in.Folder)
-			if !rules.AllowedFolders[folder] {
-				return nil, errText("目标文件夹非法（inbox/draft/trash）")
+			if folder == "" {
+				return nil, errText("请选择目标文件夹")
 			}
 			upd["folder"] = folder
 			upd["forward_to"] = ""
@@ -136,6 +136,10 @@ func (h *RuleBox) List(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 400, map[string]string{"error": err.Error()})
 			return
 		}
+		if f, ok := upd["folder"].(string); ok && f != "" && !FolderValid(h.DB, owner, f) {
+			writeJSON(w, 400, map[string]string{"error": "目标文件夹非法"})
+			return
+		}
 		rule := model.MailRule{UserID: owner}
 		rule.Name, _ = upd["name"].(string)
 		rule.Expression, _ = upd["expression"].(string)
@@ -183,6 +187,10 @@ func (h *RuleBox) One(w http.ResponseWriter, r *http.Request) {
 		upd, err := in.normalize(true)
 		if err != nil {
 			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			return
+		}
+		if f, ok := upd["folder"].(string); ok && f != "" && !FolderValid(h.DB, owner, f) {
+			writeJSON(w, 400, map[string]string{"error": "目标文件夹非法"})
 			return
 		}
 		if len(upd) > 0 {

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -39,7 +40,7 @@ export default function AdminUsers() {
   }
 
   async function del(u) {
-    if (!confirm(`${t('common.delete')} ${u.email}?`)) return
+    if (!await confirmAsync(`${t('common.delete')} ${u.email}?`)) return
     try { await api.adminUserDelete(u.id); setMsg(t('common.delete')); load() } catch (e) { setMsg(e.message) }
   }
 

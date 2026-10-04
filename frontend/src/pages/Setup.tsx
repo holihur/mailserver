@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Card, Badge, Input } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -28,11 +29,11 @@ export default function Setup() {
       setNewToken(r.token)
       setTokName('')
       setTokens(await api.tokens())
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   async function revokeToken(id: number) {
-    if (!confirm(t('token.confirmRevoke'))) return
-    try { await api.tokenDelete(id); setTokens(await api.tokens()) } catch (e: any) { alert(e.message) }
+    if (!await confirmAsync(t('token.confirmRevoke'))) return
+    try { await api.tokenDelete(id); setTokens(await api.tokens()) } catch (e: any) { toast(e.message) }
   }
   function copyText(s: string) { navigator.clipboard?.writeText(s) }
 
@@ -138,7 +139,7 @@ export default function Setup() {
                 selector <code>{dkim.selector}</code> · domain <code>{dkim.domain}</code> · {t('setup.dkimReady')}
               </p>
               <pre className="text-xs font-mono bg-muted/60 rounded-md p-3 overflow-x-auto break-all whitespace-pre-wrap">{dkim.name}.{dkim.domain} TXT "{dkim.txt}"</pre>
-              <Button size="sm" variant="outline" onClick={async () => { const r = await api.dkimPublish({ domain: dkim.domain }); alert(t('setup.publishOk', { name: r.name })) }}>{t('setup.publish')}</Button>
+              <Button size="sm" variant="outline" onClick={async () => { const r = await api.dkimPublish({ domain: dkim.domain }); toast(t('setup.publishOk', { name: r.name })) }}>{t('setup.publish')}</Button>
             </div>
           )}
         </Card>

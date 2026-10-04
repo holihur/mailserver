@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Select } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -136,7 +137,7 @@ function ProviderCard({ provider, onChanged }) {
           {busy === 'domains' ? <Loader2 className="animate-spin" /> : <RefreshCw />}{t('providers.getDomains')}
         </Button>
         <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={async () => {
-          if (confirm(`${t('common.delete')} ${provider.name}?`)) { await api.providerDelete(provider.id); onChanged() }
+          if (await confirmAsync(`${t('common.delete')} ${provider.name}?`)) { await api.providerDelete(provider.id); onChanged() }
         }}><Trash2 /></Button>
       </div>
 

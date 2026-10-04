@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge, Label, Select } from './ui/controls'
 import { SkeletonRows } from './Skeleton'
@@ -16,6 +17,8 @@ export function RulesManager({ site = false }: { site?: boolean }) {
   const [editId, setEditId] = useState<number | null>(null)
   const [sample, setSample] = useState({ from: 'spam@example.com', subject: '你好', body: '' })
   const [testResult, setTestResult] = useState<any>(null)
+  const [folders, setFolders] = useState<any[]>([])
+  useEffect(() => { api.folders().then(setFolders).catch(() => {}) }, [])
 
   const apiList = site ? api.adminRules : api.rules
   const apiCreate = site ? api.adminRuleCreate : api.ruleCreate
@@ -32,24 +35,24 @@ export function RulesManager({ site = false }: { site?: boolean }) {
 
   async function save(e: any) {
     e.preventDefault()
-    if (!form.expression.trim()) { alert(t('rules.needExpr')); return }
+    if (!form.expression.trim()) { toast(t('rules.needExpr')); return }
     try {
       if (editId) await apiPatch(editId, form)
       else await apiCreate(form)
       reset()
       load()
-    } catch (err: any) { alert(err.message) }
+    } catch (err: any) { toast(err.message) }
   }
   function startEdit(r: any) {
     setEditId(r.id)
     setForm({ name: r.name, expression: r.expression, action: r.action || 'trash', folder: r.folder || 'trash', forward_to: r.forward_to || '', priority: r.priority || 0, enabled: r.enabled })
   }
   async function del(id: number) {
-    if (!confirm(t('rules.confirmDelete'))) return
-    try { await apiDelete(id); load() } catch (err: any) { alert(err.message) }
+    if (!await confirmAsync(t('rules.confirmDelete'))) return
+    try { await apiDelete(id); load() } catch (err: any) { toast(err.message) }
   }
   async function toggle(r: any) {
-    try { await apiPatch(r.id, { enabled: !r.enabled }); load() } catch (err: any) { alert(err.message) }
+    try { await apiPatch(r.id, { enabled: !r.enabled }); load() } catch (err: any) { toast(err.message) }
   }
   async function runTest() {
     setTestResult(null)
@@ -97,6 +100,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
                   <option value="trash">{t('mail.trash')}</option>
                   <option value="inbox">{t('mail.inbox')}</option>
                   <option value="draft">{t('mail.draft')}</option>
+                  {folders.map((f: any) => <option key={f.id} value={'c' + f.id}>{f.name}</option>)}
                 </Select>
               </div>
             )}

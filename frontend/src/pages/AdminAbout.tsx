@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Card, Badge, Input, Label } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -37,7 +38,7 @@ export default function AdminAbout() {
   }
 
   async function doUpdate() {
-    if (!confirm(t('about.confirmUpdate'))) return
+    if (!await confirmAsync(t('about.confirmUpdate'))) return
     setUpdating(true); setMsg('')
     try {
       const r = await api.adminUpdate()
@@ -69,13 +70,13 @@ export default function AdminAbout() {
   async function toggleAuto(v: boolean) {
     try {
       setSettings(await api.settingsPatch({ auto_update: v ? '1' : '0' }))
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast(e.message) }
   }
   async function saveInterval() {
     try {
       const s = await api.settingsPatch({ update_interval: String(intervalMin) })
       setSettings(s); setIntervalMin(s.update_interval || 10)
-    } catch (e: any) { alert(e.message) }
+    } catch (e: any) { toast(e.message) }
   }
 
   const available = !!check?.update_available

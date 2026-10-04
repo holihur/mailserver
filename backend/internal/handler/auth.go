@@ -140,5 +140,28 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return
 	}
+	// PATCH：修改昵称 / 邮件签名
+	if r.Method == "PATCH" {
+		var in struct {
+			Name      *string `json:"name"`
+			Signature *string `json:"signature"`
+		}
+		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
+		upd := map[string]any{}
+		if in.Name != nil {
+			upd["name"] = strings.TrimSpace(*in.Name)
+		}
+		if in.Signature != nil {
+			s := *in.Signature
+			if len(s) > 1000 {
+				s = s[:1000]
+			}
+			upd["signature"] = s
+		}
+		if len(upd) > 0 {
+			a.DB.Model(&u).Updates(upd)
+		}
+		a.DB.First(&u, uid)
+	}
 	writeJSON(w, 200, u)
 }

@@ -86,8 +86,8 @@ func TestActionFolder(t *testing.T) {
 	if got := actionFolder(model.MailRule{Action: "move", Folder: "inbox"}); got != "inbox" {
 		t.Fatalf("move=%s", got)
 	}
-	if got := actionFolder(model.MailRule{Action: "move", Folder: "sent"}); got != "trash" {
-		t.Fatalf("非法目标应回退 trash，得到 %s", got)
+	if got := actionFolder(model.MailRule{Action: "move", Folder: "c7"}); got != "c7" {
+		t.Fatalf("自定义文件夹应原样返回，得到 %s", got)
 	}
 }
 

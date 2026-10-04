@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { toast, confirmAsync } from '../lib/ui'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card } from '../components/ui/controls'
@@ -8,12 +9,12 @@ import { SkeletonList } from '../components/Skeleton'
 import { FooterControls } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import {
-  Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut,
+  Inbox, Send, FileEdit, Trash2, Trash, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
-  ChevronDown, MoreVertical, Reply, MailOpen,
-  Contact, Filter, KeyRound, AtSign,
+  ChevronDown, MoreVertical, Reply, ReplyAll, Forward, MailOpen, RotateCcw,
+  Contact, Filter, KeyRound, AtSign, Download, Folder, Plus,
 } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { cn, linkify, setUnreadBadge, quoteMail } from '../lib/utils'
 import { BRAND } from '../lib/brand'
 
 const FOLDERS = [
@@ -21,15 +22,17 @@ const FOLDERS = [
   { k: 'sent', labelKey: 'mail.sent', icon: Send },
   { k: 'draft', labelKey: 'mail.draft', icon: FileEdit },
   { k: 'trash', labelKey: 'mail.trash', icon: Trash2 },
+  { k: 'deleted', labelKey: 'mail.deleted', icon: Trash },
 ]
 
 export default function MailApp() {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const [folder, setFolder] = useState('inbox')
+  const [folder, setFolder] = useState(() => localStorage.getItem('pref.folder') || 'inbox')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [unread, setUnread] = useState<any>({})
+  const [folders, setFolders] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(null)
@@ -37,7 +40,11 @@ export default function MailApp() {
   const [me, setMe] = useState(null)
   const [view, setView] = useState('list') // 移动端：list | read
   const [page, setPage] = useState(1)
-  const [sort, setSort] = useState('newest')
+  const [sort, setSort] = useState(() => localStorage.getItem('pref.sort') || 'newest')
+  const [installEvt, setInstallEvt] = useState<any>(null)
+  const prevUnread = useRef(0)
+  const touch = useRef<{ x: number; moved: boolean }>({ x: 0, moved: false })
+  const [preview, setPreview] = useState<any>(null)
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -47,24 +54,56 @@ export default function MailApp() {
       const d = await api.list(folder, q, p, s)
       setItems(d.items); setTotal(d.total); setPage(d.page || p)
     } catch {} finally { setLoading(false) }
-    api.unread().then(setUnread).catch(() => {})
+    api.unread().then((u: any) => {
+      setUnread(u)
+      prevUnread.current = sumUnread(u)
+    }).catch(() => {})
+    api.folders().then(setFolders).catch(() => {})
   }
   useEffect(() => { api.me().then(setMe).catch(() => { location.href = '/login' }) }, [])
   useEffect(() => { setSel(null); setView('list'); setPage(1); load(1, sort) }, [folder])
+  useEffect(() => { localStorage.setItem('pref.folder', folder) }, [folder])
+  useEffect(() => { localStorage.setItem('pref.sort', sort) }, [sort])
+  useEffect(() => {
+    setUnreadBadge(sumUnread(unread))
+  }, [unread])
+  // 自动刷新 + 新邮件提示
+  useEffect(() => {
+    const id = setInterval(() => {
+      api.unread().then((u: any) => {
+        const tot = sumUnread(u)
+        if (tot > prevUnread.current) {
+          toast(t('mail.newMail'), { type: 'success' })
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(BRAND, { body: t('mail.newMail') })
+          }
+        }
+        prevUnread.current = tot
+        setUnread(u)
+      }).catch(() => {})
+    }, 45000)
+    return () => clearInterval(id)
+  }, [t])
+  // PWA 安装
+  useEffect(() => {
+    const h = (e: any) => { e.preventDefault(); setInstallEvt(e) }
+    window.addEventListener('beforeinstallprompt', h)
+    return () => window.removeEventListener('beforeinstallprompt', h)
+  }, [])
 
   const [selectMode, setSelectMode] = useState(false)
   const [checked, setChecked] = useState<number[]>([])
   function toggleCheck(id: number) { setChecked(c => c.includes(id) ? c.filter(x => x !== id) : [...c, id]) }
   function toggleAll() { setChecked(c => c.length === items.length ? [] : items.map((m: any) => m.id)) }
-  async function batch(action: string) {
+  async function batch(action: string, folderArg = '') {
     if (!checked.length) return
-    try { await api.batch(checked, action) } catch (e: any) { alert(e.message) }
+    try { await api.batch(checked, action, folderArg) } catch (e: any) { toast(e.message) }
     setChecked([]); setSelectMode(false); load(page, sort)
   }
 
   async function emptyTrash() {
-    if (!confirm(t('mail.confirmPurge'))) return
-    try { await api.emptyTrash() } catch (e: any) { alert(e.message) }
+    if (!await confirmAsync(t('mail.confirmPurge'))) return
+    try { await api.emptyTrash() } catch (e: any) { toast(e.message) }
     setChecked([]); setSelectMode(false); setSel(null); load(1, sort)
   }
 
@@ -75,7 +114,51 @@ export default function MailApp() {
     setItems(items.map(i => i.id === id ? { ...i, read: true } : i))
   }
 
+  function reply(m: any, all: boolean) {
+    const sig = me?.signature ? `\n\n-- \n${me.signature}` : ''
+    let cc = ''
+    if (all) {
+      const mine = (me?.email || '').toLowerCase()
+      const others = [m.to, m.cc].filter(Boolean).join(',').split(',').map((s: string) => s.trim())
+        .filter((a: string) => a && a.toLowerCase() !== mine)
+      cc = [...new Set(others)].join(', ')
+    }
+    setShowCompose({ to: m.from, cc, subject: 'Re: ' + (m.subject || ''), body: quoteMail(m) + sig })
+  }
+  function forwardMail(m: any) {
+    const sig = me?.signature ? `\n\n-- \n${me.signature}` : ''
+    const head = `\n\n-------- 转发邮件 --------\n发件人: ${m.from}\n收件人: ${m.to}\n主题: ${m.subject || ''}\n\n`
+    setShowCompose({ subject: 'Fwd: ' + (m.subject || ''), body: head + (m.body || '') + sig })
+  }
+  function onBodyClick(e: any) {
+    const code = e.target?.dataset?.code
+    if (code) {
+      navigator.clipboard?.writeText(code)
+      toast(t('mail.codeCopied', { code }), { type: 'success' })
+    }
+  }
+
   function logout() { localStorage.removeItem('token'); location.assign('/login') }
+
+  const allFolders: any[] = [
+    ...FOLDERS,
+    ...folders.map((f: any) => ({ k: 'c' + f.id, label: f.name, icon: Folder, custom: true, id: f.id })),
+  ]
+  async function loadFolders() { try { setFolders(await api.folders()) } catch {} }
+  async function createFolder() {
+    const name = prompt(t('folders.newPrompt'))
+    if (!name) return
+    try { await api.folderCreate(name); await loadFolders() } catch (e: any) { toast(e.message) }
+  }
+  async function renameFolder(f: any) {
+    const name = prompt(t('folders.renamePrompt'), f.label)
+    if (!name) return
+    try { await api.folderPatch(f.id, name); await loadFolders() } catch (e: any) { toast(e.message) }
+  }
+  async function deleteFolder(f: any) {
+    if (!await confirmAsync(t('folders.confirmDelete', { name: f.label }))) return
+    try { await api.folderDelete(f.id); if (folder === f.k) setFolder('inbox'); await loadFolders() } catch (e: any) { toast(e.message) }
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -101,6 +184,7 @@ export default function MailApp() {
           <DropdownItem icon={ShieldCheck} onClick={() => navigate('/privacy')}>{t('nav.privacy')}</DropdownItem>
           {me?.admin && <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>}
           {me?.admin && <DropdownItem icon={ShieldCheck} onClick={() => navigate('/admin')}>{t('nav.admin')}</DropdownItem>}
+          {installEvt && <DropdownItem icon={Download} onClick={() => { installEvt.prompt(); setInstallEvt(null) }}>{t('nav.install')}</DropdownItem>}
           <DropdownSeparator />
           <DropdownItem icon={RefreshCw} onClick={() => load()}>{t('common.refresh')}</DropdownItem>
           <DropdownItem icon={LogOut} onClick={logout} className="text-red-500 hover:bg-red-500/10">{t('nav.logout')}</DropdownItem>
@@ -109,25 +193,40 @@ export default function MailApp() {
 
       {/* 移动端：文件夹横向标签 */}
       <div className="md:hidden flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
-        {FOLDERS.map(f => (
+        {allFolders.map(f => (
           <button key={f.k} onClick={() => setFolder(f.k)}
             className={cn('flex items-center gap-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
               folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
-            <f.icon size={15} />{t(f.labelKey)}
+            <f.icon size={15} />{f.labelKey ? t(f.labelKey) : f.label}
             {unread[f.k] > 0 && <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
           </button>
         ))}
+        <button onClick={createFolder} className="flex items-center rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted" aria-label={t('folders.new')}><Plus size={15} /></button>
       </div>
 
       <div className="flex-1 flex max-w-6xl w-full mx-auto min-h-0">
         <aside className="hidden md:block w-44 shrink-0 p-3 space-y-1 border-r border-border">
-          {FOLDERS.map(f => (
-            <button key={f.k} onClick={() => setFolder(f.k)}
-              className={cn('w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm', folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
-              <f.icon size={16} />{t(f.labelKey)}
-              {unread[f.k] > 0 && <span className={cn('ml-auto rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
-            </button>
+          {allFolders.map(f => (
+            <div key={f.k} className="group flex items-center gap-0.5">
+              <button onClick={() => setFolder(f.k)}
+                className={cn('flex-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm min-w-0', folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
+                <f.icon size={16} className="shrink-0" />
+                <span className="truncate">{f.labelKey ? t(f.labelKey) : f.label}</span>
+                {unread[f.k] > 0 && <span className={cn('ml-auto rounded-full px-1.5 text-[10px] font-semibold shrink-0', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
+              </button>
+              {f.custom && (
+                <Dropdown align="right" trigger={
+                  <button className="opacity-0 group-hover:opacity-100 px-1 py-2 text-muted-foreground" aria-label={t('common.edit')}><MoreVertical size={14} /></button>
+                }>
+                  <DropdownItem icon={PenLine} onClick={() => renameFolder(f)}>{t('folders.rename')}</DropdownItem>
+                  <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
+                </Dropdown>
+              )}
+            </div>
           ))}
+          <button onClick={createFolder} className="w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted">
+            <Plus size={16} />{t('folders.new')}
+          </button>
           <p className="text-xs text-muted-foreground px-3 pt-4">{t('mail.total', { n: total })}</p>
         </aside>
 
@@ -160,21 +259,38 @@ export default function MailApp() {
               )}
             </div>
             {selectMode && (
-              <div className="p-2 border-b border-border flex items-center gap-2 text-xs">
+              <div className="p-2 border-b border-border flex items-center gap-1 flex-wrap text-xs">
                 <label className="flex items-center gap-1"><input type="checkbox" checked={checked.length > 0 && checked.length === items.length} onChange={toggleAll} />{t('mail.selectAll')}</label>
                 <span className="text-muted-foreground">{t('mail.selected', { n: checked.length })}</span>
                 <div className="flex-1" />
+                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('read')}><MailOpen />{t('mail.markRead')}</Button>
+                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('unread')}><MailOpen />{t('mail.markUnread')}</Button>
                 <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('star')}><Star />{t('mail.batchStar')}</Button>
-                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => {
-                  if (folder === 'trash' && !confirm(t('mail.confirmPurge'))) return
-                  batch(folder === 'trash' ? 'delete' : 'trash')
-                }}><Trash2 />{folder === 'trash' ? t('mail.purge') : t('mail.batchDelete')}</Button>
+                {folder === 'deleted' ? (
+                  <>
+                    <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('move', 'inbox')}><RotateCcw />{t('mail.restore')}</Button>
+                    <Button variant="ghost" size="sm" disabled={!checked.length} onClick={async () => { if (!await confirmAsync(t('mail.confirmPurge'))) return; batch('purge') }}><Trash2 />{t('mail.purge')}</Button>
+                  </>
+                ) : (
+                  <Button variant="ghost" size="sm" disabled={!checked.length} onClick={async () => {
+                    if (folder === 'trash' && !await confirmAsync(t('mail.confirmPurge'))) return
+                    batch(folder === 'trash' ? 'delete' : 'trash')
+                  }}><Trash2 />{t('mail.batchDelete')}</Button>
+                )}
               </div>
             )}
             <div className="flex-1 overflow-auto">
               {loading && <SkeletonList rows={6} />}
               {!loading && items.map(m => (
-                <button key={m.id} onClick={() => selectMode ? toggleCheck(m.id) : open(m.id)}
+                <button key={m.id} onClick={() => { if (touch.current.moved) { touch.current.moved = false; return } selectMode ? toggleCheck(m.id) : open(m.id) }}
+                  onTouchStart={e => { touch.current = { x: e.touches[0].clientX, moved: false } }}
+                  onTouchMove={e => { if (Math.abs(e.touches[0].clientX - touch.current.x) > 12) touch.current.moved = true }}
+                  onTouchEnd={async e => {
+                    if (!touch.current.moved) return
+                    const dx = e.changedTouches[0].clientX - touch.current.x
+                    if (dx < -60) { await api.trash(m.id); load() }
+                    else if (dx > 60) { await api.patch(m.id, { read: !m.read }); load() }
+                  }}
                   className={cn('w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60 transition-colors',
                     (selectMode ? checked.includes(m.id) : sel?.id === m.id) && 'bg-muted', !m.read && 'bg-primary/5')}>
                   <div className="flex items-center gap-2">
@@ -194,7 +310,12 @@ export default function MailApp() {
                   </div>
                 </button>
               ))}
-              {!loading && items.length === 0 && <p className="p-6 text-sm text-muted-foreground text-center">{t('mail.empty')}</p>}
+              {!loading && items.length === 0 && (
+                <div className="p-8 text-center space-y-3">
+                  <p className="text-sm text-muted-foreground">{t('mail.empty')}</p>
+                  <Button size="sm" variant="outline" onClick={() => setShowCompose(true)}><PenLine />{t('mail.compose')}</Button>
+                </div>
+              )}
             </div>
             <div className="border-t border-border p-2 flex items-center justify-between text-xs">
               <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => load(page - 1, sort)}>‹ {t('mail.prev')}</Button>
@@ -213,14 +334,16 @@ export default function MailApp() {
                   <ArrowLeft size={16} />{t('common.back')}
                 </button>
                 <Card className="p-4 sm:p-5">
-                  <h2 className="text-lg font-semibold break-words">{sel.subject || t('mail.noSubject')}</h2>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {t('mail.fromTo', { from: sel.from, to: sel.to })} · {new Date(sel.created_at).toLocaleString()}
-                  </p>
-                  {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
-                  <div className="mt-3">
-                    <Dropdown align="left" trigger={
-                      <Button variant="outline" size="sm"><MoreVertical />{t('mail.actions')}</Button>
+                  <div className="flex items-start gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h2 className="text-lg font-semibold break-words">{sel.subject || t('mail.noSubject')}</h2>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {t('mail.fromTo', { from: sel.from, to: sel.to })} · {new Date(sel.created_at).toLocaleString()}
+                      </p>
+                      {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
+                    </div>
+                    <Dropdown align="right" trigger={
+                      <Button variant="ghost" size="icon" aria-label={t('mail.actions')}><MoreVertical /></Button>
                     }>
                       <DropdownItem icon={Star} onClick={async () => { await api.patch(sel.id, { starred: !sel.starred }); setSel({ ...sel, starred: !sel.starred }) }}>
                         {sel.starred ? t('mail.unstar') : t('mail.star')}
@@ -231,25 +354,35 @@ export default function MailApp() {
                         setSel({ ...sel, read: next })
                         setItems(items.map((i: any) => i.id === sel.id ? { ...i, read: next } : i))
                       }}>{sel.read ? t('mail.markUnread') : t('mail.markRead')}</DropdownItem>
-                      <DropdownItem icon={Reply} onClick={() => { setShowCompose({ to: sel.from, subject: 'Re: ' + sel.subject, body: '\n\n---\n' + sel.body }) }}>{t('mail.reply')}</DropdownItem>
+                      <DropdownSeparator />
+                      <DropdownItem icon={Reply} onClick={() => reply(sel, false)}>{t('mail.reply')}</DropdownItem>
+                      <DropdownItem icon={ReplyAll} onClick={() => reply(sel, true)}>{t('mail.replyAll')}</DropdownItem>
+                      <DropdownItem icon={Forward} onClick={() => forwardMail(sel)}>{t('mail.forward')}</DropdownItem>
                       <DropdownSeparator />
                       <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={async () => {
-                        if (folder === 'trash' && !confirm(t('mail.confirmPurge'))) return
+                        if ((folder === 'trash' || folder === 'deleted') && !await confirmAsync(t('mail.confirmPurge'))) return
                         await api.trash(sel.id); setSel(null); setView('list'); load()
-                      }}>{folder === 'trash' ? t('mail.purge') : t('mail.delete')}</DropdownItem>
+                      }}>{folder === 'deleted' ? t('mail.purge') : t('mail.delete')}</DropdownItem>
                     </Dropdown>
                   </div>
-                  <pre className="whitespace-pre-wrap text-sm mt-4 font-sans break-words">{sel.body}</pre>
+                  <pre onClick={onBodyClick} className="whitespace-pre-wrap text-sm mt-4 font-sans break-words" dangerouslySetInnerHTML={{ __html: linkify(sel.body) }} />
                   {attList(sel.attachments).length > 0 && (
                     <div className="mt-4 border-t border-border pt-3">
                       <b className="text-sm">{t('mail.attachments')}</b>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {attList(sel.attachments).map((a: any, i: number) => (
-                          <a key={i} href={`data:${a.type || 'application/octet-stream'};base64,${a.data}`} download={a.name}
-                            className="text-xs rounded-md border border-border px-2 py-1 hover:bg-muted">
-                            📎 {a.name} ({fmtSize(a.size)})
-                          </a>
-                        ))}
+                        {attList(sel.attachments).map((a: any, i: number) => {
+                          const dataUrl = `data:${a.type || 'application/octet-stream'};base64,${a.data}`
+                          const k = attKind(a.type)
+                          return (
+                            <div key={i} className="text-xs rounded-md border border-border px-2 py-1 hover:bg-muted flex items-center gap-1.5">
+                              {k
+                                ? <button className="hover:underline" onClick={() => setPreview({ ...a, dataUrl, kind: k })}>👁 {a.name}</button>
+                                : <span>📎 {a.name}</span>}
+                              <span className="text-muted-foreground">({fmtSize(a.size)})</span>
+                              <a href={dataUrl} download={a.name} aria-label={t('mail.download')} className="text-muted-foreground hover:text-foreground"><Download size={12} /></a>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
                   )}
@@ -262,6 +395,24 @@ export default function MailApp() {
 
       <FooterControls />
 
+      {preview && (
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onClick={() => setPreview(null)}>
+          <div className="w-full max-w-4xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 text-white mb-2">
+              <span className="truncate text-sm flex-1">{preview.name}</span>
+              <a href={preview.dataUrl} download={preview.name} className="text-white/80 hover:text-white" aria-label={t('mail.download')}><Download size={16} /></a>
+              <button onClick={() => setPreview(null)} aria-label="close" className="text-white/80 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="overflow-auto grid place-items-center">
+              {preview.kind === 'image' && <img src={preview.dataUrl} alt={preview.name} className="max-h-[84vh] rounded" />}
+              {preview.kind === 'video' && <video src={preview.dataUrl} controls className="max-h-[84vh] w-full rounded bg-black" />}
+              {preview.kind === 'audio' && <audio src={preview.dataUrl} controls className="w-full" />}
+              {preview.kind === 'pdf' && <iframe src={preview.dataUrl} title={preview.name} className="w-full h-[84vh] rounded bg-white" />}
+            </div>
+          </div>
+        </div>
+      )}
+
       {showCompose && <Compose me={me} init={typeof showCompose === 'object' ? showCompose : {}} onClose={() => { setShowCompose(false); load() }} />}
     </div>
   )
@@ -269,13 +420,26 @@ export default function MailApp() {
 
 function Compose({ me, init, onClose }: any) {
   const { t } = useI18n()
-  const [f, setF] = useState({ from: init.from || '', to: init.to || '', cc: init.cc || '', bcc: init.bcc || '', subject: init.subject || '', body: init.body || '' })
+  const [f, setF] = useState({ from: init.from || '', to: init.to || '', cc: init.cc || '', bcc: init.bcc || '', subject: init.subject || '', body: init.body || (me?.signature ? '\n\n-- \n' + me.signature : '') })
   const [atts, setAtts] = useState<any[]>([])
   const [showCC, setShowCC] = useState(!!(init.cc || init.bcc))
   const [saving, setSaving] = useState(false)
+  const [draftId, setDraftId] = useState<number | null>(null)
   const [sugg, setSugg] = useState<any[]>([])
   const [ids, setIds] = useState<any[]>([])
   useEffect(() => { api.external().then((xs: any[]) => setIds(xs.filter(x => x.enabled))).catch(() => {}) }, [])
+  // 草稿自动保存（25s 一次，有内容才存）
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (saving) return
+      if (!f.to && !f.subject && !f.body.trim()) return
+      try {
+        if (draftId) await api.patch(draftId, { to: f.to, cc: f.cc, bcc: f.bcc, subject: f.subject, body: f.body })
+        else { const r = await api.send({ ...f, folder: 'draft' }); setDraftId(r.id) }
+      } catch {}
+    }, 25000)
+    return () => clearInterval(id)
+  }, [f, draftId, saving])
   useEffect(() => {
     Promise.all([api.contacts().catch(() => []), api.directory().catch(() => [])]).then(([cs, dir]) => {
       const map = new Map<string, any>()
@@ -296,7 +460,7 @@ function Compose({ me, init, onClose }: any) {
     const files: File[] = Array.from(e.target.files || [])
     let cur = total
     for (const file of files) {
-      if (cur + file.size > 8 * 1024 * 1024) { alert(t('mail.tooLarge')); break }
+      if (cur + file.size > 8 * 1024 * 1024) { toast(t('mail.tooLarge')); break }
       cur += file.size
       const fr = new FileReader()
       fr.onload = () => {
@@ -310,7 +474,17 @@ function Compose({ me, init, onClose }: any) {
 
   async function submit(folder: string) {
     setSaving(true)
-    try { await api.send({ ...f, attachments: atts, folder }); onClose() } catch (e: any) { alert(e.message) }
+    try {
+      const r = await api.send({ ...f, attachments: atts, folder })
+      if (draftId) api.batch([draftId], 'purge').catch(() => {})
+      if (folder === 'sent') {
+        toast(t('mail.sentToast'), {
+          type: 'success',
+          action: { label: t('mail.undo'), onClick: () => { api.undoSend(r.id).then(() => toast(t('mail.undoOk'))).catch(() => toast(t('mail.undoFail'), { type: 'error' })) } },
+        })
+      }
+      onClose()
+    } catch (e: any) { toast(e.message, { type: 'error' }) }
     finally { setSaving(false) }
   }
 
@@ -365,6 +539,20 @@ function Compose({ me, init, onClose }: any) {
 
 function attList(s: any): any[] {
   try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a : [] } catch { return [] }
+}
+
+function sumUnread(u: any): number {
+  const vals = Object.values(u || {}) as number[]
+  return vals.reduce((a, b) => a + (Number(b) || 0), 0)
+}
+
+function attKind(type: string): string {
+  if (!type) return ''
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('video/')) return 'video'
+  if (type.startsWith('audio/')) return 'audio'
+  if (type === 'application/pdf') return 'pdf'
+  return ''
 }
 function fmtSize(n: number) {
   if (!n) return '0B'

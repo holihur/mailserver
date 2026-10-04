@@ -6,6 +6,7 @@ type User struct {
 	ID          uint      `gorm:"primaryKey" json:"id"`
 	Email       string    `gorm:"uniqueIndex;size:255" json:"email"`
 	Name        string    `gorm:"size:100" json:"name"`
+	Signature   string    `gorm:"size:1000" json:"signature"` // 邮件签名
 	PassHash    string    `gorm:"size:255" json:"-"`
 	Admin       bool      `json:"admin"`             // 管理员：可进 /api/admin 管理后台
 	Disabled    bool      `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
@@ -108,6 +109,14 @@ type MailRule struct {
 	Folder     string    `gorm:"size:30" json:"folder"`       // action=move 时的目标文件夹
 	ForwardTo  string    `gorm:"size:1024" json:"forward_to"` // action=forward 时的转发目标（逗号分隔）
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+// MailFolder 用户自定义文件夹。Mail.Folder 存其键 "c<ID>"。
+type MailFolder struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index" json:"user_id"`
+	Name      string    `gorm:"size:120" json:"name"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // Contact 用户联系人（通讯录）。Note 为备注，可随时修改。

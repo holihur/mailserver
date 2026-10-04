@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"time"
 
 	"mailserver/internal/model"
 	"mailserver/internal/queue"
@@ -20,6 +21,8 @@ import (
 const (
 	TypeSend  = "mail:send"
 	TypeSweep = "mail:sweep"
+	// SendDelay 延迟发送窗口：给用户留出「撤销发送」的时间。
+	SendDelay = 8 * time.Second
 )
 
 type sendPayload struct {
@@ -52,6 +55,7 @@ func (c *Client) EnqueueSend(mailID uint) error {
 	payload, _ := json.Marshal(sendPayload{ID: mailID})
 	_, err := c.c.Enqueue(asynq.NewTask(TypeSend, payload),
 		asynq.TaskID(fmt.Sprintf("mail:%d", mailID)),
+		asynq.ProcessIn(SendDelay),
 		asynq.MaxRetry(queue.MaxAttempts))
 	return err
 }

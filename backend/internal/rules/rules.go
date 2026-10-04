@@ -181,7 +181,7 @@ func scopeName(r model.MailRule) string {
 
 // actionFolder 依据动作决定目标文件夹。
 func actionFolder(r model.MailRule) string {
-	if r.Action == "move" && AllowedFolders[r.Folder] {
+	if r.Action == "move" && r.Folder != "" {
 		return r.Folder
 	}
 	// forward 会在转发的同时保留一份到收件箱
