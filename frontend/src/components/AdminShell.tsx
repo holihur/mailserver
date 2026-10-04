@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
 import { ThemeToggle, LangToggle } from './HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info } from 'lucide-react'
+import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
 
@@ -22,6 +22,8 @@ const NAV = [
   { to: '/admin/ssl', labelKey: 'admin.ssl', icon: ShieldCheck },
   { to: '/admin/providers', labelKey: 'admin.providers', icon: Cloud },
   { to: '/admin/users', labelKey: 'admin.users', icon: Users },
+  { to: '/admin/rules', labelKey: 'rules.siteNav', icon: Filter },
+  { to: '/admin/routes', labelKey: 'routes.nav', icon: Route },
   { to: '/admin/about', labelKey: 'admin.about', icon: Info },
 ]
 

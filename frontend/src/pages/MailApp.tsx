@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card } from '../components/ui/controls'
 import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../components/Dropdown'
+import { RecipientInput } from '../components/RecipientInput'
 import { useI18n } from '../lib/i18n'
 import { useTheme } from '../lib/theme'
 import {
   Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
-  ChevronDown, Languages, Sun, Moon, Monitor,
+  ChevronDown, Languages, Sun, Moon, Monitor, MoreVertical, Reply,
+  Contact, Filter, KeyRound,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
@@ -90,6 +92,9 @@ export default function MailApp() {
           {me?.email && <DropdownLabel>{me.email}</DropdownLabel>}
           <DropdownSeparator />
           <DropdownItem icon={Settings} onClick={() => navigate('/setup')}>{t('nav.setup')}</DropdownItem>
+          <DropdownItem icon={Contact} onClick={() => navigate('/contacts')}>{t('nav.contacts')}</DropdownItem>
+          <DropdownItem icon={Filter} onClick={() => navigate('/rules')}>{t('nav.rules')}</DropdownItem>
+          <DropdownItem icon={KeyRound} onClick={() => navigate('/security')}>{t('nav.security')}</DropdownItem>
           {me?.admin && <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>}
           {me?.admin && <DropdownItem icon={ShieldCheck} onClick={() => navigate('/admin')}>{t('nav.admin')}</DropdownItem>}
           <DropdownSeparator />
@@ -204,15 +209,20 @@ export default function MailApp() {
                     {t('mail.fromTo', { from: sel.from, to: sel.to })} · {new Date(sel.created_at).toLocaleString()}
                   </p>
                   {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    <Button variant="outline" size="sm" onClick={async () => { await api.patch(sel.id, { starred: !sel.starred }); setSel({ ...sel, starred: !sel.starred }) }}>
-                      {sel.starred ? t('mail.unstar') : t('mail.star')}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => { setShowCompose({ to: sel.from, subject: 'Re: ' + sel.subject, body: '\n\n---\n' + sel.body }) }}>{t('mail.reply')}</Button>
-                    <Button variant="outline" size="sm" onClick={async () => {
-                      if (folder === 'trash' && !confirm(t('mail.confirmPurge'))) return
-                      await api.trash(sel.id); setSel(null); setView('list'); load()
-                    }}>{folder === 'trash' ? t('mail.purge') : t('mail.delete')}</Button>
+                  <div className="mt-3">
+                    <Dropdown align="left" trigger={
+                      <Button variant="outline" size="sm"><MoreVertical />{t('mail.actions')}</Button>
+                    }>
+                      <DropdownItem icon={Star} onClick={async () => { await api.patch(sel.id, { starred: !sel.starred }); setSel({ ...sel, starred: !sel.starred }) }}>
+                        {sel.starred ? t('mail.unstar') : t('mail.star')}
+                      </DropdownItem>
+                      <DropdownItem icon={Reply} onClick={() => { setShowCompose({ to: sel.from, subject: 'Re: ' + sel.subject, body: '\n\n---\n' + sel.body }) }}>{t('mail.reply')}</DropdownItem>
+                      <DropdownSeparator />
+                      <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={async () => {
+                        if (folder === 'trash' && !confirm(t('mail.confirmPurge'))) return
+                        await api.trash(sel.id); setSel(null); setView('list'); load()
+                      }}>{folder === 'trash' ? t('mail.purge') : t('mail.delete')}</DropdownItem>
+                    </Dropdown>
                   </div>
                   <pre className="whitespace-pre-wrap text-sm mt-4 font-sans break-words">{sel.body}</pre>
                   {attList(sel.attachments).length > 0 && (
@@ -246,6 +256,15 @@ function Compose({ init, onClose }: any) {
   const [atts, setAtts] = useState<any[]>([])
   const [showCC, setShowCC] = useState(!!(init.cc || init.bcc))
   const [saving, setSaving] = useState(false)
+  const [sugg, setSugg] = useState<any[]>([])
+  useEffect(() => {
+    Promise.all([api.contacts().catch(() => []), api.directory().catch(() => [])]).then(([cs, dir]) => {
+      const map = new Map<string, any>()
+      for (const d of dir) map.set(d.email.toLowerCase(), { email: d.email, name: d.name })
+      for (const c of cs) map.set(c.email.toLowerCase(), { email: c.email, name: c.name, note: c.note })
+      setSugg([...map.values()])
+    })
+  }, [])
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -284,10 +303,10 @@ function Compose({ init, onClose }: any) {
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={() => setShowCC(v => !v)}>{t('mail.ccBcc')}</Button>
         </div>
-        <Input autoFocus placeholder={t('mail.to')} value={f.to} onChange={e => setF({ ...f, to: e.target.value })} />
+        <RecipientInput placeholder={t('mail.to')} value={f.to} onChange={v => setF({ ...f, to: v })} suggestions={sugg} />
         {showCC && <>
-          <Input placeholder={t('mail.cc')} value={f.cc} onChange={e => setF({ ...f, cc: e.target.value })} />
-          <Input placeholder={t('mail.bcc')} value={f.bcc} onChange={e => setF({ ...f, bcc: e.target.value })} />
+          <RecipientInput placeholder={t('mail.cc')} value={f.cc} onChange={v => setF({ ...f, cc: v })} suggestions={sugg} />
+          <RecipientInput placeholder={t('mail.bcc')} value={f.bcc} onChange={v => setF({ ...f, bcc: v })} suggestions={sugg} />
         </>}
         <Input placeholder={t('mail.subject')} value={f.subject} onChange={e => setF({ ...f, subject: e.target.value })} />
         <Textarea rows={8} placeholder={t('mail.body')} value={f.body} onChange={e => setF({ ...f, body: e.target.value })} />

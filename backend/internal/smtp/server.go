@@ -12,6 +12,7 @@ import (
 
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/rules"
 
 	"gorm.io/gorm"
 )
@@ -118,7 +119,12 @@ func saveMail(db *gorm.DB, from, to, raw string) {
 		return
 	}
 	subject, body, atts := message.ParseInbound(raw)
-	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Subject: subject, Body: body, Attachments: atts, Folder: "inbox"})
+	// CEL 规则引擎：命中则投递到目标文件夹（默认 trash）
+	folder := rules.Apply(db, u.ID, rules.Input{
+		From: from, To: to, Subject: subject, Body: body,
+		Size: len(raw), Attachments: len(message.ParseAttachments(atts)),
+	}, "inbox").Folder
+	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Subject: subject, Body: body, Attachments: atts, Folder: folder})
 }
 
 // recipientExists 判断收件人是否为本地已有用户（RCPT 阶段就拒绝未知收件人，避免静默丢信）。

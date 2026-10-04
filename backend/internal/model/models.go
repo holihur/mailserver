@@ -3,13 +3,15 @@ package model
 import "time"
 
 type User struct {
-	ID        uint      `gorm:"primaryKey" json:"id"`
-	Email     string    `gorm:"uniqueIndex;size:255" json:"email"`
-	Name      string    `gorm:"size:100" json:"name"`
-	PassHash  string    `gorm:"size:255" json:"-"`
-	Admin     bool      `json:"admin"`    // 管理员：可进 /api/admin 管理后台
-	Disabled  bool      `json:"disabled"` // 禁用：Web/API/收发信全部拒绝
-	CreatedAt time.Time `json:"created_at"`
+	ID          uint      `gorm:"primaryKey" json:"id"`
+	Email       string    `gorm:"uniqueIndex;size:255" json:"email"`
+	Name        string    `gorm:"size:100" json:"name"`
+	PassHash    string    `gorm:"size:255" json:"-"`
+	Admin       bool      `json:"admin"`             // 管理员：可进 /api/admin 管理后台
+	Disabled    bool      `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
+	TOTPSecret  string    `gorm:"size:255" json:"-"` // AES-GCM 加密的 TOTP 密钥
+	TOTPEnabled bool      `json:"totp_enabled"`      // 登录是否要求动态验证码
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // MailToken 邮件客户端专用令牌（PAT，应用专用密码）。
@@ -90,4 +92,45 @@ type Mail struct {
 	RelayErr    string    `gorm:"size:500" json:"relay_err"`
 	Attempts    int       `json:"attempts"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+// MailRule 基于 CEL 的收信规则：表达式命中后把邮件投递到指定文件夹（默认 trash）。
+// UserID=0 为整站规则（仅管理员维护），>0 为用户级规则。优先级大的先匹配。
+type MailRule struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	UserID     uint      `gorm:"index" json:"user_id"`
+	Name       string    `gorm:"size:120" json:"name"`
+	Enabled    bool      `json:"enabled"`
+	Priority   int       `json:"priority"`
+	Expression string    `gorm:"type:text" json:"expression"` // CEL，返回 bool
+	Action     string    `gorm:"size:20" json:"action"`       // trash | move
+	Folder     string    `gorm:"size:30" json:"folder"`       // action=move 时的目标文件夹
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// Contact 用户联系人（通讯录）。Note 为备注，可随时修改。
+type Contact struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"uniqueIndex:idx_contact_user_email;index" json:"user_id"`
+	Email     string    `gorm:"uniqueIndex:idx_contact_user_email;size:255" json:"email"`
+	Name      string    `gorm:"size:120" json:"name"`
+	Note      string    `gorm:"size:500" json:"note"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// MailRoute 外发邮件路由（管理员配置）：按收件人域名把邮件交给指定中继 / 直连 / 丢弃。
+// Domain 支持精确域名（example.com）或后缀（.example.com 匹配子域）；Priority 大的先匹配。
+type MailRoute struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Domain    string    `gorm:"size:255;index" json:"domain"`
+	Action    string    `gorm:"size:20" json:"action"` // relay | direct | discard
+	RelayHost string    `gorm:"size:255" json:"relay_host"`
+	RelayPort string    `gorm:"size:10" json:"relay_port"`
+	RelayUser string    `gorm:"size:255" json:"relay_user"`
+	RelayPass string    `gorm:"size:512" json:"-"` // AES-GCM 加密
+	RelayFrom string    `gorm:"size:255" json:"relay_from"`
+	Insecure  bool      `json:"insecure"`
+	Priority  int       `json:"priority"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
 }

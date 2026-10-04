@@ -48,3 +48,27 @@ func TestUserIDErrors(t *testing.T) {
 		t.Fatal("expected signature mismatch")
 	}
 }
+
+func TestTokenTypes(t *testing.T) {
+	SetSecret("unit-test-secret")
+
+	// TOTP 挑战令牌不能当作 access 令牌使用
+	ch, err := SignTOTPChallenge(7, "u@x.y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("GET", "/api/me", nil)
+	req.Header.Set("Authorization", "Bearer "+ch)
+	if _, err := UserID(req); err == nil {
+		t.Fatal("挑战令牌不应能通过 UserID")
+	}
+	if uid, err := TOTPChallengeUserID(ch); err != nil || uid != 7 {
+		t.Fatalf("挑战令牌解析失败: uid=%d err=%v", uid, err)
+	}
+
+	// access 令牌不能当挑战令牌
+	acc, _ := Sign(7, "u@x.y")
+	if _, err := TOTPChallengeUserID(acc); err == nil {
+		t.Fatal("access 令牌不应通过 TOTPChallengeUserID")
+	}
+}

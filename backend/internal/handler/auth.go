@@ -114,6 +114,12 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 401, map[string]string{"error": "账号或密码错误"})
 		return
 	}
+	// 两步验证：先返回挑战令牌，再由 /api/login/totp 完成登录
+	if u.TOTPEnabled {
+		ch, _ := auth.SignTOTPChallenge(u.ID, u.Email)
+		writeJSON(w, 200, map[string]any{"totp_required": true, "challenge": ch})
+		return
+	}
 	if !u.Admin && isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), u.Email) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)

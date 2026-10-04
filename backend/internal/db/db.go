@@ -22,7 +22,7 @@ func Open(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}, &model.DnsProvider{}, &model.AcmeConfig{}, &model.Setting{}, &model.MailToken{}); err != nil {
+	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}, &model.DnsProvider{}, &model.AcmeConfig{}, &model.Setting{}, &model.MailToken{}, &model.MailRule{}, &model.Contact{}, &model.MailRoute{}); err != nil {
 		return nil, err
 	}
 	return g, nil

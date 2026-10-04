@@ -205,6 +205,7 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 			Pass     *string `json:"password"`
 			Disabled *bool   `json:"disabled"`
 			Admin    *bool   `json:"admin"`
+			TOTPOff  *bool   `json:"totp_off"` // 重置（关闭并清除）两步验证
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "bad body"})
@@ -240,6 +241,10 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			upd["admin"] = *in.Admin
+		}
+		if in.TOTPOff != nil && *in.TOTPOff {
+			upd["totp_enabled"] = false
+			upd["totp_secret"] = ""
 		}
 		if len(upd) > 0 {
 			a.DB.Model(&u).Updates(upd)

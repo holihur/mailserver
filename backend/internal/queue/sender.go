@@ -18,6 +18,8 @@ import (
 	"mailserver/internal/dkim"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/route"
+	"mailserver/internal/rules"
 	"mailserver/internal/runtimecfg"
 
 	"gorm.io/gorm"
@@ -29,11 +31,13 @@ func Start(db *gorm.DB, rt *runtimecfg.Store) {
 	run := func() {
 		c := rt.Relay()
 		signer := rt.Signer()
+		var routes []model.MailRoute
+		db.Where("enabled = ?", true).Find(&routes)
 		var mails []model.Mail
 		db.Where("folder = ? AND relayed = ? AND attempts < ?", "sent", false, maxAttempts).
 			Order("id").Limit(20).Find(&mails)
 		for i := range mails {
-			deliver(db, c, signer, &mails[i])
+			deliver(db, c, signer, routes, &mails[i])
 		}
 	}
 	run()
@@ -42,7 +46,7 @@ func Start(db *gorm.DB, rt *runtimecfg.Store) {
 	}
 }
 
-func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail) {
+func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []model.MailRoute, m *model.Mail) {
 	recipients := message.Recipients(m)
 	if len(recipients) == 0 {
 		db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": "无收件人"})
@@ -54,8 +58,12 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail
 	for _, rcpt := range recipients {
 		var u model.User
 		if err := db.Where("LOWER(email) = ?", strings.ToLower(rcpt)).First(&u).Error; err == nil {
+			folder := rules.Apply(db, u.ID, rules.Input{
+				From: m.From, To: rcpt, Cc: m.Cc, Bcc: m.Bcc, Subject: m.Subject, Body: m.Body,
+				Size: len(m.Body), Attachments: len(message.ParseAttachments(m.Attachments)),
+			}, "inbox").Folder
 			db.Create(&model.Mail{UserID: u.ID, From: m.From, To: rcpt, Cc: m.Cc,
-				Subject: m.Subject, Body: m.Body, Attachments: m.Attachments, Folder: "inbox"})
+				Subject: m.Subject, Body: m.Body, Attachments: m.Attachments, Folder: folder})
 		} else {
 			external = append(external, rcpt)
 		}
@@ -65,34 +73,69 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, m *model.Mail
 		return
 	}
 
-	// 2) 站外：优先中继；未配中继且开启直连时，直连对方 MX:25
+	// 2) 站外：按域名分组，各自解析路由（relay/direct/discard）
 	msg := buildMsg(c.Name, m, signer)
-	if c.Host == "" {
-		if c.Direct {
-			if err := sendDirect(m.From, external, msg); err != nil {
-				db.Model(m).Updates(map[string]any{"attempts": m.Attempts + 1, "relay_err": trimErr(err)})
-				log.Printf("queue: direct mail %d to %v fail: %v", m.ID, external, err)
-				return
-			}
-			db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
-			return
+	byDomain := map[string][]string{}
+	var order []string
+	for _, rcpt := range external {
+		at := strings.LastIndex(rcpt, "@")
+		if at < 0 {
+			continue
 		}
-		db.Model(m).Updates(map[string]any{
-			"attempts":  m.Attempts + 1,
-			"relay_err": "无外发中继：25 出站被封，请配 SMTP_RELAY_HOST，或在后台开启「直连对方 MX」",
-		})
-		return
+		d := strings.ToLower(rcpt[at+1:])
+		if _, ok := byDomain[d]; !ok {
+			order = append(order, d)
+		}
+		byDomain[d] = append(byDomain[d], rcpt)
 	}
-	// 默认 envelope-from 用本人地址；若中继强制要求认证账号一致，失败后会自动用 RelayFrom 重试一次
-	if err := sendSMTP(c, m.From, external, msg); err != nil {
-		if c.From != "" {
-			if err2 := sendSMTP(c, c.From, external, msg); err2 == nil {
-				db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
-				return
+	var firstErr error
+	for _, dom := range order {
+		rcpts := byDomain[dom]
+		rt := route.Match(routes, dom)
+		switch {
+		case rt != nil && rt.Action == "discard":
+			log.Printf("queue: mail %d to %s discarded by route", m.ID, dom)
+		case rt != nil && rt.Action == "direct":
+			if err := sendDirect(m.From, rcpts, msg); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		case rt != nil && rt.Action == "relay":
+			rc := route.Relay(rt)
+			if err := sendSMTP(rc, m.From, rcpts, msg); err != nil {
+				if rc.From != "" {
+					if err2 := sendSMTP(rc, rc.From, rcpts, msg); err2 == nil {
+						continue
+					}
+				}
+				if firstErr == nil {
+					firstErr = err
+				}
+			}
+		default:
+			// 无匹配路由：用全局中继 / 直连
+			if c.Host == "" {
+				if c.Direct {
+					if err := sendDirect(m.From, rcpts, msg); err != nil && firstErr == nil {
+						firstErr = err
+					}
+				} else if firstErr == nil {
+					firstErr = fmt.Errorf("无外发中继：25 出站被封，请配 SMTP_RELAY_HOST，或在后台开启「直连对方 MX」")
+				}
+			} else if err := sendSMTP(c, m.From, rcpts, msg); err != nil {
+				if c.From != "" {
+					if err2 := sendSMTP(c, c.From, rcpts, msg); err2 == nil {
+						continue
+					}
+				}
+				if firstErr == nil {
+					firstErr = err
+				}
 			}
 		}
-		db.Model(m).Updates(map[string]any{"attempts": m.Attempts + 1, "relay_err": trimErr(err)})
-		log.Printf("queue: mail %d to %v fail: %v", m.ID, external, err)
+	}
+	if firstErr != nil {
+		db.Model(m).Updates(map[string]any{"attempts": m.Attempts + 1, "relay_err": trimErr(firstErr)})
+		log.Printf("queue: mail %d external fail: %v", m.ID, firstErr)
 		return
 	}
 	db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})

@@ -84,10 +84,15 @@ func main() {
 	au.RL = rl
 	mb := &handler.MailBox{DB: g}
 	tb := &handler.TokenBox{DB: g}
+	contacts := &handler.ContactBox{DB: g}
+	totpBox := &handler.TOTPBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
 
 	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
 	rt := runtimecfg.New(g, cfg)
+	rb := &handler.RuleBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails}
+	srb := &handler.RuleBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails, Site: true}
+	rbx := &handler.RouteBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails}
 
 	// 动态 TLS 证书：支持后台手动上传或 ACME 自动签发后热生效
 	cert := certstore.New(cfg.CertDir)
@@ -172,6 +177,11 @@ func main() {
 	mux.HandleFunc("/api/register", cors(au.Register))
 	mux.HandleFunc("/api/site", cors(au.Site))
 	mux.HandleFunc("/api/login", cors(au.Login))
+	mux.HandleFunc("/api/login/totp", cors(au.LoginTOTP))
+	mux.HandleFunc("/api/totp", cors(totpBox.Status))
+	mux.HandleFunc("/api/totp/setup", cors(totpBox.Setup))
+	mux.HandleFunc("/api/totp/enable", cors(totpBox.Enable))
+	mux.HandleFunc("/api/totp/disable", cors(totpBox.Disable))
 	mux.HandleFunc("/api/me", cors(au.Me))
 	mux.HandleFunc("/api/mails", cors(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
@@ -188,6 +198,12 @@ func main() {
 	mux.HandleFunc("/api/mails/", cors(mb.One))
 	mux.HandleFunc("/api/tokens", cors(tb.List))
 	mux.HandleFunc("/api/tokens/", cors(tb.One))
+	mux.HandleFunc("/api/rules", cors(rb.List))
+	mux.HandleFunc("/api/rules/test", cors(rb.Test))
+	mux.HandleFunc("/api/rules/", cors(rb.One))
+	mux.HandleFunc("/api/contacts", cors(contacts.List))
+	mux.HandleFunc("/api/contacts/", cors(contacts.One))
+	mux.HandleFunc("/api/directory", cors(contacts.Directory))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))
@@ -199,6 +215,12 @@ func main() {
 	mux.HandleFunc("/api/admin/update", cors(ad.Update))
 	mux.HandleFunc("/api/admin/users", cors(ad.Users))
 	mux.HandleFunc("/api/admin/users/", cors(ad.UserOne))
+	mux.HandleFunc("/api/admin/rules", cors(srb.List))
+	mux.HandleFunc("/api/admin/rules/test", cors(srb.Test))
+	mux.HandleFunc("/api/admin/rules/", cors(srb.One))
+	mux.HandleFunc("/api/admin/routes", cors(rbx.List))
+	mux.HandleFunc("/api/admin/routes/test", cors(rbx.Test))
+	mux.HandleFunc("/api/admin/routes/", cors(rbx.One))
 	mux.HandleFunc("/api/admin/domains", cors(ad.Domains))
 	mux.HandleFunc("/api/admin/providers", cors(ad.Providers))
 	mux.HandleFunc("/api/admin/providers/", cors(ad.ProviderOne))
