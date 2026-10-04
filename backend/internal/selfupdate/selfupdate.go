@@ -97,6 +97,10 @@ func Run(ctx context.Context, o Options) error {
 	if err != nil {
 		return fmt.Errorf("下载校验和失败: %w", err)
 	}
+	// 供应链：校验 checksums.txt 的 cosign 签名（有签名资源时才做；SELFUPDATE_REQUIRE_SIGNATURE=1 强制）
+	if err := verifyChecksumSignature(ctx, o, client, base, sums); err != nil {
+		return err
+	}
 	want, err := ParseChecksums(string(sums), asset)
 	if err != nil {
 		return err
@@ -127,6 +131,66 @@ func Run(ctx context.Context, o Options) error {
 	}
 	o.log("已更新到 %s：%s", tag, exe)
 	restartService(o)
+	return nil
+}
+
+// requireSignature 是否强制要求签名。
+func requireSignature() bool {
+	return os.Getenv("SELFUPDATE_REQUIRE_SIGNATURE") == "1"
+}
+
+// cosignVerifyArgs 构造 cosign verify-blob 参数（identity/issuer 锁定到 GitHub Actions）。
+func cosignVerifyArgs(repo, cert, sig, blob string) []string {
+	return []string{
+		"verify-blob",
+		"--certificate", cert,
+		"--signature", sig,
+		"--certificate-identity-regexp", "^https://github.com/" + repo + "/.*$",
+		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+		blob,
+	}
+}
+
+// verifyChecksumSignature 下载 .sig/.pem 并调用 cosign 验签；无签名资源时按需降级。
+func verifyChecksumSignature(ctx context.Context, o Options, client *http.Client, base string, sums []byte) error {
+	sig, err := httpGet(ctx, client, base+"checksums.txt.sig")
+	if err != nil {
+		if requireSignature() {
+			return fmt.Errorf("缺少 checksums.txt.sig（已设 SELFUPDATE_REQUIRE_SIGNATURE=1）")
+		}
+		o.log("未找到签名文件，跳过 cosign 验签（仅 sha256）")
+		return nil
+	}
+	cert, err := httpGet(ctx, client, base+"checksums.txt.pem")
+	if err != nil {
+		if requireSignature() {
+			return fmt.Errorf("缺少 checksums.txt.pem: %w", err)
+		}
+		return nil
+	}
+	if _, err := exec.LookPath("cosign"); err != nil {
+		if requireSignature() {
+			return fmt.Errorf("未安装 cosign，无法验签")
+		}
+		o.log("未安装 cosign，跳过验签（仅 sha256）")
+		return nil
+	}
+	dir, err := os.MkdirTemp("", "msverify")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	sumPath := filepath.Join(dir, "checksums.txt")
+	sigPath := filepath.Join(dir, "checksums.txt.sig")
+	certPath := filepath.Join(dir, "checksums.txt.pem")
+	_ = os.WriteFile(sumPath, sums, 0o600)
+	_ = os.WriteFile(sigPath, sig, 0o600)
+	_ = os.WriteFile(certPath, cert, 0o600)
+	cmd := exec.CommandContext(ctx, "cosign", cosignVerifyArgs(o.Repo, certPath, sigPath, sumPath)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("cosign 验签失败: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+	o.log("cosign 验签通过")
 	return nil
 }
 

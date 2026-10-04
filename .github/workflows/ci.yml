@@ -50,6 +50,13 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Lint (only new issues)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: backend
+          only-new-issues: true
+
       - name: Build
         env:
           CGO_ENABLED: "0"

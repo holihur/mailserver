@@ -66,6 +66,7 @@ services:
       SEND_DAILY_LIMIT: ${SEND_DAILY_LIMIT:-500}
       SEND_PER_MINUTE: ${SEND_PER_MINUTE:-20}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
+      MTA_STS_MODE: ${MTA_STS_MODE:-none}
     volumes: [maildata:/data]
     restart: unless-stopped
     mem_limit: 192m

@@ -125,15 +125,18 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 	if err := a.DB.Where("email = ?", in.Email).First(&u).Error; err != nil {
 		// 兼容历史大小写不一致的数据
 		if err := a.DB.Where("LOWER(email) = ?", strings.ToLower(strings.TrimSpace(in.Email))).First(&u).Error; err != nil {
+			a.recordLogin(0, in.Email, r, false)
 			writeJSON(w, 401, map[string]string{"error": "账号或密码错误"})
 			return
 		}
 	}
 	if u.Disabled {
+		a.recordLogin(u.ID, u.Email, r, false)
 		writeJSON(w, 401, map[string]string{"error": "账号已禁用，请联系管理员"})
 		return
 	}
 	if bcrypt.CompareHashAndPassword([]byte(u.PassHash), []byte(in.Pass)) != nil {
+		a.recordLogin(u.ID, u.Email, r, false)
 		writeJSON(w, 401, map[string]string{"error": "账号或密码错误"})
 		return
 	}
@@ -148,6 +151,7 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		a.DB.Model(&u).Update("admin", true)
 	}
 	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
+	a.recordLogin(u.ID, u.Email, r, true)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": u})
 }
 
@@ -189,6 +193,9 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	u.QuotaUsed = quota.Usage(a.DB, uid)
 	writeJSON(w, 200, u)
 }
+
+// NotifyLogin 由 main 注入：新 IP 登录时给用户发提醒邮件。
+var NotifyLogin func(db *gorm.DB, uid uint, email, ip, ua string)
 
 // 常见弱密码（小写）拦截，配合长度要求。
 var weakPasswords = map[string]bool{
@@ -246,12 +253,64 @@ func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.New), bcrypt.DefaultCost)
 	newVer := u.TokenVersion + 1
 	if err := a.DB.Model(&model.User{}).Where("id = ?", uid).Updates(map[string]any{
-		"pass_hash": string(hash), "token_version": newVer,
+		"pass_hash": string(hash), "token_version": newVer, "must_change_password": false,
 	}).Error; err != nil {
 		writeJSON(w, 500, map[string]string{"error": "保存失败"})
 		return
 	}
 	// 换发当前会话的新令牌，其余旧令牌因版本不符立即失效
+	tok, _ := auth.Sign(u.ID, u.Email, newVer)
+	writeJSON(w, 200, map[string]any{"ok": true, "token": tok})
+}
+
+// recordLogin 记录登录事件；首次从某 IP 成功登录时触发告警钩子。
+func (a *Auth) recordLogin(uid uint, email string, r *http.Request, success bool) {
+	ip := clientIP(r)
+	ua := r.Header.Get("User-Agent")
+	if len(ua) > 200 {
+		ua = ua[:200]
+	}
+	a.DB.Create(&model.LoginEvent{UserID: uid, Email: strings.ToLower(strings.TrimSpace(email)), IP: ip, UserAgent: ua, Success: success})
+	if success && uid != 0 && NotifyLogin != nil {
+		var n int64
+		a.DB.Model(&model.LoginEvent{}).Where("user_id = ? AND success = ? AND ip = ?", uid, true, ip).Count(&n)
+		if n == 1 {
+			NotifyLogin(a.DB, uid, email, ip, ua)
+		}
+	}
+}
+
+// GET /api/me/logins -> 最近 30 条登录历史
+func (a *Auth) Logins(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(a.DB, w, r)
+	if !ok {
+		return
+	}
+	var evs []model.LoginEvent
+	a.DB.Where("user_id = ?", uid).Order("id DESC").Limit(30).Find(&evs)
+	if evs == nil {
+		evs = []model.LoginEvent{}
+	}
+	writeJSON(w, 200, evs)
+}
+
+// POST /api/me/logout-all -> 递增 token_version，登出所有设备（当前会话换发新 token）
+func (a *Auth) LogoutAll(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(a.DB, w, r)
+	if !ok {
+		return
+	}
+	if r.Method != "POST" {
+		w.WriteHeader(405)
+		return
+	}
+	var u model.User
+	if err := a.DB.First(&u, uid).Error; err != nil {
+		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return
+	}
+	newVer := u.TokenVersion + 1
+	a.DB.Model(&model.User{}).Where("id = ?", uid).Update("token_version", newVer)
 	tok, _ := auth.Sign(u.ID, u.Email, newVer)
 	writeJSON(w, 200, map[string]any{"ok": true, "token": tok})
 }

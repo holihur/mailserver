@@ -70,7 +70,7 @@ export default function MailApp() {
     }).catch(() => {})
     api.folders().then(setFolders).catch(() => {})
   }
-  useEffect(() => { api.me().then(setMe).catch(() => { location.href = '/login' }) }, [])
+  useEffect(() => { api.me().then((m: any) => { setMe(m); if (m?.must_change_password) navigate('/security') }).catch(() => { location.href = '/login' }) }, [])
   useEffect(() => { setSel(null); setView('list'); setPage(1); load(1, sort) }, [folder])
   useEffect(() => { localStorage.setItem('pref.folder', folder) }, [folder])
   useEffect(() => { localStorage.setItem('pref.sort', sort) }, [sort])

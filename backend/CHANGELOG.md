@@ -17,13 +17,22 @@
 - **发信节流**（#12）：每用户每日/每分钟发信配额（`SEND_DAILY_LIMIT=500`、`SEND_PER_MINUTE=20`），超限拒绝入队并标记失败，覆盖网页/JMAP/MCP/SMTP 提交。
 - **PAT 最小权限**（#18）：新建应用专用密码默认只勾 `imap,smtp`，显式全选才存全量（不再用空串代表全选，防止未来 scope 静默扩权）；旧空-scope token 标「全权限（旧）」。
 - **/metrics 鉴权**（#19）：配 `METRICS_TOKEN` 则要求 Bearer，否则仅允许本机访问，不再公网裸奔。
+- **进阶加固**：#4 补 **JMAP/MCP 的 HTTP 层 IP 限流**（Redis，120/分）；#5 自更新增加 **cosign 运行时验签**（`SELFUPDATE_REQUIRE_SIGNATURE=1` 强制）；#7 入站 SMTP 增加 **STARTTLS**；#9 增加**登录历史 / 新 IP 登录邮件提醒 / 管理员重置后强制改密 / 一键退出所有设备**；#12 **新账号 24h 内降限额（graduated trust）**、超限 `[ALERT]` 日志、后台展示「今日已发」。
+
+### 新增
+- **附件 blob 落盘**（#6）：新增内容寻址 `internal/blob`（sha256 去重），入站附件改为落盘（DB 仅存元数据 + blob id），读写路径自动兼容旧 base64；前端/接口自动 hydrate。
+- **一键备份 / 恢复**（#13）：`mailserver backup [文件]` 导出 DB 全表 JSON + `DATA_DIR`（含证书/blob）为 tar.gz；`mailserver restore <文件>` 恢复。
+- **正文全文检索**（#14）：搜索覆盖 **正文**；启用 `pg_trgm` + GIN 索引加速 `ILIKE` 子串搜索（扩展不可用时自动退化）。
+- **MTA-STS**（#17）：`MTA_STS_MODE=testing|enforce` 时提供 `/.well-known/mta-sts.txt`。
+- **工程护栏**（#20）：新增 Dependabot（gomod/npm/docker/actions）、golangci-lint（CI，仅新版问题）、GitHub **CodeQL**（Go + TS）。
 
 ### 修复
 - **入站 SMTP 多收件人静默丢信**（#1）：`RCPT TO` 改为逐个收集并逐个投递，`MAIL FROM`/`RSET` 清空收件人，另补 DATA 段 `.` 透明传输；补单测。
 - **邮件大小上限写死 1MB**（#2）：新增可配置 `MAX_MESSAGE_MB`（默认 25），入站 / 提交统一；超限仍回 `552 5.3.4` 但**保持协议同步**（丢弃剩余数据直到结束符），不再协议错位；补单测。
 - **IMAP 假 IDLE + 缺扩展**（#8）：IDLE 改为阻塞等 DONE 的同时每 3s 推送 `EXISTS`（不再死等）；新增 `MOVE`/`UIDPLUS`（COPYUID/APPENDUID）/`NAMESPACE`/`ID`/`QUOTA`（GETQUOTA/GETQUOTAROOT）；连接加 30 分钟读超时；补单测。
 - **零环路保护**（#15）：入站按 `Received` 跳数 >50 拒收；别名改为递归展开（visited + 深度上限），互指/自指不再滚雪球；补单测。
-- **Sieve `reject` 空操作**（#16）：实现 `reject`/`ereject`（拒收不投递）；未知动作改为**编译期报错**（`CHECKSCRIPT`/`PUTSCRIPT` 返回 NO），不再静默吞掉；新增 `vacation` 自动回复（`VacationHook` + Redis 7 天去重）；ManageSieve 能力改为从引擎支持集生成；补单测。
+- **Sieve `reject` 空操作**（#16）：实现 `reject`/`ereject`（拒收不投递）；未知动作改为**编译期报错**（`CHECKSCRIPT`/`PUTSCRIPT` 返回 NO），不再静默吞掉；新增 `vacation` 自动回复（`VacationHook` + Redis 7 天去重，**批量/自动邮件不回复**）；ManageSieve 能力改为从引擎支持集生成；Sieve 页新增「外出自动回复」入口；补单测。
+- **环路保护补全**（#15）：渲染/外发邮件带 `Delivered-To` 与 `Received` 头。
 
 ## [v0.15.0] - 2026-10-04
 

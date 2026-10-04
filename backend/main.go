@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -16,6 +17,8 @@ import (
 	"time"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/backup"
+	"mailserver/internal/blob"
 	"mailserver/internal/certstore"
 	"mailserver/internal/config"
 	"mailserver/internal/db"
@@ -30,6 +33,7 @@ import (
 	"mailserver/internal/mailqueue"
 	"mailserver/internal/managesieve"
 	"mailserver/internal/mcp"
+	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/pop3"
 	"mailserver/internal/ratelimit"
@@ -67,10 +71,44 @@ func main() {
 			}
 			return
 		case "help", "-h", "--help":
-			fmt.Println("用法: mailserver [version|update]")
+			fmt.Println("用法: mailserver [version|update|backup|restore]")
 			fmt.Println("  (无参数)  启动服务")
 			fmt.Println("  version  显示版本")
 			fmt.Println("  update   从 GitHub Release 更新到最新版并重启服务")
+			fmt.Println("  backup [文件]   备份数据库与数据目录到 tar.gz（默认自动命名）")
+			fmt.Println("  restore <文件>  从备份恢复")
+			return
+		case "backup":
+			_ = godotenv.Load()
+			c := config.Load()
+			g, err := db.Open(c.DatabaseURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+			out := "backup-" + time.Now().Format("20060102-150405") + ".tar.gz"
+			if len(os.Args) > 2 {
+				out = os.Args[2]
+			}
+			if err := backup.Create(g, c.DataDir, out); err != nil {
+				log.Fatal("备份失败: ", err)
+			}
+			fmt.Println("备份完成:", out)
+			return
+		case "restore":
+			_ = godotenv.Load()
+			c := config.Load()
+			if len(os.Args) < 3 {
+				fmt.Println("用法: mailserver restore <备份文件>")
+				return
+			}
+			g, err := db.Open(c.DatabaseURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := backup.Restore(g, c.DataDir, os.Args[2]); err != nil {
+				log.Fatal("恢复失败: ", err)
+			}
+			fmt.Println("恢复完成")
 			return
 		}
 	}
@@ -95,6 +133,12 @@ func main() {
 	}
 	auth.SetSecret(cfg.JWTSecret)
 	secret.SetKey(cfg.JWTSecret)
+	// 附件内容寻址存储（DATA_DIR/blobs）；不可用则退化为 base64
+	if bs, err := blob.New(filepath.Join(cfg.DataDir, "blobs")); err != nil {
+		log.Println("blob 存储初始化失败，附件仍用 base64:", err)
+	} else {
+		message.SetBlobStore(bs)
+	}
 	if cfg.JWTSecret == "dev-secret-change-me-32chars!!" || len(cfg.JWTSecret) < 16 {
 		log.Println("⚠️  安全警告：JWT_SECRET 为默认值或过短；它同时用于登录令牌与凭证加密，请设置随机 32 位以上")
 	}
@@ -130,7 +174,21 @@ func main() {
 		log.Fatal("发信队列需要 Redis（REDIS_URL）：", err)
 	}
 	mb.MQ = mq
-	// SIP Sieve vacation：发自动回复，按（用户,发件人）7 天去重
+	// 新 IP 登录提醒：给用户自己发一封站内信
+	handler.NotifyLogin = func(db *gorm.DB, uid uint, email, ip, ua string) {
+		var u model.User
+		if err := db.First(&u, uid).Error; err != nil {
+			return
+		}
+		body := fmt.Sprintf("您的账号 %s 于 %s 从新 IP 登录：\n\nIP: %s\n设备: %s\n\n如非本人操作，请立即修改密码并退出所有设备。\n",
+			email, time.Now().Format(time.RFC3339), ip, ua)
+		m := model.Mail{UserID: uid, From: u.Email, To: u.Email, Subject: "新登录提醒", Body: body, Folder: "sent", Read: true, Status: "queued"}
+		if err := db.Create(&m).Error; err != nil {
+			return
+		}
+		_ = mq.EnqueueSend(m.ID)
+	}
+	// 发信 vacation：自动回复，按（用户,发件人）7 天去重
 	deliver.VacationHook = func(db *gorm.DB, uid uint, from, subject, text string) {
 		if !mq.AllowVacation(uid, from, 7) {
 			return
@@ -185,7 +243,7 @@ func main() {
 	host := rt.MailHost
 	maxMsg := int64(cfg.MaxMessageMB) << 20
 
-	go mailsmtp.Serve(":"+cfg.SMTPport, g, maxMsg, cfg.DMARCEnforce)
+	go mailsmtp.Serve(":"+cfg.SMTPport, g, maxMsg, cfg.DMARCEnforce, tlsConf)
 	go external.Start(g)
 	handler.StartAuditRetention(g)
 	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, host, g, tlsConf, maxMsg)
@@ -259,6 +317,8 @@ func main() {
 	mux.HandleFunc("/api/gdpr/delete", cors(gdpr.Delete))
 	mux.HandleFunc("/api/me", cors(au.Me))
 	mux.HandleFunc("/api/me/password", cors(au.ChangePassword))
+	mux.HandleFunc("/api/me/logins", cors(au.Logins))
+	mux.HandleFunc("/api/me/logout-all", cors(au.LogoutAll))
 	mux.HandleFunc("/api/mails", cors(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			mb.List(w, r)
@@ -291,12 +351,36 @@ func main() {
 	mux.HandleFunc("/api/sieve/check", cors(sieveBox.Check))
 	mux.HandleFunc("/api/sieve/", cors(sieveBox.One))
 	mux.HandleFunc("/api/proxy/image", cors(proxyBox.Image))
-	mux.HandleFunc("/mcp", cors(mcpSrv.Handler))
-	mux.HandleFunc("/jmap", cors(jmapSrv.Handler))
-	mux.HandleFunc("/jmap/", cors(jmapSrv.Handler))
-	mux.HandleFunc("/.well-known/jmap", cors(jmapSrv.Handler))
+	// JMAP / MCP：HTTP 层按 IP 限流（复用 Redis），防应用层 DDoS / 撞库
+	rlHTTP := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			ip := r.RemoteAddr
+			if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+				ip = h
+			}
+			if !rl.Allow("http:"+ip, 120, time.Minute) {
+				http.Error(w, "too many requests", http.StatusTooManyRequests)
+				return
+			}
+			next(w, r)
+		}
+	}
+	mux.HandleFunc("/mcp", cors(rlHTTP(mcpSrv.Handler)))
+	mux.HandleFunc("/jmap", cors(rlHTTP(jmapSrv.Handler)))
+	mux.HandleFunc("/jmap/", cors(rlHTTP(jmapSrv.Handler)))
+	mux.HandleFunc("/.well-known/jmap", cors(rlHTTP(jmapSrv.Handler)))
 	mux.HandleFunc("/metrics", metricsBox.Serve)
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
+	// MTA-STS 策略文件（配 MTA_STS_MODE=testing|enforce 时生效）
+	mux.HandleFunc("/.well-known/mta-sts.txt", func(w http.ResponseWriter, r *http.Request) {
+		mode := strings.ToLower(strings.TrimSpace(cfg.MtaStsMode))
+		if mode != "testing" && mode != "enforce" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "version: STSv1\nmode: %s\nmx: %s\nmax_age: 604800\n", mode, rt.MailHost())
+	})
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))
 	mux.HandleFunc("/api/domains/", cors(dns.DomainOne))

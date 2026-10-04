@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -133,5 +134,15 @@ func TestRepoAllowed(t *testing.T) {
 	t.Setenv("MAILSERVER_REPO_ALLOW_ANY", "1")
 	if !RepoAllowed("evil/mailserver") {
 		t.Fatal("放开后应允许")
+	}
+}
+
+func TestCosignVerifyArgs(t *testing.T) {
+	args := cosignVerifyArgs("holihur/mailserver", "c.pem", "s.sig", "sums.txt")
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"verify-blob", "holihur/mailserver", "token.actions.githubusercontent.com", "--signature", "--certificate"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("缺少 %q: %v", want, args)
+		}
 	}
 }

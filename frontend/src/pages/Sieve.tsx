@@ -12,6 +12,7 @@ export default function Sieve() {
   const [list, setList] = useState<any[]>([])
   const [name, setName] = useState('main')
   const [script, setScript] = useState(template)
+  const [vac, setVac] = useState('')
 
   async function load() {
     try { setList(await api.sieve()) } catch {}
@@ -56,6 +57,13 @@ export default function Sieve() {
           <Button size="sm" variant="outline" onClick={reset}><Plus />{t('sieve.new')}</Button>
         </div>
         <Textarea rows={14} className="font-mono text-xs" value={script} onChange={e => setScript(e.target.value)} />
+        <div className="flex items-center gap-2">
+          <Input className="h-8 text-xs" placeholder={t('sieve.vacationPlaceholder')} value={vac} onChange={e => setVac(e.target.value)} />
+          <Button size="sm" variant="outline" type="button" disabled={!vac.trim()}
+            onClick={() => setScript(`require ["vacation"];\n\nvacation :days 7 "${vac.replace(/"/g, '')}";\n`)}>
+            {t('sieve.vacation')}
+          </Button>
+        </div>
         <div className="flex items-center gap-2">
           <Button size="sm" onClick={save}><Save />{t('common.save')}</Button>
           <Button size="sm" variant="outline" onClick={check}><Check />{t('sieve.check')}</Button>

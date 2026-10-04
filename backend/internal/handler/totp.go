@@ -167,6 +167,7 @@ func (a *Auth) LoginTOTP(w http.ResponseWriter, r *http.Request) {
 	}
 	raw, err := secret.Decrypt(u.TOTPSecret)
 	if err != nil || !totp.Verify(string(raw), strings.TrimSpace(in.Code)) {
+		a.recordLogin(u.ID, u.Email, r, false)
 		writeJSON(w, 401, map[string]string{"error": "动态验证码错误"})
 		return
 	}
@@ -175,5 +176,6 @@ func (a *Auth) LoginTOTP(w http.ResponseWriter, r *http.Request) {
 		a.DB.Model(&u).Update("admin", true)
 	}
 	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
+	a.recordLogin(u.ID, u.Email, r, true)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": u})
 }

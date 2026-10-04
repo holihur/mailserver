@@ -74,7 +74,7 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 	tx := m.DB.Where("user_id = ? AND folder = ?", uid, folder).Order(order)
 	if q != "" {
 		like := "%" + q + "%"
-		tx = tx.Where("subject LIKE ? OR \"from\" LIKE ? OR \"to\" LIKE ?", like, like, like)
+		tx = tx.Where("subject ILIKE ? OR \"from\" ILIKE ? OR \"to\" ILIKE ? OR body ILIKE ?", like, like, like, like)
 	}
 	var total int64
 	tx.Model(&model.Mail{}).Count(&total)
@@ -82,6 +82,9 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 	tx.Offset((page - 1) * size).Limit(size).Find(&items)
 	if items == nil {
 		items = []model.Mail{}
+	}
+	for i := range items {
+		items[i].Attachments = message.HydrateAttachments(items[i].Attachments)
 	}
 	writeJSON(w, 200, map[string]any{"total": total, "items": items, "page": page})
 }
@@ -145,6 +148,7 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 			m.DB.Model(&mail).Update("read", true)
 			mail.Read = true
 		}
+		mail.Attachments = message.HydrateAttachments(mail.Attachments)
 		writeJSON(w, 200, mail)
 	case "PATCH":
 		var in struct {

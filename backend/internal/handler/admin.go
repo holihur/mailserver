@@ -113,6 +113,7 @@ func (a *Admin) Overview(w http.ResponseWriter, r *http.Request) {
 type adminUser struct {
 	model.User
 	MailCount int64 `json:"mail_count"`
+	SentToday int64 `json:"sent_today"`
 }
 
 // GET /api/admin/users（带各账号邮件数）  POST /api/admin/users（新建邮箱账号）
@@ -136,9 +137,18 @@ func (a *Admin) Users(w http.ResponseWriter, r *http.Request) {
 	for _, c := range counts {
 		m[c.UserID] = c.N
 	}
+	// 今日已发（sent 且今天创建），供后台查看 / 手动核对
+	now := time.Now()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	var sent []cnt
+	a.DB.Model(&model.Mail{}).Select("user_id, COUNT(*) AS n").Where("folder = ? AND created_at >= ?", "sent", start).Group("user_id").Scan(&sent)
+	sentMap := make(map[uint]int64, len(sent))
+	for _, c := range sent {
+		sentMap[c.UserID] = c.N
+	}
 	out := make([]adminUser, 0, len(users))
 	for _, u := range users {
-		out = append(out, adminUser{User: u, MailCount: m[u.ID]})
+		out = append(out, adminUser{User: u, MailCount: m[u.ID], SentToday: sentMap[u.ID]})
 	}
 	writeJSON(w, 200, out)
 }
@@ -238,6 +248,7 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 			hash, _ := bcrypt.GenerateFromPassword([]byte(*in.Pass), bcrypt.DefaultCost)
 			upd["pass_hash"] = string(hash)
 			upd["token_version"] = gorm.Expr("token_version + ?", 1) // 重置密码后旧令牌立即失效
+			upd["must_change_password"] = true                       // 强制用户下次登录改密
 		}
 		if in.Disabled != nil {
 			upd["disabled"] = *in.Disabled

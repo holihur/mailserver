@@ -65,6 +65,7 @@ services:
       SEND_DAILY_LIMIT: ${SEND_DAILY_LIMIT:-500}
       SEND_PER_MINUTE: ${SEND_PER_MINUTE:-20}
       METRICS_TOKEN: ${METRICS_TOKEN:-}
+      MTA_STS_MODE: ${MTA_STS_MODE:-none}
       # 隐式 TLS 端口（证书可在管理后台一键申请/上传）
       SUBMIT_TLS_PORT: ${SUBMIT_TLS_PORT:-465}
       IMAP_TLS_PORT: ${IMAP_TLS_PORT:-993}

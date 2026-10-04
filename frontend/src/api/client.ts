@@ -28,6 +28,8 @@ export const api = {
   gdprDelete: (password) => req('/api/gdpr/delete', { method: 'POST', body: JSON.stringify({ password }) }),
   me: () => req('/api/me'),
   changePassword: (oldPw, newPw) => req('/api/me/password', { method: 'POST', body: JSON.stringify({ old: oldPw, new: newPw }) }),
+  logins: () => req('/api/me/logins'),
+  logoutAll: () => req('/api/me/logout-all', { method: 'POST' }),
   list: (folder = 'inbox', q = '', page = 1, sort = 'newest') =>
     req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}`),
   unread: () => req('/api/mails/unread'),

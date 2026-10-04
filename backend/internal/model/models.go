@@ -14,6 +14,8 @@ type User struct {
 	Disabled    bool   `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
 	TOTPSecret  string `gorm:"size:255" json:"-"` // AES-GCM 加密的 TOTP 密钥
 	TOTPEnabled bool   `json:"totp_enabled"`      // 登录是否要求动态验证码
+	// MustChangePassword 管理员重置密码后置 true，强制下次登录改密
+	MustChangePassword bool `json:"must_change_password"`
 	// TokenVersion 令牌版本：改密/重置/关闭 TOTP 时自增，旧 access token 立即失效。
 	TokenVersion int       `gorm:"not null;default:0" json:"-"`
 	CreatedAt    time.Time `json:"created_at"`
@@ -53,6 +55,17 @@ type ScheduledMail struct {
 	LastSent    *time.Time `json:"last_sent"`
 	LastError   string     `gorm:"size:500" json:"last_error"`
 	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// LoginEvent 登录历史（成功/失败），用于用户查看与异常告警。
+type LoginEvent struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	UserID    uint      `gorm:"index" json:"user_id"`
+	Email     string    `gorm:"size:255" json:"email"`
+	IP        string    `gorm:"size:64" json:"ip"`
+	UserAgent string    `gorm:"size:255" json:"user_agent"`
+	Success   bool      `json:"success"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 // AuditLog 管理员高危操作审计日志（脱敏后记录）。

@@ -86,7 +86,7 @@ export default function AdminUsers() {
         <b className="text-sm">{t('users.all', { n: users.length })}</b>
         <table className="w-full text-sm mt-3 min-w-[560px]">
           <thead><tr className="text-left text-xs text-muted-foreground">
-            <th className="py-1">{t('users.email')}</th><th>{t('users.name')}</th><th>{t('users.mails')}</th><th>{t('users.quota')}</th><th>{t('users.status')}</th><th className="text-right">{t('users.actions')}</th>
+            <th className="py-1">{t('users.email')}</th><th>{t('users.name')}</th><th>{t('users.mails')}</th><th>{t('users.sentToday')}</th><th>{t('users.quota')}</th><th>{t('users.status')}</th><th className="text-right">{t('users.actions')}</th>
           </tr></thead>
           <tbody>
             {users.map(u => (
@@ -94,6 +94,7 @@ export default function AdminUsers() {
                 <td className="py-2 pr-2">{u.email} {u.admin && <Badge>{t('users.adminBadge')}</Badge>}</td>
                 <td className="pr-2">{u.name}</td>
                 <td className="pr-2">{u.mail_count}</td>
+                <td className="pr-2 text-xs">{u.sent_today ?? 0}</td>
                 <td className="pr-2 text-xs">{u.quota_mb > 0 ? `${u.quota_mb} MB` : t('users.unlimited')}</td>
                 <td className="pr-2">{u.disabled ? <span className="text-red-500 text-xs">{t('users.disabled')}</span> : <span className="text-green-600 text-xs">{t('users.normal')}</span>}</td>
                 <td className="text-right whitespace-nowrap">
@@ -105,7 +106,7 @@ export default function AdminUsers() {
                 </td>
               </tr>
             ))}
-            {users.length === 0 && <tr><td colSpan={6} className="py-4 text-center text-muted-foreground">{t('users.none')}</td></tr>}
+            {users.length === 0 && <tr><td colSpan={7} className="py-4 text-center text-muted-foreground">{t('users.none')}</td></tr>}
           </tbody>
         </table>
       </Card>

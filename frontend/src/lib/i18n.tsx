@@ -273,6 +273,12 @@ export const DICTS = {
 
     'security.title': '账户安全',
     'security.passwordTitle': '修改密码',
+    'security.sessions': '登录历史 / 设备',
+    'security.logoutAll': '退出所有设备',
+    'security.confirmLogoutAll': '确定退出所有设备上的登录？',
+    'security.logoutAllOk': '已退出所有设备',
+    'security.noLogins': '暂无登录记录',
+    'security.mustChange': '管理员已重置你的密码，请立即修改。',
     'security.oldPassword': '原密码',
     'security.newPassword': '新密码（≥8 位）',
     'security.changePassword': '修改密码',
@@ -387,6 +393,8 @@ export const DICTS = {
     'sieve.desc': '用 Sieve 脚本在服务端过滤来信：fileinto 归档、redirect 转发、discard 丢弃。也支持 ManageSieve 客户端（端口 4190，用应用专用密码）。',
     'sieve.name': '脚本名称',
     'sieve.new': '新建',
+    'sieve.vacation': '外出自动回复',
+    'sieve.vacationPlaceholder': '外出回复内容…',
     'sieve.template': `# Sieve 脚本示例
 require ["fileinto"];
 
@@ -540,6 +548,7 @@ if header :contains "Subject" "促销" {
     'users.setQuota': '设置配额',
     'users.all': '全部账号（{n}）',
     'users.mails': '邮件',
+    'users.sentToday': '今日已发',
     'users.status': '状态',
     'users.actions': '操作',
     'users.normal': '正常',
@@ -824,6 +833,12 @@ if header :contains "Subject" "促销" {
 
     'security.title': 'Security',
     'security.passwordTitle': 'Change password',
+    'security.sessions': 'Login history & devices',
+    'security.logoutAll': 'Sign out everywhere',
+    'security.confirmLogoutAll': 'Sign out from all devices?',
+    'security.logoutAllOk': 'Signed out everywhere',
+    'security.noLogins': 'No login records',
+    'security.mustChange': 'An admin reset your password. Please change it now.',
     'security.oldPassword': 'Current password',
     'security.newPassword': 'New password (≥8 chars)',
     'security.changePassword': 'Change password',
@@ -938,6 +953,8 @@ if header :contains "Subject" "促销" {
     'sieve.desc': 'Filter incoming mail server-side with Sieve: fileinto, redirect, discard. ManageSieve clients supported (port 4190, use an app password).',
     'sieve.name': 'Script name',
     'sieve.new': 'New',
+    'sieve.vacation': 'Out-of-office auto-reply',
+    'sieve.vacationPlaceholder': 'Out-of-office message…',
     'sieve.template': `# Sieve script example
 require ["fileinto"];
 
@@ -1091,6 +1108,7 @@ if header :contains "Subject" "promo" {
     'users.setQuota': 'Set quota',
     'users.all': 'All accounts ({n})',
     'users.mails': 'Mail',
+    'users.sentToday': 'Sent today',
     'users.status': 'Status',
     'users.actions': 'Actions',
     'users.normal': 'Active',

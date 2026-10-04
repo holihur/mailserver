@@ -23,6 +23,7 @@ type Options struct {
 	ReceiptFor  uint   // MDN 关联的原邮件 ID
 	AuthResults string // SPF/DKIM/DMARC 结果描述
 	Quarantine  bool   // DMARC 隔离：强制投到垃圾箱
+	Bulk        bool   // 批量/自动生成邮件（不发 vacation 回复）
 }
 
 // VacationHook 由 main 注入：发送 vacation 自动回复（含去重）；未注入则不回复。
@@ -108,7 +109,7 @@ func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, htmlS
 	if discard || reject {
 		return true // 拒收/丢弃：不投递
 	}
-	if vacation != "" && VacationHook != nil && from != "" && !strings.EqualFold(strings.TrimSpace(from), u.Email) {
+	if vacation != "" && !o.Bulk && VacationHook != nil && from != "" && !strings.EqualFold(strings.TrimSpace(from), u.Email) {
 		VacationHook(db, u.ID, from, subject, vacation)
 	}
 	for _, r := range redirects {

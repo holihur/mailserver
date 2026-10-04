@@ -2,6 +2,7 @@ package smtp
 
 import (
 	"bufio"
+	"crypto/tls"
 	"net"
 	"os"
 	"strings"
@@ -42,7 +43,7 @@ func dialHandle(t *testing.T, g *gorm.DB) *smtpClient {
 func dialHandleN(t *testing.T, g *gorm.DB, maxBytes int64) *smtpClient {
 	t.Helper()
 	srv, cli := net.Pipe()
-	go handle(srv, g, maxBytes, "")
+	go handle(srv, g, maxBytes, "", nil)
 	t.Cleanup(func() { cli.Close() })
 	c := &smtpClient{r: bufio.NewReader(cli), w: bufio.NewWriter(cli)}
 	if !strings.HasPrefix(c.read(), "220") {
@@ -73,6 +74,31 @@ func (c *smtpClient) cmd(s string) string {
 			continue
 		}
 		return l
+	}
+}
+
+func TestInboundStartTLSAdvertised(t *testing.T) {
+	srv, cli := net.Pipe()
+	go handle(srv, nil, 1<<20, "", &tls.Config{})
+	defer cli.Close()
+	r := bufio.NewReader(cli)
+	w := bufio.NewWriter(cli)
+	read := func() string { l, _ := r.ReadString('\n'); return strings.TrimRight(l, "\r\n") }
+	if !strings.HasPrefix(read(), "220") {
+		t.Fatal("缺少 greeting")
+	}
+	w.WriteString("EHLO x\r\n")
+	w.Flush()
+	var lines []string
+	for {
+		l := read()
+		lines = append(lines, l)
+		if !strings.HasPrefix(l, "250-") {
+			break
+		}
+	}
+	if !strings.Contains(strings.Join(lines, "\n"), "STARTTLS") {
+		t.Fatalf("EHLO 应通告 STARTTLS: %v", lines)
 	}
 }
 

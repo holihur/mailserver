@@ -4,7 +4,8 @@ import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
 import { useI18n } from '../lib/i18n'
-import { ShieldCheck, Copy, KeyRound, Check, Download, Trash2 } from 'lucide-react'
+import { ShieldCheck, Copy, KeyRound, Check, Download, Trash2, History, LogOut } from 'lucide-react'
+import { cn } from '../lib/utils'
 
 export default function Security() {
   const { t } = useI18n()
@@ -15,11 +16,24 @@ export default function Security() {
   const [pwOld, setPwOld] = useState('')
   const [pwNew, setPwNew] = useState('')
   const [pwBusy, setPwBusy] = useState(false)
+  const [logins, setLogins] = useState<any[]>([])
+  const [mustChange, setMustChange] = useState(false)
 
   async function load() {
     try { const s = await api.totp(); setEnabled(!!s.enabled) } catch { setEnabled(false) }
+    api.me().then((m: any) => setMustChange(!!m.must_change_password)).catch(() => {})
+    api.logins().then(setLogins).catch(() => {})
   }
   useEffect(() => { load() }, [])
+
+  async function logoutAll() {
+    if (!await confirmAsync(t('security.confirmLogoutAll'))) return
+    try {
+      const r: any = await api.logoutAll()
+      if (r?.token) localStorage.setItem('token', r.token)
+      toast(t('security.logoutAllOk'), { type: 'success' })
+    } catch (e: any) { toast(e.message) }
+  }
 
   async function beginSetup() {
     setBusy(true)
@@ -77,6 +91,9 @@ export default function Security() {
 
   return (
     <PageShell title={t('security.title')} icon={ShieldCheck} maxWidth="max-w-2xl">
+        {mustChange && (
+          <p className="text-sm rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3">{t('security.mustChange')}</p>
+        )}
         <Card className="p-4 space-y-3">
           <div className="flex items-center gap-2">
             <KeyRound size={16} />
@@ -131,6 +148,29 @@ export default function Security() {
             <p className="text-xs text-muted-foreground">{t('security.passwordHint')}</p>
             <Button size="sm" disabled={pwBusy || pwNew.length < 8}>{t('security.changePassword')}</Button>
           </form>
+        </Card>
+
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <History size={16} />
+            <b className="text-sm">{t('security.sessions')}</b>
+            <div className="flex-1" />
+            <Button size="sm" variant="outline" onClick={logoutAll}><LogOut />{t('security.logoutAll')}</Button>
+          </div>
+          {logins.length === 0
+            ? <p className="text-sm text-muted-foreground">{t('security.noLogins')}</p>
+            : (
+              <div className="text-sm divide-y divide-border">
+                {logins.map((l: any) => (
+                  <div key={l.id} className="flex items-center gap-2 py-1.5">
+                    <span className={cn('size-2 rounded-full shrink-0', l.success ? 'bg-green-500' : 'bg-red-500')} />
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(l.created_at).toLocaleString()}</span>
+                    <span className="text-xs font-mono">{l.ip}</span>
+                    <span className="text-xs text-muted-foreground truncate ml-auto max-w-[40%]">{l.user_agent}</span>
+                  </div>
+                ))}
+              </div>
+            )}
         </Card>
 
         <Card className="p-4 space-y-3">

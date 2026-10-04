@@ -75,21 +75,29 @@ func (c *Client) allowSend(mailID uint) bool {
 	if err := c.db.Select("user_id").First(&m, mailID).Error; err != nil || m.UserID == 0 {
 		return true
 	}
+	daily := c.daily
+	// graduated trust：新账号前 24h 更严（≤ 50 封/日）
+	if daily > 50 {
+		var u model.User
+		if err := c.db.Select("created_at").First(&u, m.UserID).Error; err == nil && time.Since(u.CreatedAt) < 24*time.Hour {
+			daily = 50
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	block := func(msg string) bool {
 		c.db.Model(&model.Mail{}).Where("id = ?", mailID).Updates(map[string]any{"status": "failed", "relay_err": msg})
-		log.Printf("send limit hit user=%d mail=%d: %s", m.UserID, mailID, msg)
+		log.Printf("[ALERT] send limit hit user=%d mail=%d: %s", m.UserID, mailID, msg)
 		return false
 	}
-	if c.daily > 0 {
+	if daily > 0 {
 		k := fmt.Sprintf("send:day:%d:%s", m.UserID, time.Now().Format("20060102"))
 		if n, err := c.rdb.Incr(ctx, k).Result(); err == nil {
 			if n == 1 {
 				_ = c.rdb.Expire(ctx, k, 24*time.Hour).Err()
 			}
-			if int(n) > c.daily {
-				return block(fmt.Sprintf("超出每日发信配额（%d）", c.daily))
+			if int(n) > daily {
+				return block(fmt.Sprintf("超出每日发信配额（%d）", daily))
 			}
 		}
 	}

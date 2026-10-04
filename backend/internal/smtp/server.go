@@ -5,6 +5,7 @@ package smtp
 
 import (
 	"bufio"
+	"crypto/tls"
 	"fmt"
 	"net"
 	"strconv"
@@ -21,27 +22,28 @@ import (
 	"gorm.io/gorm"
 )
 
-func Serve(addr string, db *gorm.DB, maxBytes int64, dmarc string) {
+func Serve(addr string, db *gorm.DB, maxBytes int64, dmarc string, tlsConf *tls.Config) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		fmt.Println("smtp listen fail:", err)
 		return
 	}
-	fmt.Println("smtp inbound on", addr, "max", maxBytes>>20, "MB")
+	fmt.Println("smtp inbound on", addr, "max", maxBytes>>20, "MB", "tls=", tlsConf != nil)
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		go handle(c, db, maxBytes, dmarc)
+		go handle(c, db, maxBytes, dmarc, tlsConf)
 	}
 }
 
-func handle(c net.Conn, db *gorm.DB, maxBytes int64, dmarc string) {
+func handle(c net.Conn, db *gorm.DB, maxBytes int64, dmarc string, tlsConf *tls.Config) {
 	if maxBytes <= 0 {
 		maxBytes = 25 << 20
 	}
 	remoteIP, _, _ := net.SplitHostPort(c.RemoteAddr().String())
+	encrypted := false
 	defer c.Close()
 	r := bufio.NewReader(c)
 	w := bufio.NewWriter(c)
@@ -97,7 +99,27 @@ func handle(c net.Conn, db *gorm.DB, maxBytes int64, dmarc string) {
 		}
 		switch {
 		case strings.HasPrefix(up, "EHLO"), strings.HasPrefix(up, "HELO"):
-			reply("250-Hello\r\n250 8BITMIME")
+			if tlsConf != nil && !encrypted {
+				reply("250-Hello\r\n250-STARTTLS\r\n250 8BITMIME")
+			} else {
+				reply("250-Hello\r\n250 8BITMIME")
+			}
+		case strings.HasPrefix(up, "STARTTLS"):
+			if tlsConf == nil || encrypted {
+				reply("502 not supported")
+				continue
+			}
+			reply("220 ready")
+			tc := tls.Server(c, tlsConf)
+			if err := tc.Handshake(); err != nil {
+				return
+			}
+			c = tc
+			r = bufio.NewReader(c)
+			w = bufio.NewWriter(c)
+			encrypted = true
+			from, rcpts, data = "", nil, strings.Builder{}
+			inData, overLimit = false, false
 		case strings.HasPrefix(up, "MAIL FROM:"):
 			from = extractAddr(line)
 			rcpts = nil // 新邮件：清空上一封的收件人
@@ -151,6 +173,7 @@ func extractAddr(s string) string {
 func saveMail(db *gorm.DB, from, to, remoteIP, raw, dmarcEnforce string) {
 	in := message.ParseInboundFull(raw)
 	subject, body, htmlBody, atts := in.Subject, in.Body, in.HTML, in.Attachments
+	atts = message.Blobify(atts) // 附件内容寻址落盘（无 store 时保持 base64）
 	to = strings.ToLower(strings.TrimSpace(to))
 	// 环路保护：Received 跳数过高直接拒收（防两站互指滚雪球）
 	if message.ReceivedCount(raw) > 50 {
@@ -160,7 +183,7 @@ func saveMail(db *gorm.DB, from, to, remoteIP, raw, dmarcEnforce string) {
 
 	// 发件人认证（SPF/DKIM/DMARC）；SPF/DKIM 结果写入邮件，DMARC 按站点配置隔离/拒收（默认 none）
 	res := emailauth.Evaluate(emailauth.NetLookup, net.ParseIP(remoteIP), from, []byte(raw))
-	opts := deliver.Options{ReceiptTo: in.ReceiptTo, IsMDN: in.IsMDN, AuthResults: res.String()}
+	opts := deliver.Options{ReceiptTo: in.ReceiptTo, IsMDN: in.IsMDN, AuthResults: res.String(), Bulk: message.IsBulk(raw)}
 	if res.DMARC == "fail" {
 		switch dmarcEnforce {
 		case "reject":

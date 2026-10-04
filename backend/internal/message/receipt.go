@@ -73,6 +73,25 @@ func ParseInboundFull(raw string) Inbound {
 	return in
 }
 
+// IsBulk 判断邮件是否为批量/自动生成（邮件列表、自动回复），用于抑制 vacation 回复风暴。
+func IsBulk(raw string) bool {
+	msg, err := mail.ReadMessage(strings.NewReader(raw))
+	if err != nil {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(msg.Header.Get("Precedence"))) {
+	case "bulk", "list", "junk":
+		return true
+	}
+	if strings.TrimSpace(msg.Header.Get("Auto-Submitted")) != "" {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(msg.Header.Get("X-Autoreply")), "yes") {
+		return true
+	}
+	return false
+}
+
 // ReceivedCount 统计原始邮件中 Received 头的数量（环路跳数）。
 func ReceivedCount(raw string) int {
 	msg, err := mail.ReadMessage(strings.NewReader(raw))
