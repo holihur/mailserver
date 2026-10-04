@@ -15,11 +15,11 @@ import (
 	"strings"
 	"time"
 
+	localdeliver "mailserver/internal/deliver"
 	"mailserver/internal/dkim"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/route"
-	"mailserver/internal/rules"
 	"mailserver/internal/runtimecfg"
 
 	"gorm.io/gorm"
@@ -58,12 +58,7 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []mode
 	for _, rcpt := range recipients {
 		var u model.User
 		if err := db.Where("LOWER(email) = ?", strings.ToLower(rcpt)).First(&u).Error; err == nil {
-			folder := rules.Apply(db, u.ID, rules.Input{
-				From: m.From, To: rcpt, Cc: m.Cc, Bcc: m.Bcc, Subject: m.Subject, Body: m.Body,
-				Size: len(m.Body), Attachments: len(message.ParseAttachments(m.Attachments)),
-			}, "inbox").Folder
-			db.Create(&model.Mail{UserID: u.ID, From: m.From, To: rcpt, Cc: m.Cc,
-				Subject: m.Subject, Body: m.Body, Attachments: m.Attachments, Folder: folder})
+			localdeliver.ToUser(db, &u, m.From, rcpt, m.Cc, m.Bcc, m.Subject, m.Body, m.Attachments)
 		} else {
 			external = append(external, rcpt)
 		}

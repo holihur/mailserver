@@ -25,3 +25,15 @@ export function LangToggle() {
     </Button>
   )
 }
+
+// 页面底部统一的语言 / 主题切换
+import { BRAND } from '../lib/brand'
+export function FooterControls() {
+  return (
+    <footer className="border-t border-border py-3 flex items-center justify-center gap-1 text-xs text-muted-foreground">
+      <span className="mr-2">© {BRAND}</span>
+      <LangToggle />
+      <ThemeToggle />
+    </footer>
+  )
+}

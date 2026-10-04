@@ -40,6 +40,7 @@ type ruleInput struct {
 	Expression string `json:"expression"`
 	Action     string `json:"action"`
 	Folder     string `json:"folder"`
+	ForwardTo  string `json:"forward_to"`
 }
 
 // normalize 校验并生成入库字段（partial=true 时允许缺省字段，用于 PATCH）。
@@ -76,21 +77,32 @@ func (in ruleInput) normalize(partial bool) (map[string]any, error) {
 	if in.Action != "" {
 		action := strings.ToLower(strings.TrimSpace(in.Action))
 		if !rules.AllowedActions[action] {
-			return nil, errText("不支持的动作（trash/move）")
+			return nil, errText("不支持的动作（trash/move/forward）")
 		}
 		upd["action"] = action
-		folder := strings.TrimSpace(in.Folder)
-		if action == "move" {
+		switch action {
+		case "move":
+			folder := strings.TrimSpace(in.Folder)
 			if !rules.AllowedFolders[folder] {
 				return nil, errText("目标文件夹非法（inbox/draft/trash）")
 			}
 			upd["folder"] = folder
-		} else {
+			upd["forward_to"] = ""
+		case "forward":
+			targets := rules.SplitTargets(in.ForwardTo)
+			if len(targets) == 0 {
+				return nil, errText("转发动作需要填写目标邮箱")
+			}
+			upd["forward_to"] = strings.Join(targets, ", ")
 			upd["folder"] = ""
+		default:
+			upd["folder"] = ""
+			upd["forward_to"] = ""
 		}
 	} else if !partial {
 		upd["action"] = "trash"
 		upd["folder"] = ""
+		upd["forward_to"] = ""
 	}
 	return upd, nil
 }
@@ -129,6 +141,7 @@ func (h *RuleBox) List(w http.ResponseWriter, r *http.Request) {
 		rule.Expression, _ = upd["expression"].(string)
 		rule.Action, _ = upd["action"].(string)
 		rule.Folder, _ = upd["folder"].(string)
+		rule.ForwardTo, _ = upd["forward_to"].(string)
 		rule.Enabled, _ = upd["enabled"].(bool)
 		rule.Priority, _ = upd["priority"].(int)
 		if err := h.DB.Create(&rule).Error; err != nil {

@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
-import { ThemeToggle, LangToggle } from './HeaderControls'
+import { FooterControls } from './HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route } from 'lucide-react'
+import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
 
@@ -24,6 +24,7 @@ const NAV = [
   { to: '/admin/users', labelKey: 'admin.users', icon: Users },
   { to: '/admin/rules', labelKey: 'rules.siteNav', icon: Filter },
   { to: '/admin/routes', labelKey: 'routes.nav', icon: Route },
+  { to: '/admin/aliases', labelKey: 'aliases.nav', icon: AtSign },
   { to: '/admin/about', labelKey: 'admin.about', icon: Info },
 ]
 
@@ -35,7 +36,7 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
   useEffect(() => { api.version().then(setVer).catch(() => {}) }, [])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
         <Link to="/" className="font-semibold flex items-center gap-2"><Mail size={16} />{BRAND}</Link>
         <Badge className="hidden sm:inline-flex">{t('admin.title')}</Badge>
@@ -45,18 +46,16 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
           </Badge>
         )}
         <div className="flex-1" />
-        <LangToggle />
-        <ThemeToggle />
         <Link to="/"><Button variant="ghost" size="sm">{t('admin.backToMail')}</Button></Link>
       </header>
 
       {me && !me.admin ? (
-        <div className="max-w-xl mx-auto p-8 text-sm text-muted-foreground space-y-2">
+        <div className="flex-1 max-w-xl mx-auto p-8 text-sm text-muted-foreground space-y-2">
           <p className="font-semibold text-foreground">{t('admin.needAdmin')}</p>
           <p>{t('admin.needAdminHint')}</p>
         </div>
       ) : (
-        <div className="max-w-5xl mx-auto p-3 sm:p-4 md:grid md:grid-cols-[190px_1fr] md:gap-5">
+        <div className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-4 md:grid md:grid-cols-[190px_1fr] md:gap-5">
           <aside className="mb-3 md:mb-0">
             <nav className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0 md:sticky md:top-16">
               {NAV.map(n => (
@@ -77,6 +76,7 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
           </main>
         </div>
       )}
+      <FooterControls />
     </div>
   )
 }

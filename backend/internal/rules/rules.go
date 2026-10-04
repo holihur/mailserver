@@ -31,7 +31,7 @@ type Input struct {
 var AllowedFolders = map[string]bool{"inbox": true, "draft": true, "trash": true}
 
 // AllowedActions 支持的命中动作。
-var AllowedActions = map[string]bool{"trash": true, "move": true}
+var AllowedActions = map[string]bool{"trash": true, "move": true, "forward": true}
 
 var (
 	envOnce sync.Once
@@ -119,11 +119,13 @@ func Match(expr string, in Input) (bool, error) {
 
 // Decision 命中结果。
 type Decision struct {
-	Matched bool   `json:"matched"`
-	Folder  string `json:"folder"`
-	Rule    string `json:"rule"`
-	RuleID  uint   `json:"rule_id"`
-	Scope   string `json:"scope"` // site | user
+	Matched bool     `json:"matched"`
+	Action  string   `json:"action"` // trash | move | forward
+	Folder  string   `json:"folder"`
+	Forward []string `json:"forward"`
+	Rule    string   `json:"rule"`
+	RuleID  uint     `json:"rule_id"`
+	Scope   string   `json:"scope"` // site | user
 }
 
 // Evaluate 按「整站优先、用户其次；同级按优先级降序」评估规则，返回首个命中。
@@ -152,7 +154,9 @@ func Evaluate(list []model.MailRule, in Input) Decision {
 		}
 		return Decision{
 			Matched: true,
+			Action:  actionName(r),
 			Folder:  actionFolder(r),
+			Forward: forwardTargets(r),
 			Rule:    r.Name,
 			RuleID:  r.ID,
 			Scope:   scopeName(r),
@@ -180,7 +184,43 @@ func actionFolder(r model.MailRule) string {
 	if r.Action == "move" && AllowedFolders[r.Folder] {
 		return r.Folder
 	}
+	// forward 会在转发的同时保留一份到收件箱
 	return "trash"
+}
+
+func actionName(r model.MailRule) string {
+	switch r.Action {
+	case "move", "forward":
+		return r.Action
+	default:
+		return "trash"
+	}
+}
+
+// forwardTargets 解析转发目标（仅 action=forward 有效）。
+func forwardTargets(r model.MailRule) []string {
+	if r.Action != "forward" {
+		return nil
+	}
+	return SplitTargets(r.ForwardTo)
+}
+
+// SplitTargets 解析逗号/分号/空白分隔的地址列表（去重、小写）。
+func SplitTargets(s string) []string {
+	fields := strings.FieldsFunc(s, func(r rune) bool {
+		return r == ',' || r == ';' || r == '\n' || r == '\t' || r == ' '
+	})
+	seen := map[string]bool{}
+	out := make([]string, 0, len(fields))
+	for _, f := range fields {
+		f = strings.ToLower(strings.TrimSpace(f))
+		if f == "" || !strings.Contains(f, "@") || seen[f] {
+			continue
+		}
+		seen[f] = true
+		out = append(out, f)
+	}
+	return out
 }
 
 // Load 加载整站规则 + 指定用户的规则（供收信时评估）。

@@ -94,6 +94,7 @@ func main() {
 	rb := &handler.RuleBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails}
 	srb := &handler.RuleBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails, Site: true}
 	rbx := &handler.RouteBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails}
+	abx := &handler.AliasBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails}
 
 	// 动态 TLS 证书：支持后台手动上传或 ACME 自动签发后热生效
 	cert := certstore.New(cfg.CertDir)
@@ -198,6 +199,7 @@ func main() {
 		w.WriteHeader(405)
 	}))
 	mux.HandleFunc("/api/mails/batch", cors(mb.Batch))
+	mux.HandleFunc("/api/mails/unread", cors(mb.Unread))
 	mux.HandleFunc("/api/mails/", cors(mb.One))
 	mux.HandleFunc("/api/tokens", cors(tb.List))
 	mux.HandleFunc("/api/tokens/", cors(tb.One))
@@ -224,6 +226,8 @@ func main() {
 	mux.HandleFunc("/api/admin/routes", cors(rbx.List))
 	mux.HandleFunc("/api/admin/routes/test", cors(rbx.Test))
 	mux.HandleFunc("/api/admin/routes/", cors(rbx.One))
+	mux.HandleFunc("/api/admin/aliases", cors(abx.List))
+	mux.HandleFunc("/api/admin/aliases/", cors(abx.One))
 	mux.HandleFunc("/api/admin/domains", cors(ad.Domains))
 	mux.HandleFunc("/api/admin/providers", cors(ad.Providers))
 	mux.HandleFunc("/api/admin/providers/", cors(ad.ProviderOne))

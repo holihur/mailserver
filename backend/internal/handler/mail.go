@@ -142,6 +142,27 @@ func (m *MailBox) Outbox(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, items)
 }
 
+// GET /api/mails/unread -> {folder: 未读数}
+func (m *MailBox) Unread(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(m.DB, w, r)
+	if !ok {
+		return
+	}
+	type row struct {
+		Folder string
+		N      int64
+	}
+	var rows []row
+	m.DB.Model(&model.Mail{}).Select("folder, COUNT(*) AS n").
+		Where("user_id = ?", uid).Where(map[string]any{"read": false}).
+		Group("folder").Scan(&rows)
+	out := map[string]int64{}
+	for _, x := range rows {
+		out[x.Folder] = x.N
+	}
+	writeJSON(w, 200, out)
+}
+
 // POST /api/mails/batch {ids:[...], action:trash|delete|star|unstar|read|unread|move|empty, folder?}
 func (m *MailBox) Batch(w http.ResponseWriter, r *http.Request) {
 	uid, ok := uidOf(m.DB, w, r)

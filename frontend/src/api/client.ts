@@ -29,6 +29,7 @@ export const api = {
   me: () => req('/api/me'),
   list: (folder = 'inbox', q = '', page = 1, sort = 'newest') =>
     req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}`),
+  unread: () => req('/api/mails/unread'),
   get: (id) => req(`/api/mails/${id}`),
   send: (b) => req('/api/mails', { method: 'POST', body: JSON.stringify(b) }),
   patch: (id, b) => req(`/api/mails/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
@@ -55,6 +56,10 @@ export const api = {
   adminRoutePatch: (id, b) => req(`/api/admin/routes/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   adminRouteDelete: (id) => req(`/api/admin/routes/${id}`, { method: 'DELETE' }),
   adminRouteTest: (domain) => req('/api/admin/routes/test', { method: 'POST', body: JSON.stringify({ domain }) }),
+  adminAliases: () => req('/api/admin/aliases'),
+  adminAliasCreate: (b) => req('/api/admin/aliases', { method: 'POST', body: JSON.stringify(b) }),
+  adminAliasPatch: (id, b) => req(`/api/admin/aliases/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
+  adminAliasDelete: (id) => req(`/api/admin/aliases/${id}`, { method: 'DELETE' }),
   outbox: () => req('/api/outbox'),
   tokens: () => req('/api/tokens'),
   tokenCreate: (name) => req('/api/tokens', { method: 'POST', body: JSON.stringify({ name }) }),

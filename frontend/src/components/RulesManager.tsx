@@ -5,7 +5,7 @@ import { SkeletonRows } from './Skeleton'
 import { useI18n } from '../lib/i18n'
 import { Plus, Trash2, Pencil, Check, X, FlaskConical } from 'lucide-react'
 
-const EMPTY = { name: '', expression: '', action: 'trash', folder: 'trash', priority: 0, enabled: true }
+const EMPTY = { name: '', expression: '', action: 'trash', folder: 'trash', forward_to: '', priority: 0, enabled: true }
 
 // site=true 管理整站规则（/api/admin/rules），否则管理个人规则（/api/rules）。
 export function RulesManager({ site = false }: { site?: boolean }) {
@@ -42,7 +42,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
   }
   function startEdit(r: any) {
     setEditId(r.id)
-    setForm({ name: r.name, expression: r.expression, action: r.action || 'trash', folder: r.folder || 'trash', priority: r.priority || 0, enabled: r.enabled })
+    setForm({ name: r.name, expression: r.expression, action: r.action || 'trash', folder: r.folder || 'trash', forward_to: r.forward_to || '', priority: r.priority || 0, enabled: r.enabled })
   }
   async function del(id: number) {
     if (!confirm(t('rules.confirmDelete'))) return
@@ -87,6 +87,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
               <Select className="mt-1" value={form.action} onChange={e => setForm({ ...form, action: e.target.value })}>
                 <option value="trash">{t('rules.actionTrash')}</option>
                 <option value="move">{t('rules.actionMove')}</option>
+                <option value="forward">{t('rules.actionForward')}</option>
               </Select>
             </div>
             {form.action === 'move' && (
@@ -97,6 +98,13 @@ export function RulesManager({ site = false }: { site?: boolean }) {
                   <option value="inbox">{t('mail.inbox')}</option>
                   <option value="draft">{t('mail.draft')}</option>
                 </Select>
+              </div>
+            )}
+            {form.action === 'forward' && (
+              <div className="sm:col-span-2">
+                <Label className="text-xs text-muted-foreground">{t('rules.forwardTo')}</Label>
+                <Input className="mt-1 font-mono" value={form.forward_to} onChange={e => setForm({ ...form, forward_to: e.target.value })} placeholder="d@example.com, e@other.com" />
+                <p className="text-xs text-muted-foreground mt-1">{t('rules.forwardHint')}</p>
               </div>
             )}
             <label className="flex items-center gap-2 text-sm pb-2">
@@ -135,7 +143,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium truncate">{r.name}</span>
-                <Badge>{r.action === 'move' ? `${t('rules.actionMove')} → ${r.folder}` : t('rules.actionTrash')}</Badge>
+                <Badge>{r.action === 'move' ? `${t('rules.actionMove')} → ${r.folder}` : r.action === 'forward' ? `${t('rules.actionForward')} → ${r.forward_to}` : t('rules.actionTrash')}</Badge>
                 {r.priority ? <Badge>{t('rules.priority')} {r.priority}</Badge> : null}
               </div>
               <code className="text-xs text-muted-foreground break-all">{r.expression}</code>

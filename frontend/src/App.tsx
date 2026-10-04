@@ -11,6 +11,7 @@ import AdminUsers from './pages/AdminUsers'
 import AdminAbout from './pages/AdminAbout'
 import AdminRules from './pages/AdminRules'
 import AdminRoutes from './pages/AdminRoutes'
+import AdminAliases from './pages/AdminAliases'
 import Contacts from './pages/Contacts'
 import Rules from './pages/Rules'
 import Security from './pages/Security'
@@ -38,6 +39,7 @@ export default function App() {
         <Route path="/admin/about" element={authed() ? <AdminAbout /> : <Navigate to="/login" />} />
         <Route path="/admin/rules" element={authed() ? <AdminRules /> : <Navigate to="/login" />} />
         <Route path="/admin/routes" element={authed() ? <AdminRoutes /> : <Navigate to="/login" />} />
+        <Route path="/admin/aliases" element={authed() ? <AdminAliases /> : <Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>
   )

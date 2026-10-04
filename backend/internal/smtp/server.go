@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"mailserver/internal/alias"
+	"mailserver/internal/deliver"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
-	"mailserver/internal/rules"
 
 	"gorm.io/gorm"
 )
@@ -113,21 +114,30 @@ func extractAddr(s string) string {
 }
 
 func saveMail(db *gorm.DB, from, to, raw string) {
-	// 按收件人找本地用户，找不到则丢弃（防垃圾占库）
-	var u model.User
-	if err := db.Where("email = ?", to).First(&u).Error; err != nil {
+	subject, body, atts := message.ParseInbound(raw)
+	to = strings.ToLower(strings.TrimSpace(to))
+
+	// 别名 / 转发：命中则投递到全部目标（本地进收件箱，外部自动转发）
+	if al := alias.Match(db, to); al != nil {
+		deliver.Forward(db, from, alias.Targets(al.Targets), subject, body, atts)
+		if al.Keep {
+			var u model.User
+			if err := db.Where("LOWER(email) = ?", to).First(&u).Error; err == nil {
+				deliver.ToUser(db, &u, from, to, "", "", subject, body, atts)
+			}
+		}
 		return
 	}
-	subject, body, atts := message.ParseInbound(raw)
-	// CEL 规则引擎：命中则投递到目标文件夹（默认 trash）
-	folder := rules.Apply(db, u.ID, rules.Input{
-		From: from, To: to, Subject: subject, Body: body,
-		Size: len(raw), Attachments: len(message.ParseAttachments(atts)),
-	}, "inbox").Folder
-	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Subject: subject, Body: body, Attachments: atts, Folder: folder})
+
+	// 普通收件人：按收件人找本地用户，找不到则丢弃（防垃圾占库）
+	var u model.User
+	if err := db.Where("LOWER(email) = ?", to).First(&u).Error; err != nil {
+		return
+	}
+	deliver.ToUser(db, &u, from, to, "", "", subject, body, atts)
 }
 
-// recipientExists 判断收件人是否为本地已有用户（RCPT 阶段就拒绝未知收件人，避免静默丢信）。
+// recipientExists 判断收件人是否为本地已有用户或别名（RCPT 阶段就拒绝未知收件人，避免静默丢信）。
 func recipientExists(db *gorm.DB, addr string) bool {
 	addr = strings.ToLower(strings.TrimSpace(addr))
 	if addr == "" {
@@ -135,5 +145,8 @@ func recipientExists(db *gorm.DB, addr string) bool {
 	}
 	var n int64
 	db.Model(&model.User{}).Where("LOWER(email) = ?", addr).Count(&n)
-	return n > 0
+	if n > 0 {
+		return true
+	}
+	return alias.Match(db, addr) != nil
 }

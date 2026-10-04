@@ -5,12 +5,12 @@ import { Button, Input, Textarea, Card } from '../components/ui/controls'
 import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../components/Dropdown'
 import { RecipientInput } from '../components/RecipientInput'
 import { SkeletonList } from '../components/Skeleton'
+import { FooterControls } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { useTheme } from '../lib/theme'
 import {
   Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
-  ChevronDown, Languages, Sun, Moon, Monitor, MoreVertical, Reply,
+  ChevronDown, MoreVertical, Reply, MailOpen,
   Contact, Filter, KeyRound,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -24,13 +24,12 @@ const FOLDERS = [
 ]
 
 export default function MailApp() {
-  const { t, lang, setLang } = useI18n()
+  const { t } = useI18n()
   const navigate = useNavigate()
-  const { theme, cycle: cycleTheme } = useTheme()
-  const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
   const [folder, setFolder] = useState('inbox')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [unread, setUnread] = useState<any>({})
   const [total, setTotal] = useState(0)
   const [q, setQ] = useState('')
   const [sel, setSel] = useState(null)
@@ -48,6 +47,7 @@ export default function MailApp() {
       const d = await api.list(folder, q, p, s)
       setItems(d.items); setTotal(d.total); setPage(d.page || p)
     } catch {} finally { setLoading(false) }
+    api.unread().then(setUnread).catch(() => {})
   }
   useEffect(() => { api.me().then(setMe).catch(() => { location.href = '/login' }) }, [])
   useEffect(() => { setSel(null); setView('list'); setPage(1); load(1, sort) }, [folder])
@@ -80,8 +80,7 @@ export default function MailApp() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <b className="hidden sm:inline">📮 {BRAND}</b>
-        <b className="sm:hidden">📮</b>
+        <b className="shrink-0 truncate max-w-[45vw]">📮 {BRAND}</b>
         <div className="flex-1" />
         <Button size="sm" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
         <Dropdown align="right" trigger={
@@ -102,11 +101,6 @@ export default function MailApp() {
           {me?.admin && <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>}
           {me?.admin && <DropdownItem icon={ShieldCheck} onClick={() => navigate('/admin')}>{t('nav.admin')}</DropdownItem>}
           <DropdownSeparator />
-          <DropdownItem icon={Languages} onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}>
-            {lang === 'zh' ? 'English' : '中文'}
-          </DropdownItem>
-          <DropdownItem icon={ThemeIcon} onClick={cycleTheme}>{t('theme.' + theme)}</DropdownItem>
-          <DropdownSeparator />
           <DropdownItem icon={RefreshCw} onClick={() => load()}>{t('common.refresh')}</DropdownItem>
           <DropdownItem icon={LogOut} onClick={logout} className="text-red-500 hover:bg-red-500/10">{t('nav.logout')}</DropdownItem>
         </Dropdown>
@@ -119,6 +113,7 @@ export default function MailApp() {
             className={cn('flex items-center gap-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
               folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
             <f.icon size={15} />{t(f.labelKey)}
+            {unread[f.k] > 0 && <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
           </button>
         ))}
       </div>
@@ -129,6 +124,7 @@ export default function MailApp() {
             <button key={f.k} onClick={() => setFolder(f.k)}
               className={cn('w-full flex items-center gap-2 rounded-md px-3 py-2 text-sm', folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
               <f.icon size={16} />{t(f.labelKey)}
+              {unread[f.k] > 0 && <span className={cn('ml-auto rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
             </button>
           ))}
           <p className="text-xs text-muted-foreground px-3 pt-4">{t('mail.total', { n: total })}</p>
@@ -178,16 +174,23 @@ export default function MailApp() {
               {loading && <SkeletonList rows={6} />}
               {!loading && items.map(m => (
                 <button key={m.id} onClick={() => selectMode ? toggleCheck(m.id) : open(m.id)}
-                  className={cn('w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60',
-                    (selectMode ? checked.includes(m.id) : sel?.id === m.id) && 'bg-muted', !m.read && 'font-semibold')}>
-                  <div className="flex items-center gap-2 text-sm">
-                    {selectMode && <input type="checkbox" readOnly checked={checked.includes(m.id)} className="pointer-events-none" />}
-                    <span className="truncate flex-1">{folder === 'sent' ? m.to : m.from}</span>
-                    {!selectMode && <Star size={14} className={m.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}
+                  className={cn('w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60 transition-colors',
+                    (selectMode ? checked.includes(m.id) : sel?.id === m.id) && 'bg-muted', !m.read && 'bg-primary/5')}>
+                  <div className="flex items-center gap-2">
+                    {selectMode && <input type="checkbox" readOnly checked={checked.includes(m.id)} className="pointer-events-none shrink-0" />}
+                    {!m.read && !selectMode && <span className="size-2 rounded-full bg-primary shrink-0" />}
+                    <span className={cn('truncate flex-1 text-sm', !m.read ? 'font-semibold' : 'text-muted-foreground')}>
+                      {folder === 'sent' ? m.to : m.from}
+                    </span>
+                    {attList(m.attachments).length > 0 && <Paperclip size={12} className="text-muted-foreground shrink-0" />}
+                    {!selectMode && <Star size={14} className={cn('shrink-0', m.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground')}
                       onClick={async e => { e.stopPropagation(); await api.patch(m.id, { starred: !m.starred }); load() }} />}
                   </div>
-                  <div className="text-sm truncate">{m.subject || t('mail.noSubject')}</div>
-                  <div className="text-xs text-muted-foreground truncate">{m.body?.slice(0, 60)}</div>
+                  <div className={cn('text-sm truncate mt-0.5', m.read ? 'text-muted-foreground' : 'font-medium')}>{m.subject || t('mail.noSubject')}</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-xs text-muted-foreground truncate flex-1">{m.body?.slice(0, 80)}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">{fmtWhen(m.created_at)}</span>
+                  </div>
                 </button>
               ))}
               {!loading && items.length === 0 && <p className="p-6 text-sm text-muted-foreground text-center">{t('mail.empty')}</p>}
@@ -221,6 +224,12 @@ export default function MailApp() {
                       <DropdownItem icon={Star} onClick={async () => { await api.patch(sel.id, { starred: !sel.starred }); setSel({ ...sel, starred: !sel.starred }) }}>
                         {sel.starred ? t('mail.unstar') : t('mail.star')}
                       </DropdownItem>
+                      <DropdownItem icon={MailOpen} onClick={async () => {
+                        const next = !sel.read
+                        await api.patch(sel.id, { read: next })
+                        setSel({ ...sel, read: next })
+                        setItems(items.map((i: any) => i.id === sel.id ? { ...i, read: next } : i))
+                      }}>{sel.read ? t('mail.markUnread') : t('mail.markRead')}</DropdownItem>
                       <DropdownItem icon={Reply} onClick={() => { setShowCompose({ to: sel.from, subject: 'Re: ' + sel.subject, body: '\n\n---\n' + sel.body }) }}>{t('mail.reply')}</DropdownItem>
                       <DropdownSeparator />
                       <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={async () => {
@@ -249,6 +258,8 @@ export default function MailApp() {
           </div>
         </section>
       </div>
+
+      <FooterControls />
 
       {showCompose && <Compose init={typeof showCompose === 'object' ? showCompose : {}} onClose={() => { setShowCompose(false); load() }} />}
     </div>
@@ -350,4 +361,12 @@ function fmtSize(n: number) {
   if (n < 1024) return n + 'B'
   if (n < 1024 * 1024) return (n / 1024).toFixed(0) + 'KB'
   return (n / 1024 / 1024).toFixed(1) + 'MB'
+}
+
+function fmtWhen(s: string) {
+  if (!s) return ''
+  const d = new Date(s)
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleDateString()
 }

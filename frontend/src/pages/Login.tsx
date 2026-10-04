@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card } from '../components/ui/controls'
-import { LangToggle, ThemeToggle } from '../components/HeaderControls'
+import { FooterControls } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import { Mail, Loader2 } from 'lucide-react'
 import { BRAND } from '../lib/brand'
@@ -52,11 +52,8 @@ export default function Login() {
   }
 
   return (
-    <div className="relative min-h-screen grid place-items-center bg-muted/40 p-4">
-      <div className="absolute top-3 right-3 flex items-center gap-1">
-        <LangToggle />
-        <ThemeToggle />
-      </div>
+    <div className="min-h-screen flex flex-col bg-muted/40">
+      <div className="flex-1 grid place-items-center p-4">
       <Card className="w-full max-w-sm p-6 space-y-4">
         <div className="flex items-center gap-2">
           <span className="grid place-items-center size-9 rounded-md bg-primary text-primary-foreground"><Mail size={18} /></span>
@@ -101,6 +98,8 @@ export default function Login() {
         <p className="text-xs text-muted-foreground">{regOpen ? t('login.hint') : t('login.registerClosed')}</p>
         <p className="text-xs text-center"><Link to="/privacy" className="text-muted-foreground underline">{t('nav.privacy')}</Link></p>
       </Card>
+      </div>
+      <FooterControls />
     </div>
   )
 }

@@ -103,8 +103,9 @@ type MailRule struct {
 	Enabled    bool      `json:"enabled"`
 	Priority   int       `json:"priority"`
 	Expression string    `gorm:"type:text" json:"expression"` // CEL，返回 bool
-	Action     string    `gorm:"size:20" json:"action"`       // trash | move
+	Action     string    `gorm:"size:20" json:"action"`       // trash | move | forward
 	Folder     string    `gorm:"size:30" json:"folder"`       // action=move 时的目标文件夹
+	ForwardTo  string    `gorm:"size:1024" json:"forward_to"` // action=forward 时的转发目标（逗号分隔）
 	CreatedAt  time.Time `json:"created_at"`
 }
 
@@ -131,6 +132,18 @@ type MailRoute struct {
 	RelayFrom string    `gorm:"size:255" json:"relay_from"`
 	Insecure  bool      `json:"insecure"`
 	Priority  int       `json:"priority"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// MailAlias 收件人别名 / 转发（管理员配置）：把发给 Source 的邮件投递到多个 Targets。
+// Source 可为完整地址（abc@example.com）或整域 catch-all（@example.com）。
+// Target 是本地用户则进其收件箱，是外部地址则自动转发（入队外发）。
+type MailAlias struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Source    string    `gorm:"size:255;index" json:"source"`
+	Targets   string    `gorm:"type:text" json:"targets"` // 逗号分隔的地址列表
+	Keep      bool      `json:"keep"`                     // 是否同时保留原收件人
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
 }
