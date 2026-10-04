@@ -19,7 +19,11 @@ export default function DnsPage() {
   const [newRec, setNewRec] = useState({ name: '', type: 'A', value: '', ttl: 600, prio: 10 })
   const [zone, setZone] = useState('')
   const [hints, setHints] = useState<any[]>([])
-  useEffect(() => { api.deliverability().then(setHints).catch(() => {}) }, [])
+  const [dnssec, setDnssec] = useState<any>(null)
+  useEffect(() => {
+    api.deliverability().then(setHints).catch(() => {})
+    api.dnssec().then(setDnssec).catch(() => {})
+  }, [])
   async function publishHints() {
     if (!sel) return
     try {
@@ -165,6 +169,25 @@ export default function DnsPage() {
                     <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(h.value)} aria-label={t('common.copy')}><Copy size={14} /></Button>
                   </div>
                 ))}
+              </Card>
+
+              <Card className="p-4 text-sm space-y-2">
+                <b className="text-sm">{t('dns.dnssec')}</b>
+                {!dnssec?.enabled
+                  ? <p className="text-xs text-muted-foreground">{t('dns.dnssecDisabled')}</p>
+                  : (
+                    <>
+                      <p className="text-xs text-muted-foreground">{t('dns.dnssecSteps')}</p>
+                      {(dnssec.domains || []).length === 0 && <p className="text-xs text-muted-foreground">—</p>}
+                      {(dnssec.domains || []).map((x: any) => (
+                        <div key={x.domain} className="flex items-center gap-2 text-xs">
+                          <span className="font-mono">{x.domain}</span>
+                          <span className="font-mono truncate flex-1">{x.ds || '—'}</span>
+                          {x.ds && <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(x.ds)} aria-label={t('dns.copyDs')}><Copy size={14} /></Button>}
+                        </div>
+                      ))}
+                    </>
+                  )}
               </Card>
             </>
           )}

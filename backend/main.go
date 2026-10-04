@@ -294,6 +294,7 @@ func main() {
 	au.RT = rt
 	dns.RT = rt
 	dns.CertDir = cfg.CertDir
+	dns.DNSSECOn = cfg.DNSSECEnable
 	dns.AdminEmails = cfg.AdminEmails
 
 	host := rt.MailHost
@@ -475,6 +476,7 @@ func main() {
 	mux.HandleFunc("/api/admin/audit", cors(ad.AuditLogs))
 	mux.HandleFunc("/api/admin/deliverability", cors(dns.Deliverability))
 	mux.HandleFunc("/api/admin/deliverability/publish", cors(dns.PublishDeliverability))
+	mux.HandleFunc("/api/admin/dnssec", cors(dns.DNSSECInfo))
 	mux.HandleFunc("/api/admin/health", cors(ad.HealthStatus))
 	mux.HandleFunc("/api/admin/about", cors(ad.About))
 	mux.HandleFunc("/api/admin/update/check", cors(ad.UpdateCheck))

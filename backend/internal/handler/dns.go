@@ -25,6 +25,7 @@ type DNS struct {
 	RT          *runtimecfg.Store
 	AdminEmails string // ADMIN_EMAILS 兜底提权名单（与 Admin 一致）
 	CertDir     string // 证书目录（用于计算 DANE TLSA）
+	DNSSECOn    bool   // DNSSEC 是否启用（展示 DS）
 }
 
 // signer 返回当前 DKIM 签名器（可能为 nil）。

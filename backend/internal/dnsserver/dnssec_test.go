@@ -123,6 +123,20 @@ func TestNSEC3NegativeProof(t *testing.T) {
 	}
 }
 
+func TestDSForZone(t *testing.T) {
+	EnableDNSSEC(t.TempDir(), false)
+	defer EnableDNSSEC("", false)
+	if !Enabled() {
+		t.Fatal("Enabled 应为 true")
+	}
+	if DSForZone("example.com") == "" {
+		t.Fatal("DS 不应为空")
+	}
+	if n := len(DNSKEYForZone("example.com")); n != 2 {
+		t.Fatalf("应有 KSK+ZSK 两条，得到 %d", n)
+	}
+}
+
 func TestCanonicalLess(t *testing.T) {
 	order := []string{"example.com.", "a.example.com.", "mail.example.com.", "z.example.com."}
 	for i := 0; i < len(order)-1; i++ {

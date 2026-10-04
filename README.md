@@ -24,6 +24,7 @@
 
 **运维**
 - 自托管权威 DNS；一键 Let's Encrypt（DNS-01）或手动证书，热生效；DKIM 签名；阿里云 / Cloudflare 一键下发解析。
+- **DNSSEC**：内置权威 DNS 在线签名（NSEC / `DNSSEC_NSEC3=1` 用 NSEC3），后台直接展示需在注册商设置的 **DS 记录**；步骤见 [`DNSSEC.md`](./DNSSEC.md)。
 - **系统健康告警**（内存 / 磁盘 / CPU 80% / 90% 分级预警）、**Prometheus `/metrics`**、**后台自动更新**（默认 10 分钟检查）。
 - **每用户存储配额**、**GDPR**（数据导出 + 注销删除）、隐私政策页。
 - 多语言、明暗主题、响应式、PWA、骨架屏、Toast 通知。

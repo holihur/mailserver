@@ -112,6 +112,28 @@ func DS(zone string) *dns.DS {
 	return zk.ksk.ToDS(dns.SHA256)
 }
 
+// DSForZone 返回 DS 记录文本（未启用/无密钥时为空）。
+func DSForZone(zone string) string {
+	if ds := DS(zone); ds != nil {
+		return ds.String()
+	}
+	return ""
+}
+
+// DNSKEYForZone 返回 zone 的 DNSKEY 记录文本列表（不含 RRSIG）。
+func DNSKEYForZone(zone string) []string {
+	out := []string{}
+	for _, rr := range (&Server{}).DNSKEYs(zone) {
+		if _, ok := rr.(*dns.DNSKEY); ok {
+			out = append(out, rr.String())
+		}
+	}
+	return out
+}
+
+// Enabled 报告 DNSSEC 是否已启用（已配置密钥目录）。
+func Enabled() bool { return dnssecDir != "" }
+
 // signAnswers 对一组应答按 name+type 分组做 RRSIG。
 func (s *Server) signAnswers(zone string, answers []dns.RR) []dns.RR {
 	zk := loadKeys(zone)
