@@ -28,8 +28,8 @@ var (
 	keyCache  = map[string]*zoneKeys{}
 )
 
-// EnableDNSSEC 启用 DNSSEC，dir 为密钥目录（空=禁用）。
-func EnableDNSSEC(dir string) { dnssecDir = dir }
+// EnableDNSSEC 启用 DNSSEC，dir 为密钥目录（空=禁用）；nsec3=true 使用 NSEC3。
+func EnableDNSSEC(dir string, nsec3 bool) { dnssecDir = dir; useNSEC3 = nsec3 }
 
 func loadKeys(zone string) *zoneKeys {
 	if dnssecDir == "" {
@@ -154,8 +154,8 @@ func canonicalLess(a, b string) bool {
 	return i < j
 }
 
-// zoneNSEC 生成 zone 的全部 NSEC 记录（已排序，环形 next）。
-func (s *Server) zoneNSEC(z *Zone) []*dns.NSEC {
+// zoneOwners 计算 zone 内每个 owner 拥有的类型集合。
+func zoneOwners(z *Zone) map[string]map[uint16]bool {
 	types := map[string]map[uint16]bool{}
 	add := func(name string, t uint16) {
 		name = dns.Fqdn(strings.ToLower(name))
@@ -187,35 +187,55 @@ func (s *Server) zoneNSEC(z *Zone) []*dns.NSEC {
 			add(name, dns.TypeSRV)
 		case "CAA":
 			add(name, dns.TypeCAA)
+		case "TLSA":
+			add(name, dns.TypeTLSA)
 		}
 	}
+	return types
+}
+
+func bitmap(ts map[uint16]bool) []uint16 {
+	bm := make([]uint16, 0, len(ts))
+	for t := range ts {
+		bm = append(bm, t)
+	}
+	sort.Slice(bm, func(a, b int) bool { return bm[a] < bm[b] })
+	return bm
+}
+
+func sortedNames(types map[string]map[uint16]bool) []string {
 	names := make([]string, 0, len(types))
 	for n := range types {
 		names = append(names, n)
 	}
 	sort.Slice(names, func(i, j int) bool { return canonicalLess(names[i], names[j]) })
+	return names
+}
+
+// zoneNSEC 生成 zone 的全部 NSEC 记录（已排序，环形 next）。
+func (s *Server) zoneNSEC(z *Zone) []*dns.NSEC {
+	types := zoneOwners(z)
+	names := sortedNames(types)
 	out := make([]*dns.NSEC, 0, len(names))
 	for i, n := range names {
 		next := names[(i+1)%len(names)]
 		ts := types[n]
 		ts[dns.TypeNSEC] = true
 		ts[dns.TypeRRSIG] = true
-		bm := make([]uint16, 0, len(ts))
-		for t := range ts {
-			bm = append(bm, t)
-		}
-		sort.Slice(bm, func(a, b int) bool { return bm[a] < bm[b] })
 		out = append(out, &dns.NSEC{
 			Hdr:        dns.RR_Header{Name: n, Rrtype: dns.TypeNSEC, Class: dns.ClassINET, Ttl: 3600},
 			NextDomain: next,
-			TypeBitMap: bm,
+			TypeBitMap: bitmap(ts),
 		})
 	}
 	return out
 }
 
-// negativeProof 生成否定应答的 authority：SOA + SOA RRSIG + NSEC + NSEC RRSIG。
+// negativeProof 生成否定应答的 authority：SOA + SOA RRSIG + (NSEC3|NSEC) + RRSIG。
 func (s *Server) negativeProof(z *Zone, qname string) []dns.RR {
+	if useNSEC3 {
+		return s.negativeProofNSEC3(z, qname)
+	}
 	zk := loadKeys(z.Domain)
 	soa := s.soaRR(z.Domain)
 	out := []dns.RR{soa}

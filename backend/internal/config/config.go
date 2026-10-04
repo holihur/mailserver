@@ -43,6 +43,7 @@ type Config struct {
 	SendPerMinute   int    // 每用户每分钟发信上限（0=不限）
 	MtaStsMode      string // MTA-STS 模式：none（默认）| testing | enforce
 	DNSSECEnable    bool   // 启用 DNSSEC 签名（密钥存 DATA_DIR/dnssec）
+	DNSSECNSEC3     bool   // 使用 NSEC3（默认 NSEC）
 	BackupDir       string // 定时备份目录（空=不启用）
 	BackupInterval  int    // 备份间隔（小时）
 	BackupKeep      int    // 保留份数
@@ -131,6 +132,7 @@ func Load() Config {
 		SendPerMinute:   atoiDefault(os.Getenv("SEND_PER_MINUTE"), 20),
 		MtaStsMode:      strings.ToLower(strings.TrimSpace(getenv("MTA_STS_MODE", "none"))),
 		DNSSECEnable:    getenv("DNSSEC_ENABLE", "0") == "1",
+		DNSSECNSEC3:     getenv("DNSSEC_NSEC3", "0") == "1",
 		BackupDir:       os.Getenv("BACKUP_DIR"),
 		BackupInterval:  atoiDefault(os.Getenv("BACKUP_INTERVAL_HOURS"), 24),
 		BackupKeep:      atoiDefault(os.Getenv("BACKUP_KEEP"), 7),

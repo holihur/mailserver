@@ -7,8 +7,8 @@ import (
 )
 
 func TestDNSSECSign(t *testing.T) {
-	EnableDNSSEC(t.TempDir())
-	defer EnableDNSSEC("")
+	EnableDNSSEC(t.TempDir(), false)
+	defer EnableDNSSEC("", false)
 
 	keys := (&Server{}).DNSKEYs("example.com")
 	if len(keys) != 3 {
@@ -43,8 +43,8 @@ func TestDNSSECSign(t *testing.T) {
 }
 
 func TestNSECNegativeProof(t *testing.T) {
-	EnableDNSSEC(t.TempDir())
-	defer EnableDNSSEC("")
+	EnableDNSSEC(t.TempDir(), false)
+	defer EnableDNSSEC("", false)
 	s := &Server{}
 	z := &Zone{Domain: "example.com", Records: []Rec{
 		{Name: "@", Type: "A", Value: "1.2.3.4"},
@@ -84,6 +84,43 @@ func TestNSECNegativeProof(t *testing.T) {
 	}
 	check("mail.example.com.", false) // NODATA：精确匹配
 	check("nope.example.com.", true)  // NXDOMAIN：覆盖区间
+}
+
+func TestNSEC3NegativeProof(t *testing.T) {
+	EnableDNSSEC(t.TempDir(), true)
+	defer EnableDNSSEC("", false)
+	s := &Server{}
+	z := &Zone{Domain: "example.com", Records: []Rec{
+		{Name: "@", Type: "A", Value: "1.2.3.4"},
+		{Name: "mail", Type: "A", Value: "1.2.3.5"},
+	}}
+	var zsk *dns.DNSKEY
+	for _, rr := range s.DNSKEYs("example.com") {
+		if k, ok := rr.(*dns.DNSKEY); ok && k.Flags == 256 {
+			zsk = k
+		}
+	}
+	for _, q := range []string{"mail.example.com.", "nope.example.com."} {
+		ns := s.negativeProof(z, q)
+		found := 0
+		for i, rr := range ns {
+			n3, ok := rr.(*dns.NSEC3)
+			if !ok {
+				continue
+			}
+			found++
+			if i+1 < len(ns) {
+				if sig, ok := ns[i+1].(*dns.RRSIG); ok {
+					if err := sig.Verify(zsk, []dns.RR{n3}); err != nil {
+						t.Fatalf("%s: NSEC3 验签失败: %v", q, err)
+					}
+				}
+			}
+		}
+		if found == 0 {
+			t.Fatalf("%s: 应含 NSEC3", q)
+		}
+	}
 }
 
 func TestCanonicalLess(t *testing.T) {

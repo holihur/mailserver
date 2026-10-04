@@ -58,7 +58,7 @@ func (d *DNS) mustAdmin(w http.ResponseWriter, r *http.Request) (*model.User, bo
 
 var validTypes = map[string]bool{
 	"A": true, "AAAA": true, "MX": true, "TXT": true,
-	"CNAME": true, "NS": true, "SRV": true, "CAA": true,
+	"CNAME": true, "NS": true, "SRV": true, "CAA": true, "TLSA": true,
 }
 
 // POST /api/domains {name, ip} -> 自动配齐 mail 所需记录

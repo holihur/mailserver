@@ -188,6 +188,11 @@ func toRRs(z *Zone, qtype uint16) []dns.RR {
 		case qtype == dns.TypeCAA && t == "CAA":
 			flag, tag, val := parseCAA(r.Value)
 			out = append(out, &dns.CAA{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypeCAA, Class: dns.ClassINET, Ttl: ttl}, Flag: flag, Tag: tag, Value: val})
+		case qtype == dns.TypeTLSA && t == "TLSA":
+			f := strings.Fields(r.Value)
+			if len(f) == 4 {
+				out = append(out, &dns.TLSA{Hdr: dns.RR_Header{Name: name, Rrtype: dns.TypeTLSA, Class: dns.ClassINET, Ttl: ttl}, Usage: uint8(atoi(f[0])), Selector: uint8(atoi(f[1])), MatchingType: uint8(atoi(f[2])), Certificate: f[3]})
+			}
 		}
 	}
 	return out

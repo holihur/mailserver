@@ -342,7 +342,7 @@ func main() {
 	if cfg.DNSAddr != "" && !strings.EqualFold(cfg.DNSAddr, "off") && !strings.EqualFold(cfg.DNSAddr, "none") {
 		go func() {
 			if cfg.DNSSECEnable {
-				dnsserver.EnableDNSSEC(filepath.Join(cfg.DataDir, "dnssec"))
+				dnsserver.EnableDNSSEC(filepath.Join(cfg.DataDir, "dnssec"), cfg.DNSSECNSEC3)
 				if ds := dnsserver.DS(cfg.DKIMDomain); ds != nil {
 					log.Printf("DNSSEC 已启用；请到注册商设置 DS: %s", ds.String())
 				}
@@ -474,6 +474,7 @@ func main() {
 	mux.HandleFunc("/api/admin/overview", cors(ad.Overview))
 	mux.HandleFunc("/api/admin/audit", cors(ad.AuditLogs))
 	mux.HandleFunc("/api/admin/deliverability", cors(dns.Deliverability))
+	mux.HandleFunc("/api/admin/deliverability/publish", cors(dns.PublishDeliverability))
 	mux.HandleFunc("/api/admin/health", cors(ad.HealthStatus))
 	mux.HandleFunc("/api/admin/about", cors(ad.About))
 	mux.HandleFunc("/api/admin/update/check", cors(ad.UpdateCheck))

@@ -7,7 +7,7 @@ import { SkeletonList } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
 import { Plus, Trash2, Globe, Copy, CheckCircle2 } from 'lucide-react'
 
-const TYPES = ['A', 'AAAA', 'MX', 'TXT', 'CNAME', 'NS', 'SRV', 'CAA']
+const TYPES = ['A', 'AAAA', 'MX', 'TXT', 'CNAME', 'NS', 'SRV', 'CAA', 'TLSA']
 
 export default function DnsPage() {
   const { t } = useI18n()
@@ -20,6 +20,14 @@ export default function DnsPage() {
   const [zone, setZone] = useState('')
   const [hints, setHints] = useState<any[]>([])
   useEffect(() => { api.deliverability().then(setHints).catch(() => {}) }, [])
+  async function publishHints() {
+    if (!sel) return
+    try {
+      const r: any = await api.publishDeliverability(sel.domain.id)
+      toast(t('dns.publishHintsOk', { n: r.created }))
+      await open(sel.domain.id)
+    } catch (e: any) { toast(e.message) }
+  }
 
   async function loadDomains() {
     try { setDomains(await api.dnsList()) } catch {} finally { setLoading(false) }
@@ -142,7 +150,11 @@ export default function DnsPage() {
               </Card>
 
               <Card className="p-4 text-sm space-y-2">
-                <b className="text-sm">{t('dns.deliverability')}</b>
+                <div className="flex items-center gap-2">
+                  <b className="text-sm">{t('dns.deliverability')}</b>
+                  <div className="flex-1" />
+                  <Button size="sm" variant="outline" onClick={publishHints}><Plus />{t('dns.publishHints')}</Button>
+                </div>
                 <p className="text-xs text-muted-foreground">{t('dns.deliverabilityHint')}</p>
                 {hints.length === 0 && <p className="text-xs text-muted-foreground">—</p>}
                 {hints.map((h, i) => (
