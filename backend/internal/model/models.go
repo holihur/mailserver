@@ -27,8 +27,29 @@ type MailToken struct {
 	Prefix       string     `gorm:"size:20;index" json:"prefix"`
 	Hash         string     `gorm:"size:64;uniqueIndex" json:"-"`
 	AllowedCIDRs string     `gorm:"size:500" json:"allowed_cidrs"` // 允许使用的来源 CIDR，逗号分隔；空=不限
+	Scopes       string     `gorm:"size:200" json:"scopes"`        // 授权范围（imap,pop3,smtp,jmap,sieve,mcp），逗号分隔；空=不限
 	LastUsed     *time.Time `json:"last_used"`
 	CreatedAt    time.Time  `json:"created_at"`
+}
+
+// ScheduledMail 定时 / 周期性发送的邮件：到期后由队列生成一封普通 sent 邮件发出。
+// Repeat 为空表示只发一次；daily/weekly/monthly 表示循环发送。
+type ScheduledMail struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	UserID      uint       `gorm:"index" json:"user_id"`
+	From        string     `gorm:"size:255" json:"from"`
+	To          string     `gorm:"size:255" json:"to"`
+	Cc          string     `gorm:"size:255" json:"cc"`
+	Bcc         string     `gorm:"size:255" json:"bcc"`
+	Subject     string     `gorm:"size:500" json:"subject"`
+	Body        string     `gorm:"type:text" json:"body"`
+	Attachments string     `gorm:"type:text" json:"attachments"`
+	SendAt      time.Time  `gorm:"index" json:"send_at"`
+	Repeat      string     `gorm:"size:20" json:"repeat"` // "" | daily | weekly | monthly
+	Enabled     bool       `json:"enabled"`
+	LastSent    *time.Time `json:"last_sent"`
+	LastError   string     `gorm:"size:500" json:"last_error"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // ---- 自托管域名/DNS ----

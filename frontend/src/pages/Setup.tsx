@@ -6,6 +6,16 @@ import PageShell from '../components/PageShell'
 import { useI18n } from '../lib/i18n'
 import { RefreshCw, CheckCircle2, Clock, XCircle, KeyRound, Plus, Trash2, Copy, Settings } from 'lucide-react'
 
+const SCOPES: [string, string][] = [
+  ['imap', 'token.scopeImap'],
+  ['pop3', 'token.scopePop3'],
+  ['smtp', 'token.scopeSmtp'],
+  ['jmap', 'token.scopeJmap'],
+  ['sieve', 'token.scopeSieve'],
+  ['mcp', 'token.scopeMcp'],
+]
+const ALL_SCOPES = SCOPES.map(s => s[0])
+
 export default function Setup() {
   const { t } = useI18n()
   const [outbox, setOutbox] = useState([])
@@ -14,6 +24,7 @@ export default function Setup() {
   const [me, setMe] = useState<any>(null)
   const [tokName, setTokName] = useState('')
   const [tokCidrs, setTokCidrs] = useState('')
+  const [tokScopes, setTokScopes] = useState<string[]>(ALL_SCOPES)
   const [newToken, setNewToken] = useState('')
   const host = location.hostname
 
@@ -28,10 +39,12 @@ export default function Setup() {
   async function createToken(e: any) {
     e.preventDefault()
     try {
-      const r = await api.tokenCreate(tokName, tokCidrs)
+      const scopes = tokScopes.length === ALL_SCOPES.length ? '' : tokScopes.join(',')
+      const r = await api.tokenCreate(tokName, tokCidrs, scopes)
       setNewToken(r.token)
       setTokName('')
       setTokCidrs('')
+      setTokScopes(ALL_SCOPES)
       setTokens(await api.tokens())
     } catch (err: any) { toast(err.message) }
   }
@@ -68,6 +81,19 @@ export default function Setup() {
             </div>
             <Input className="font-mono text-xs" placeholder={t('token.cidrPlaceholder')} value={tokCidrs} onChange={e => setTokCidrs(e.target.value)} />
             <p className="text-xs text-muted-foreground">{t('token.cidrHint')}</p>
+            <div className="space-y-1">
+              <p className="text-xs font-medium">{t('token.scopes')}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                {SCOPES.map(([k, key]) => (
+                  <label key={k} className="flex items-center gap-1.5 text-xs">
+                    <input type="checkbox" checked={tokScopes.includes(k)}
+                      onChange={e => setTokScopes(v => e.target.checked ? [...v, k] : v.filter(x => x !== k))} />
+                    {t(key)}
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">{t('token.scopesHint')}</p>
+            </div>
           </form>
           {newToken && (
             <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-2">
@@ -87,6 +113,7 @@ export default function Setup() {
                   <span className="text-xs text-muted-foreground hidden sm:inline">
                     {tk.last_used ? t('token.lastUsed', { t: new Date(tk.last_used).toLocaleDateString() }) : t('token.neverUsed')}
                     {tk.allowed_cidrs ? ` · ${tk.allowed_cidrs}` : ''}
+                    {tk.scopes ? ` · ${tk.scopes}` : ` · ${t('token.scopeAll')}`}
                   </span>
                   <div className="flex-1" />
                   <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => revokeToken(tk.id)}><Trash2 /></Button>
@@ -177,6 +204,11 @@ export default function Setup() {
         <Card className="p-4 text-sm text-muted-foreground space-y-1">
           <b className="text-foreground text-sm">{t('setup.why25')}</b>
           <p>{t('setup.why25Body')}</p>
+        </Card>
+
+        <Card className="p-4 text-sm text-muted-foreground space-y-1">
+          <b className="text-foreground text-sm">{t('setup.noCalendar')}</b>
+          <p>{t('setup.noCalendarBody')}</p>
         </Card>
     </PageShell>
   )

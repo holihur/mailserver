@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Button } from './ui/controls'
+import { Button, Input } from './ui/controls'
 import { useI18n } from '../lib/i18n'
-import { subscribeUI, getToasts, getConfirms, dismissToast, resolveConfirm } from '../lib/ui'
+import { subscribeUI, getToasts, getConfirms, getPrompts, dismissToast, resolveConfirm, resolvePrompt, type PromptItem } from '../lib/ui'
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react'
 
 // 全局挂载：右下角 Toast 通知 + 居中确认框。
@@ -11,6 +11,7 @@ export function UIHost() {
   useEffect(() => subscribeUI(() => force(n => n + 1)), [])
   const toasts = getToasts()
   const confirms = getConfirms()
+  const prompts = getPrompts()
 
   return (
     <>
@@ -47,6 +48,32 @@ export function UIHost() {
           </div>
         </div>
       ))}
+
+      {prompts.map(p => <PromptDialog key={p.id} item={p} />)}
     </>
+  )
+}
+
+function PromptDialog({ item }: { item: PromptItem }) {
+  const { t } = useI18n()
+  const [v, setV] = useState(item.defaultValue || '')
+  const submit = (e: any) => { e.preventDefault(); resolvePrompt(item.id, v) }
+  return (
+    <div className="fixed inset-0 z-[100] grid place-items-center bg-black/40 p-4"
+      onClick={() => resolvePrompt(item.id, null)}>
+      <form className="w-full max-w-sm rounded-lg border border-border bg-card p-4 space-y-4 shadow-xl"
+        onClick={e => e.stopPropagation()} onSubmit={submit}>
+        <p className="text-sm whitespace-pre-line break-words">{item.msg}</p>
+        <Input autoFocus
+          type={item.password ? 'password' : item.inputType === 'number' ? 'number' : 'text'}
+          value={v} placeholder={item.placeholder}
+          onChange={e => setV(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') resolvePrompt(item.id, null) }} />
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" size="sm" type="button" onClick={() => resolvePrompt(item.id, null)}>{t('common.cancel')}</Button>
+          <Button size="sm" type="submit">{t('common.confirm')}</Button>
+        </div>
+      </form>
+    </div>
   )
 }

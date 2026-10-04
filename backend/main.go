@@ -25,6 +25,7 @@ import (
 	"mailserver/internal/health"
 	"mailserver/internal/imap"
 	"mailserver/internal/jmap"
+	"mailserver/internal/logging"
 	"mailserver/internal/mailqueue"
 	"mailserver/internal/managesieve"
 	"mailserver/internal/mcp"
@@ -73,6 +74,22 @@ func main() {
 
 	_ = godotenv.Load()
 	cfg := config.Load()
+	// 日志：写入文件并按大小滚动，同时保留 stdout（Docker / systemd 收集）
+	if closeLog, err := logging.Setup(logging.Options{
+		File:       cfg.LogFile,
+		MaxMB:      cfg.LogMaxMB,
+		MaxBackups: cfg.LogMaxBackups,
+		MaxAgeDays: cfg.LogMaxAgeDays,
+		Compress:   cfg.LogCompress,
+		AlsoStdout: true,
+	}); err != nil {
+		log.Println("日志文件初始化失败，仅输出到 stdout:", err)
+	} else {
+		defer closeLog()
+		if cfg.LogFile != "" {
+			log.Printf("日志文件: %s (max %dMB × %d, age %dd, compress=%v)", cfg.LogFile, cfg.LogMaxMB, cfg.LogMaxBackups, cfg.LogMaxAgeDays, cfg.LogCompress)
+		}
+	}
 	auth.SetSecret(cfg.JWTSecret)
 	secret.SetKey(cfg.JWTSecret)
 	if cfg.JWTSecret == "dev-secret-change-me-32chars!!" || len(cfg.JWTSecret) < 16 {
@@ -92,6 +109,7 @@ func main() {
 	au.RL = rl
 	mb := &handler.MailBox{DB: g}
 	tb := &handler.TokenBox{DB: g}
+	sb := &handler.ScheduledBox{DB: g}
 	contacts := &handler.ContactBox{DB: g}
 	extBox := &handler.ExternalBox{DB: g}
 	folderBox := &handler.FolderBox{DB: g}
@@ -236,6 +254,8 @@ func main() {
 	mux.HandleFunc("/api/mails/", cors(mb.One))
 	mux.HandleFunc("/api/tokens", cors(tb.List))
 	mux.HandleFunc("/api/tokens/", cors(tb.One))
+	mux.HandleFunc("/api/scheduled", cors(sb.List))
+	mux.HandleFunc("/api/scheduled/", cors(sb.One))
 	mux.HandleFunc("/api/rules", cors(rb.List))
 	mux.HandleFunc("/api/rules/test", cors(rb.Test))
 	mux.HandleFunc("/api/rules/", cors(rb.One))
@@ -317,7 +337,7 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "+
+			"default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; "+
 				"script-src 'self' 'unsafe-inline'; connect-src 'self' https://api.ipify.org; "+
 				"object-src 'none'; base-uri 'none'; frame-ancestors 'none'")
 		next.ServeHTTP(w, r)

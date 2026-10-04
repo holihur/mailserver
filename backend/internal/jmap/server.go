@@ -46,7 +46,7 @@ func bearer(r *http.Request) string {
 func acctID(uid uint) string { return "u" + strconv.FormatUint(uint64(uid), 10) }
 
 func (s *Server) authUser(w http.ResponseWriter, r *http.Request) (*model.User, bool) {
-	u, err := auth.AuthenticateMail(s.DB, "", bearer(r), auth.HostOf(r.RemoteAddr))
+	u, err := auth.AuthenticateMail(s.DB, "", bearer(r), auth.HostOf(r.RemoteAddr), auth.ScopeJMAP)
 	if err != nil {
 		writeJSON(w, 401, map[string]any{"type": "about:blank", "status": 401, "detail": "unauthorized"})
 		return nil, false

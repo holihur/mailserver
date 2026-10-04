@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/contacts"
 	"mailserver/internal/model"
 
 	"gorm.io/gorm"
@@ -73,7 +74,7 @@ func (s *Server) Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := auth.AuthenticateMail(s.DB, "", bearer(r), auth.HostOf(r.RemoteAddr))
+	u, err := auth.AuthenticateMail(s.DB, "", bearer(r), auth.HostOf(r.RemoteAddr), auth.ScopeMCP)
 	if err != nil {
 		writeErr(w, nil, -32001, "unauthorized: "+err.Error())
 		return
@@ -190,6 +191,7 @@ func (s *Server) run(u *model.User, name string, args json.RawMessage) (string, 
 		if err := s.DB.Create(&m).Error; err != nil {
 			return "", fmt.Errorf("保存失败")
 		}
+		contacts.Collect(s.DB, u.ID, m.From, m.To, m.Cc, m.Bcc)
 		if s.MQ != nil {
 			_ = s.MQ.EnqueueSend(m.ID)
 		}

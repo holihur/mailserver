@@ -142,7 +142,7 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 				s.err("need USER first")
 				continue
 			}
-			u, err := auth.AuthenticateMail(s.db, s.name, arg, auth.HostOf(s.conn.RemoteAddr().String()))
+			u, err := auth.AuthenticateMail(s.db, s.name, arg, auth.HostOf(s.conn.RemoteAddr().String()), auth.ScopePOP3)
 			if err != nil {
 				s.err(err.Error())
 				continue

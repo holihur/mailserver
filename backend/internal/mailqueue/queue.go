@@ -8,11 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
+	"mailserver/internal/contacts"
 	"mailserver/internal/model"
 	"mailserver/internal/queue"
 	"mailserver/internal/runtimecfg"
+	"mailserver/internal/schedule"
 
 	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
@@ -96,9 +99,10 @@ func Start(redisURL string, db *gorm.DB, rt *runtimecfg.Store) error {
 }
 
 type handler struct {
-	db     *gorm.DB
-	rt     *runtimecfg.Store
-	client *Client
+	db      *gorm.DB
+	rt      *runtimecfg.Store
+	client  *Client
+	sweepMu sync.Mutex
 }
 
 func (h *handler) send(ctx context.Context, t *asynq.Task) error {
@@ -113,6 +117,8 @@ func (h *handler) send(ctx context.Context, t *asynq.Task) error {
 	if m.Relayed || m.Attempts >= queue.MaxAttempts {
 		return nil
 	}
+	// 自动把收件人（To/Cc/Bcc）收录进通讯录（系统转发的 UserID=0 会跳过）
+	contacts.Collect(h.db, m.UserID, m.From, m.To, m.Cc, m.Bcc)
 	queue.Deliver(h.db, h.rt.Relay(), h.rt.Signer(), queue.LoadRoutes(h.db), &m)
 
 	// 未成功则返回错误触发 asynq 重试（已到上限则不再重试）
@@ -125,11 +131,39 @@ func (h *handler) send(ctx context.Context, t *asynq.Task) error {
 }
 
 func (h *handler) sweep(ctx context.Context, t *asynq.Task) error {
+	h.sweepMu.Lock()
+	defer h.sweepMu.Unlock()
 	var mails []model.Mail
 	h.db.Where("folder = ? AND relayed = ? AND attempts < ?", "sent", false, queue.MaxAttempts).
 		Order("id").Limit(100).Find(&mails)
 	for _, m := range mails {
 		_ = h.client.EnqueueSend(m.ID)
 	}
+	h.processScheduled()
 	return nil
+}
+
+// processScheduled 把到期的定时 / 周期邮件生成一封 sent 邮件并发出；重复任务计算下次时间。
+func (h *handler) processScheduled() {
+	var list []model.ScheduledMail
+	h.db.Where("enabled = ? AND send_at <= ?", true, time.Now()).Order("send_at").Limit(100).Find(&list)
+	for _, sm := range list {
+		m := model.Mail{UserID: sm.UserID, From: sm.From, To: sm.To, Cc: sm.Cc, Bcc: sm.Bcc,
+			Subject: sm.Subject, Body: sm.Body, Attachments: sm.Attachments,
+			Folder: "sent", Read: true, Status: "queued"}
+		if err := h.db.Create(&m).Error; err != nil {
+			h.db.Model(&model.ScheduledMail{}).Where("id = ?", sm.ID).Update("last_error", err.Error())
+			continue
+		}
+		_ = h.client.EnqueueSend(m.ID)
+		now := time.Now()
+		if sm.Repeat == "" {
+			h.db.Model(&model.ScheduledMail{}).Where("id = ?", sm.ID).
+				Updates(map[string]any{"enabled": false, "last_sent": now, "last_error": ""})
+		} else {
+			next := schedule.NextRun(sm.SendAt, sm.Repeat, now)
+			h.db.Model(&model.ScheduledMail{}).Where("id = ?", sm.ID).
+				Updates(map[string]any{"send_at": next, "last_sent": now, "last_error": ""})
+		}
+	}
 }

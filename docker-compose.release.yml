@@ -2,6 +2,14 @@
 # api 镜像已内嵌前端，Web 界面直接由 api 在 80 端口提供，无需单独的 web 容器。
 # 由 install.sh 下载使用，或手动：
 #   docker compose -f docker-compose.release.yml up -d
+
+# 日志轮转：Docker 内置 json-file 驱动，按大小/数量滚动，避免日志撑满磁盘。
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     image: postgres:16-alpine
@@ -12,6 +20,7 @@ services:
     volumes: [pgdata:/var/lib/postgresql/data]
     restart: unless-stopped
     mem_limit: 256m
+    logging: *default-logging
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mailserver}"]
       interval: 10s
@@ -45,6 +54,11 @@ services:
       SMTP_RELAY_FROM: ${SMTP_RELAY_FROM:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       DKIM_SELECTOR: ${DKIM_SELECTOR:-dkim}
+      # 日志（写入 /data/logs 并按大小滚动）
+      LOG_MAX_MB: ${LOG_MAX_MB:-50}
+      LOG_MAX_BACKUPS: ${LOG_MAX_BACKUPS:-5}
+      LOG_MAX_AGE_DAYS: ${LOG_MAX_AGE_DAYS:-30}
+      LOG_COMPRESS: ${LOG_COMPRESS:-1}
       # 隐式 TLS 端口（证书可在管理后台一键申请/上传）
       SUBMIT_TLS_PORT: ${SUBMIT_TLS_PORT:-465}
       IMAP_TLS_PORT: ${IMAP_TLS_PORT:-993}
@@ -52,11 +66,13 @@ services:
     volumes: [maildata:/data]
     restart: unless-stopped
     mem_limit: 192m
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     restart: unless-stopped
     mem_limit: 64m
+    logging: *default-logging
 
 volumes: { maildata: {}, pgdata: {} }

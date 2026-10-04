@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -35,6 +36,12 @@ type Config struct {
 	RelayUser       string
 	RelayPass       string
 	RelayFrom       string
+	// 日志
+	LogFile       string // 日志文件路径；off/-/stdout 则仅输出 stdout
+	LogMaxMB      int    // 单个日志文件大小上限（MB）
+	LogMaxBackups int    // 保留的旧日志文件个数
+	LogMaxAgeDays int    // 旧日志文件保留天数
+	LogCompress   bool   // 是否 gzip 压缩旧日志
 }
 
 // DKIM_DOMAIN 未配置时从 MAIL_HOST 推导：mail.example.com -> example.com
@@ -56,12 +63,40 @@ func getenv(k, def string) string {
 	return def
 }
 
+func atoiDefault(s string, def int) int {
+	if strings.TrimSpace(s) == "" {
+		return def
+	}
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n < 0 {
+		return def
+	}
+	return n
+}
+
+func isFalse(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "0", "false", "no", "off":
+		return true
+	}
+	return false
+}
+
 func Load() Config {
 	dataDir := getenv("DATA_DIR", "./data")
 	dbURL := os.Getenv("DATABASE_URL")
 	certDir := os.Getenv("CERT_DIR")
 	if certDir == "" {
 		certDir = filepath.Join(dataDir, "certs")
+	}
+	// 日志文件：默认为 DATA_DIR/logs/mailserver.log；LOG_FILE=off/-/stdout 可关闭文件输出
+	logFile := os.Getenv("LOG_FILE")
+	if logFile == "" {
+		logFile = filepath.Join(dataDir, "logs", "mailserver.log")
+	}
+	switch strings.ToLower(strings.TrimSpace(logFile)) {
+	case "off", "-", "stdout", "none":
+		logFile = ""
 	}
 	return Config{
 		Port:            getenv("PORT", "8080"),
@@ -92,5 +127,10 @@ func Load() Config {
 		TLSKey:          os.Getenv("TLS_KEY"),
 		Host:            getenv("MAIL_HOST", "mail.example.com"),
 		AdminEmails:     os.Getenv("ADMIN_EMAILS"),
+		LogFile:         logFile,
+		LogMaxMB:        atoiDefault(os.Getenv("LOG_MAX_MB"), 50),
+		LogMaxBackups:   atoiDefault(os.Getenv("LOG_MAX_BACKUPS"), 5),
+		LogMaxAgeDays:   atoiDefault(os.Getenv("LOG_MAX_AGE_DAYS"), 30),
+		LogCompress:     !isFalse(os.Getenv("LOG_COMPRESS")),
 	}
 }

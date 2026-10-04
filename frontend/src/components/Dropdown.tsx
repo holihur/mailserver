@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '../lib/utils'
 
 // 轻量下拉菜单：点击触发器展开，点击外部 / Esc 关闭，选中项后自动关闭。
+// 菜单通过 portal 渲染到 body 并使用 fixed 定位，避免被 overflow 容器裁剪或被层叠上下文遮挡。
 export function Dropdown({
   trigger,
   children,
@@ -15,11 +17,35 @@ export function Dropdown({
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ top: number; left?: number; right?: number } | null>(null)
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const compute = () => {
+      const r = ref.current?.getBoundingClientRect()
+      if (!r) return
+      setPos(
+        align === 'right'
+          ? { top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) }
+          : { top: r.bottom + 8, left: Math.max(8, r.left) },
+      )
+    }
+    compute()
+    window.addEventListener('resize', compute)
+    window.addEventListener('scroll', compute, true)
+    return () => {
+      window.removeEventListener('resize', compute)
+      window.removeEventListener('scroll', compute, true)
+    }
+  }, [open, align])
 
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      if (ref.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false)
@@ -35,18 +61,20 @@ export function Dropdown({
   return (
     <div ref={ref} className="relative">
       <div onClick={() => setOpen(o => !o)}>{trigger}</div>
-      {open && (
+      {open && pos && createPortal(
         <div
+          ref={menuRef}
           role="menu"
+          style={{ position: 'fixed', top: pos.top, left: pos.left, right: pos.right }}
           onClick={() => setOpen(false)}
           className={cn(
-            'absolute z-50 mt-2 min-w-[13rem] rounded-md border border-border bg-card text-card-foreground shadow-lg p-1',
-            align === 'right' ? 'right-0' : 'left-0',
+            'z-[100] min-w-[13rem] rounded-md border border-border bg-card text-card-foreground shadow-lg p-1',
             className,
           )}
         >
           {children}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )

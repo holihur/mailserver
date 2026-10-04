@@ -219,7 +219,7 @@ func (s *sess) authenticate(rest string) {
 		s.no("Bad credentials")
 		return
 	}
-	u, err := auth.AuthenticateMail(s.db, p[1], p[2], auth.HostOf(s.conn.RemoteAddr().String()))
+	u, err := auth.AuthenticateMail(s.db, p[1], p[2], auth.HostOf(s.conn.RemoteAddr().String()), auth.ScopeSieve)
 	if err != nil {
 		s.no("Authentication failed")
 		return

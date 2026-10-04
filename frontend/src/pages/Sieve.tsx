@@ -6,21 +6,12 @@ import { toast, confirmAsync } from '../lib/ui'
 import { useI18n } from '../lib/i18n'
 import { Filter, Plus, Trash2, Check, Save, Power } from 'lucide-react'
 
-const TEMPLATE = `# Sieve 脚本示例
-require ["fileinto"];
-
-if header :contains "Subject" "促销" {
-  fileinto "Trash";
-} elsif address :domain "From" "spam.com" {
-  discard;
-}
-`
-
 export default function Sieve() {
   const { t } = useI18n()
+  const template = t('sieve.template')
   const [list, setList] = useState<any[]>([])
   const [name, setName] = useState('main')
-  const [script, setScript] = useState(TEMPLATE)
+  const [script, setScript] = useState(template)
 
   async function load() {
     try { setList(await api.sieve()) } catch {}
@@ -28,7 +19,7 @@ export default function Sieve() {
   useEffect(() => { load() }, [])
 
   function edit(sc: any) { setName(sc.name); setScript(sc.script) }
-  function reset() { setName('main'); setScript(TEMPLATE) }
+  function reset() { setName('main'); setScript(template) }
 
   async function save() {
     try {

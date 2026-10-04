@@ -51,9 +51,9 @@ export function setUnreadBadge(n: number) {
   img.src = origIcon
 }
 
-// 引用原文
-export function quoteMail(m: any): string {
+// 引用原文（文案交由调用方传入 t，保持多语言一致）
+export function quoteMail(m: any, t: (k: string, vars?: any) => string): string {
   const when = m.created_at ? new Date(m.created_at).toLocaleString() : ''
   const lines = (m.body || '').split('\n').map((l: string) => '> ' + l).join('\n')
-  return `\n\n在 ${when}，${m.from} 写道：\n${lines}`
+  return `\n\n${t('mail.quoteWrote', { when, from: m.from })}\n${lines}`
 }

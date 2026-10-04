@@ -21,6 +21,7 @@ const Accounts = lazy(() => import('./pages/Accounts'))
 const Rules = lazy(() => import('./pages/Rules'))
 const Security = lazy(() => import('./pages/Security'))
 const Sieve = lazy(() => import('./pages/Sieve'))
+const Scheduled = lazy(() => import('./pages/Scheduled'))
 const Privacy = lazy(() => import('./pages/Privacy'))
 
 const authed = () => !!localStorage.getItem('token')
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/rules" element={authed() ? <Rules /> : <Navigate to="/login" />} />
           <Route path="/security" element={authed() ? <Security /> : <Navigate to="/login" />} />
           <Route path="/sieve" element={authed() ? <Sieve /> : <Navigate to="/login" />} />
+          <Route path="/scheduled" element={authed() ? <Scheduled /> : <Navigate to="/login" />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/admin" element={authed() ? <AdminPage /> : <Navigate to="/login" />} />
           <Route path="/admin/settings" element={authed() ? <AdminSettings /> : <Navigate to="/login" />} />

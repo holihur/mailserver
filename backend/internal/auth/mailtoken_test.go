@@ -167,3 +167,57 @@ func TestCIDREdge(t *testing.T) {
 		t.Fatal("含空项应仍能匹配单 IP")
 	}
 }
+
+func TestScopes(t *testing.T) {
+	if err := ValidScopes("imap,smtp"); err != nil {
+		t.Fatalf("合法范围不应报错: %v", err)
+	}
+	if err := ValidScopes("imap,bogus"); err == nil {
+		t.Fatal("未知范围应报错")
+	}
+	if got := NormalizeScopes("SMTP, imap , imap"); got != "imap,smtp" {
+		t.Fatalf("NormalizeScopes=%q", got)
+	}
+	if !TokenAllows("", ScopeMCP) {
+		t.Fatal("空范围应表示不限")
+	}
+	if !TokenAllows("imap,mcp", "MCP") {
+		t.Fatal("范围应大小写不敏感")
+	}
+	if TokenAllows("imap", "smtp") {
+		t.Fatal("未授权范围应拒绝")
+	}
+}
+
+func TestAuthenticateMailScopes(t *testing.T) {
+	dsn := os.Getenv("TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("TEST_DATABASE_URL 未设置，跳过")
+	}
+	g, err := db.Open(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g.Exec("TRUNCATE mail_tokens, users RESTART IDENTITY CASCADE")
+	plain, prefix, _ := NewMailToken()
+	u := model.User{Email: "scope@test.local"}
+	g.Create(&u)
+	g.Create(&model.MailToken{UserID: u.ID, Name: "imap-only", Prefix: prefix, Hash: HashMailToken(plain), Scopes: "imap"})
+
+	if _, err := AuthenticateMail(g, "scope@test.local", plain, "", ScopeIMAP); err != nil {
+		t.Fatalf("imap 应通过: %v", err)
+	}
+	if _, err := AuthenticateMail(g, "scope@test.local", plain, "", ScopeSMTP); err == nil {
+		t.Fatal("smtp 应被拒绝")
+	}
+	if _, err := AuthenticateMail(g, "scope@test.local", plain, ""); err != nil {
+		t.Fatalf("不指定范围应通过: %v", err)
+	}
+
+	// 旧令牌 Scopes 为空 = 不限
+	plain2, prefix2, _ := NewMailToken()
+	g.Create(&model.MailToken{UserID: u.ID, Name: "legacy", Prefix: prefix2, Hash: HashMailToken(plain2)})
+	if _, err := AuthenticateMail(g, "scope@test.local", plain2, "", ScopeSMTP); err != nil {
+		t.Fatalf("旧令牌应不限范围: %v", err)
+	}
+}

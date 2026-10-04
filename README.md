@@ -60,14 +60,24 @@
 
 Sweetcorn 的取舍：**不搭 Postfix/Dovecot 套件**，用单进程 + 单二进制换取部署简单、资源占用低。
 
+> **明确不支持日历**：本系统是纯邮件系统，不提供 CalDAV / iCalendar 同步，也不解析会议邀请；通讯录（CardDAV）同样仅站内管理。请搭配独立日历 / 联系人服务使用。
+
 **领先点**：单二进制 / 内置权威 DNS / CEL 收信规则 / MCP / JMAP / GDPR / 后台自动更新。
 
-### 暂缺（后期补齐）
+### 明确不支持 / 后期规划
+
+**明确不支持：**
+
+| 能力 | 说明 |
+|------|------|
+| 日历（CalDAV / iCalendar） | 不含日历，不解析会议邀请；不提供 CalDAV 同步 |
+| CardDAV 联系人同步 | 通讯录仅站内管理，暂不与客户端双向同步 |
+
+**后期规划：**
 
 | 能力 | 说明 | 状态 |
 |------|------|------|
-| CalDAV / CardDAV | 日历与联系人同步 | 后期 |
-| ActiveSync (EAS) | 移动端原生邮件/日历/联系人 | 后期 |
+| ActiveSync (EAS) | 移动端原生同步（仅邮件，不含日历/联系人） | 后期 |
 | 反垃圾 / 反病毒 | Rspamd / SpamAssassin + ClamAV | 后期 |
 | 全文检索 | 索引式搜索（Solr / Xapian） | 后期 |
 | LDAP SSO | 目录服务（OIDC 已支持） | 后期 |
@@ -107,6 +117,14 @@ curl -fsSL https://raw.githubusercontent.com/holihur/mailserver/main/install.sh 
 sudo /opt/mailserver/bin/mailserver update    # 拉取最新 Release 并重启
 sudo /opt/mailserver/bin/mailserver version   # 查看当前版本
 ```
+
+## 日志
+
+应用日志**同时写入文件与 stdout**：文件用成熟库 `lumberjack` 按大小滚动，stdout 交给运行时收集。
+
+- **文件**：默认 `DATA_DIR/logs/mailserver.log`；`LOG_MAX_MB=50`（单文件上限）、`LOG_MAX_BACKUPS=5`（保留份数）、`LOG_MAX_AGE_DAYS=30`（保留天数）、默认 gzip 压缩。`LOG_FILE=off` 可关闭文件输出，`LOG_FILE=/path` 可自定义路径。
+- **Docker**：stdout 另由 compose 内置的 `json-file` 驱动轮转（`10m×3`）；文件写在 `maildata` 卷内持久化。查看 `docker compose logs -f api`。
+- **systemd / 二进制**：stdout 由 journald 自带轮转，`journalctl -u mailserver -f`；如需限制总量，在 `/etc/systemd/journald.conf` 设 `SystemMaxUse=500M` 后 `systemctl restart systemd-journald`。
 
 ## 发布
 

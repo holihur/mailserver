@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmAsync, promptAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -30,13 +30,13 @@ export default function AdminUsers() {
   }
 
   async function resetPass(u) {
-    const pw = prompt(`${t('users.changePass')}: ${u.email} (≥6)`)
+    const pw = await promptAsync(`${t('users.changePass')}: ${u.email}`, { password: true, placeholder: '≥6' })
     if (!pw) return
     try { await api.adminUserPatch(u.id, { password: pw }); setMsg(t('users.changePass')) } catch (e) { setMsg(e.message) }
   }
 
   async function setQuota(u) {
-    const v = prompt(`${t('users.setQuota')}: ${u.email} (MB, 0=${t('users.unlimited')})`, String(u.quota_mb || 0))
+    const v = await promptAsync(`${t('users.setQuota')}: ${u.email} (MB, 0=${t('users.unlimited')})`, { defaultValue: String(u.quota_mb || 0), inputType: 'number', placeholder: 'MB' })
     if (v === null) return
     const mb = parseInt(v, 10)
     if (isNaN(mb) || mb < 0) return

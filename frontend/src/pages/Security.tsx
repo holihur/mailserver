@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmAsync, promptAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -52,7 +52,7 @@ export default function Security() {
   }
   async function deleteAccount() {
     if (!await confirmAsync(t('security.deleteConfirm'))) return
-    const pw = prompt(t('security.passwordPrompt'))
+    const pw = await promptAsync(t('security.passwordPrompt'), { password: true })
     if (!pw) return
     try {
       await api.gdprDelete(pw)

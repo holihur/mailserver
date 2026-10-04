@@ -67,3 +67,32 @@ func TestLoadCertDirExplicit(t *testing.T) {
 		t.Errorf("CertDir=%q", cfg.CertDir)
 	}
 }
+
+func TestLogConfig(t *testing.T) {
+	t.Setenv("DATA_DIR", "/data")
+	t.Setenv("LOG_FILE", "")
+	t.Setenv("LOG_MAX_MB", "")
+	t.Setenv("LOG_MAX_BACKUPS", "")
+	t.Setenv("LOG_MAX_AGE_DAYS", "")
+	t.Setenv("LOG_COMPRESS", "")
+	cfg := Load()
+	if cfg.LogFile != "/data/logs/mailserver.log" {
+		t.Errorf("default LogFile=%q", cfg.LogFile)
+	}
+	if cfg.LogMaxMB != 50 || cfg.LogMaxBackups != 5 || cfg.LogMaxAgeDays != 30 || !cfg.LogCompress {
+		t.Errorf("log defaults: %+v", cfg)
+	}
+
+	t.Setenv("LOG_FILE", "off")
+	if cfg := Load(); cfg.LogFile != "" {
+		t.Errorf("LOG_FILE=off should disable file logging, got %q", cfg.LogFile)
+	}
+
+	t.Setenv("LOG_FILE", "/custom/x.log")
+	t.Setenv("LOG_MAX_MB", "10")
+	t.Setenv("LOG_COMPRESS", "0")
+	cfg = Load()
+	if cfg.LogFile != "/custom/x.log" || cfg.LogMaxMB != 10 || cfg.LogCompress {
+		t.Errorf("log custom: %+v", cfg)
+	}
+}

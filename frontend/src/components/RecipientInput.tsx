@@ -9,11 +9,13 @@ export function RecipientInput({
   onChange,
   placeholder,
   suggestions,
+  autoFocus,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   suggestions: Suggestion[]
+  autoFocus?: boolean
 }) {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
@@ -51,6 +53,7 @@ export function RecipientInput({
           </span>
         ))}
         <input
+          autoFocus={autoFocus}
           className="flex-1 min-w-[8rem] bg-transparent outline-none py-1"
           placeholder={emails.length ? '' : placeholder}
           value={q}

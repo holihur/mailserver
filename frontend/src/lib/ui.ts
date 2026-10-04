@@ -13,8 +13,19 @@ export type ToastItem = {
 
 export type ConfirmItem = { id: number; msg: string; resolve: (v: boolean) => void }
 
+export type PromptItem = {
+  id: number
+  msg: string
+  defaultValue: string
+  password: boolean
+  inputType: 'text' | 'number'
+  placeholder?: string
+  resolve: (v: string | null) => void
+}
+
 let toasts: ToastItem[] = []
 let confirms: ConfirmItem[] = []
+let prompts: PromptItem[] = []
 const listeners = new Set<() => void>()
 let seq = 1
 
@@ -31,6 +42,7 @@ export function subscribeUI(l: () => void) {
 
 export const getToasts = () => toasts
 export const getConfirms = () => confirms
+export const getPrompts = () => prompts
 
 export function dismissToast(id: number) {
   toasts = toasts.filter(t => t.id !== id)
@@ -64,5 +76,32 @@ export function resolveConfirm(id: number, v: boolean) {
   const c = confirms.find(x => x.id === id)
   if (c) c.resolve(v)
   confirms = confirms.filter(x => x.id !== id)
+  emit()
+}
+
+// promptAsync：应用内输入弹窗（替代原生 prompt，移动端/无头环境更可靠）
+export function promptAsync(
+  msg: string,
+  opts: { defaultValue?: string; password?: boolean; inputType?: 'text' | 'number'; placeholder?: string } = {},
+): Promise<string | null> {
+  return new Promise(resolve => {
+    const p: PromptItem = {
+      id: seq++,
+      msg,
+      defaultValue: opts.defaultValue ?? '',
+      password: !!opts.password,
+      inputType: opts.inputType || 'text',
+      placeholder: opts.placeholder,
+      resolve,
+    }
+    prompts = [...prompts, p]
+    emit()
+  })
+}
+
+export function resolvePrompt(id: number, v: string | null) {
+  const p = prompts.find(x => x.id === id)
+  if (p) p.resolve(v)
+  prompts = prompts.filter(x => x.id !== id)
   emit()
 }

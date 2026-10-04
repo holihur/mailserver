@@ -35,6 +35,7 @@ func (h *TokenBox) List(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name         string `json:"name"`
 			AllowedCIDRs string `json:"allowed_cidrs"`
+			Scopes       string `json:"scopes"`
 		}
 		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in)
 		name := strings.TrimSpace(in.Name)
@@ -49,12 +50,17 @@ func (h *TokenBox) List(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 400, map[string]string{"error": err.Error()})
 			return
 		}
+		scopes := auth.NormalizeScopes(in.Scopes)
+		if err := auth.ValidScopes(scopes); err != nil {
+			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			return
+		}
 		plain, prefix, err := auth.NewMailToken()
 		if err != nil {
 			writeJSON(w, 500, map[string]string{"error": "生成失败"})
 			return
 		}
-		t := model.MailToken{UserID: uid, Name: name, Prefix: prefix, Hash: auth.HashMailToken(plain), AllowedCIDRs: cidrs}
+		t := model.MailToken{UserID: uid, Name: name, Prefix: prefix, Hash: auth.HashMailToken(plain), AllowedCIDRs: cidrs, Scopes: scopes}
 		if err := h.DB.Create(&t).Error; err != nil {
 			writeJSON(w, 500, map[string]string{"error": "保存失败"})
 			return
@@ -62,8 +68,8 @@ func (h *TokenBox) List(w http.ResponseWriter, r *http.Request) {
 		// token 为一次性明文，前端需提示用户立即复制。
 		writeJSON(w, 201, map[string]any{
 			"id": t.ID, "name": t.Name, "prefix": t.Prefix,
-			"allowed_cidrs": t.AllowedCIDRs,
-			"token":         plain, "created_at": t.CreatedAt,
+			"allowed_cidrs": t.AllowedCIDRs, "scopes": t.Scopes,
+			"token": plain, "created_at": t.CreatedAt,
 		})
 	default:
 		w.WriteHeader(405)
@@ -91,6 +97,7 @@ func (h *TokenBox) One(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name         *string `json:"name"`
 			AllowedCIDRs *string `json:"allowed_cidrs"`
+			Scopes       *string `json:"scopes"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "bad body"})
@@ -107,6 +114,14 @@ func (h *TokenBox) One(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			upd["allowed_cidrs"] = cidrs
+		}
+		if in.Scopes != nil {
+			scopes := auth.NormalizeScopes(*in.Scopes)
+			if err := auth.ValidScopes(scopes); err != nil {
+				writeJSON(w, 400, map[string]string{"error": err.Error()})
+				return
+			}
+			upd["scopes"] = scopes
 		}
 		if len(upd) > 0 {
 			h.DB.Model(&t).Updates(upd)

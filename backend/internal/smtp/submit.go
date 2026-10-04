@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/contacts"
 	"mailserver/internal/htmlsanitize"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
@@ -242,7 +243,7 @@ func (s *submitter) doAuth(arg string) bool {
 }
 
 func (s *submitter) checkUser(email, pass string) bool {
-	u, err := auth.AuthenticateMail(s.db, email, pass, auth.HostOf(s.remote))
+	u, err := auth.AuthenticateMail(s.db, email, pass, auth.HostOf(s.remote), auth.ScopeSMTP)
 	if err != nil {
 		return false
 	}
@@ -256,6 +257,7 @@ func (s *submitter) queueMail(raw string) {
 	for _, to := range s.rcpts {
 		m := model.Mail{UserID: s.user.ID, From: s.user.Email, To: to, Subject: subject, Body: body, BodyHTML: htmlsanitize.Sanitize(htmlBody), Attachments: atts, Folder: "sent", Read: true, Status: "queued"}
 		s.db.Create(&m)
+		contacts.Collect(s.db, s.user.ID, s.user.Email, to)
 	}
 	s.reply(fmt.Sprintf("250 OK queued for %d rcpt(s)", len(s.rcpts)))
 }

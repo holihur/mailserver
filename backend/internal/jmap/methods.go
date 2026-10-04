@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"mailserver/internal/contacts"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 )
@@ -577,6 +578,7 @@ func (s *Server) submissionSet(u *model.User, acct string, args json.RawMessage,
 			continue
 		}
 		s.DB.Model(&m).Updates(map[string]any{"folder": "sent", "status": "queued"})
+		contacts.Collect(s.DB, u.ID, m.From, m.To, m.Cc, m.Bcc)
 		if s.MQ != nil {
 			_ = s.MQ.EnqueueSend(m.ID)
 		}

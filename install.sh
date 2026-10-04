@@ -320,6 +320,9 @@ EnvironmentFile=/etc/mailserver/mailserver.env
 ExecStart=${DIR}/bin/mailserver
 Restart=always
 RestartSec=3
+# 日志交由 journald 轮转（journalctl -u mailserver；总大小用 SystemMaxUse 限制）
+StandardOutput=journal
+StandardError=journal
 # 内置 DNS 需要绑定 :53
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 CapabilityBoundingSet=CAP_NET_BIND_SERVICE
