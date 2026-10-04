@@ -17,10 +17,11 @@ import (
 	"mailserver/internal/config"
 	"mailserver/internal/db"
 	"mailserver/internal/dnsserver"
+	"mailserver/internal/external"
 	"mailserver/internal/handler"
 	"mailserver/internal/imap"
+	"mailserver/internal/mailqueue"
 	"mailserver/internal/pop3"
-	"mailserver/internal/queue"
 	"mailserver/internal/ratelimit"
 	"mailserver/internal/runtimecfg"
 	"mailserver/internal/secret"
@@ -85,12 +86,23 @@ func main() {
 	mb := &handler.MailBox{DB: g}
 	tb := &handler.TokenBox{DB: g}
 	contacts := &handler.ContactBox{DB: g}
+	extBox := &handler.ExternalBox{DB: g}
 	totpBox := &handler.TOTPBox{DB: g}
 	gdpr := &handler.GDPRBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
 
 	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
 	rt := runtimecfg.New(g, cfg)
+	// asynq 发信队列（Redis 后端）：入队 + worker + 定时兜底
+	mq, err := mailqueue.NewClient(cfg.RedisURL)
+	if err != nil {
+		log.Fatal("发信队列需要 Redis（REDIS_URL）：", err)
+	}
+	mb.MQ = mq
+	defer mq.Close()
+	if err := mailqueue.Start(cfg.RedisURL, g, rt); err != nil {
+		log.Fatal("启动 asynq 失败：", err)
+	}
 	rb := &handler.RuleBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails}
 	srb := &handler.RuleBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails, Site: true}
 	rbx := &handler.RouteBox{DB: g, RT: rt, AdminEmails: cfg.AdminEmails}
@@ -121,6 +133,7 @@ func main() {
 	host := rt.MailHost
 
 	go mailsmtp.Serve(":"+cfg.SMTPport, g)
+	go external.Start(g)
 	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, host, g, tlsConf)
 	go pop3.Serve(":"+cfg.Pop3Port, host, g, tlsConf)
 	go imap.Serve(":"+cfg.ImapPort, host, g, tlsConf)
@@ -133,7 +146,6 @@ func main() {
 	if cfg.Pop3TLSPort != "" {
 		go pop3.ServeTLS(":"+cfg.Pop3TLSPort, host, g, tlsConf)
 	}
-	go queue.Start(g, rt)
 
 	// 内置权威 DNS（与 API 同一进程/二进制；DNS_ADDR=off 可禁用）
 	if cfg.DNSAddr != "" && !strings.EqualFold(cfg.DNSAddr, "off") && !strings.EqualFold(cfg.DNSAddr, "none") {
@@ -209,6 +221,8 @@ func main() {
 	mux.HandleFunc("/api/contacts", cors(contacts.List))
 	mux.HandleFunc("/api/contacts/", cors(contacts.One))
 	mux.HandleFunc("/api/directory", cors(contacts.Directory))
+	mux.HandleFunc("/api/external", cors(extBox.List))
+	mux.HandleFunc("/api/external/", cors(extBox.One))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))

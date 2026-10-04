@@ -17,6 +17,7 @@ import (
 
 	localdeliver "mailserver/internal/deliver"
 	"mailserver/internal/dkim"
+	"mailserver/internal/external"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/route"
@@ -25,31 +26,24 @@ import (
 	"gorm.io/gorm"
 )
 
-const maxAttempts = 8
+const MaxAttempts = 8
 
-func Start(db *gorm.DB, rt *runtimecfg.Store) {
-	run := func() {
-		c := rt.Relay()
-		signer := rt.Signer()
-		var routes []model.MailRoute
-		db.Where("enabled = ?", true).Find(&routes)
-		var mails []model.Mail
-		db.Where("folder = ? AND relayed = ? AND attempts < ?", "sent", false, maxAttempts).
-			Order("id").Limit(20).Find(&mails)
-		for i := range mails {
-			deliver(db, c, signer, routes, &mails[i])
-		}
-	}
-	run()
-	for range time.Tick(20 * time.Second) {
-		run()
-	}
+// LoadRoutes 读取启用的邮件路由（供 asynq worker 使用）。
+func LoadRoutes(db *gorm.DB) []model.MailRoute {
+	var routes []model.MailRoute
+	db.Where("enabled = ?", true).Find(&routes)
+	return routes
 }
 
-func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []model.MailRoute, m *model.Mail) {
+func Deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []model.MailRoute, m *model.Mail) {
+	db.Model(m).Update("status", "sending")
+	// 以第三方账号身份发信时，改用该账号的 SMTP 配置
+	if ext := external.Find(db, m.UserID, m.From); ext != nil {
+		c = external.Relay(ext)
+	}
 	recipients := message.Recipients(m)
 	if len(recipients) == 0 {
-		db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": "无收件人"})
+		db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": "无收件人", "status": "sent"})
 		return
 	}
 
@@ -64,7 +58,7 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []mode
 		}
 	}
 	if len(external) == 0 {
-		db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
+		db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": "", "status": "sent"})
 		return
 	}
 
@@ -129,11 +123,15 @@ func deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []mode
 		}
 	}
 	if firstErr != nil {
-		db.Model(m).Updates(map[string]any{"attempts": m.Attempts + 1, "relay_err": trimErr(firstErr)})
+		status := "queued"
+		if m.Attempts+1 >= MaxAttempts {
+			status = "failed"
+		}
+		db.Model(m).Updates(map[string]any{"attempts": m.Attempts + 1, "relay_err": trimErr(firstErr), "status": status})
 		log.Printf("queue: mail %d external fail: %v", m.ID, firstErr)
 		return
 	}
-	db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": ""})
+	db.Model(m).Updates(map[string]any{"relayed": true, "relay_err": "", "status": "sent"})
 }
 
 // sendSMTP 通过中继发信；465 用隐式 TLS，25/587 用 STARTTLS。

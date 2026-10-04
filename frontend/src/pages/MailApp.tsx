@@ -11,7 +11,7 @@ import {
   Inbox, Send, FileEdit, Trash2, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
   ChevronDown, MoreVertical, Reply, MailOpen,
-  Contact, Filter, KeyRound,
+  Contact, Filter, KeyRound, AtSign,
 } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
@@ -95,6 +95,7 @@ export default function MailApp() {
           <DropdownSeparator />
           <DropdownItem icon={Settings} onClick={() => navigate('/setup')}>{t('nav.setup')}</DropdownItem>
           <DropdownItem icon={Contact} onClick={() => navigate('/contacts')}>{t('nav.contacts')}</DropdownItem>
+          <DropdownItem icon={AtSign} onClick={() => navigate('/accounts')}>{t('nav.accounts')}</DropdownItem>
           <DropdownItem icon={Filter} onClick={() => navigate('/rules')}>{t('nav.rules')}</DropdownItem>
           <DropdownItem icon={KeyRound} onClick={() => navigate('/security')}>{t('nav.security')}</DropdownItem>
           <DropdownItem icon={ShieldCheck} onClick={() => navigate('/privacy')}>{t('nav.privacy')}</DropdownItem>
@@ -261,18 +262,20 @@ export default function MailApp() {
 
       <FooterControls />
 
-      {showCompose && <Compose init={typeof showCompose === 'object' ? showCompose : {}} onClose={() => { setShowCompose(false); load() }} />}
+      {showCompose && <Compose me={me} init={typeof showCompose === 'object' ? showCompose : {}} onClose={() => { setShowCompose(false); load() }} />}
     </div>
   )
 }
 
-function Compose({ init, onClose }: any) {
+function Compose({ me, init, onClose }: any) {
   const { t } = useI18n()
-  const [f, setF] = useState({ to: init.to || '', cc: init.cc || '', bcc: init.bcc || '', subject: init.subject || '', body: init.body || '' })
+  const [f, setF] = useState({ from: init.from || '', to: init.to || '', cc: init.cc || '', bcc: init.bcc || '', subject: init.subject || '', body: init.body || '' })
   const [atts, setAtts] = useState<any[]>([])
   const [showCC, setShowCC] = useState(!!(init.cc || init.bcc))
   const [saving, setSaving] = useState(false)
   const [sugg, setSugg] = useState<any[]>([])
+  const [ids, setIds] = useState<any[]>([])
+  useEffect(() => { api.external().then((xs: any[]) => setIds(xs.filter(x => x.enabled))).catch(() => {}) }, [])
   useEffect(() => {
     Promise.all([api.contacts().catch(() => []), api.directory().catch(() => [])]).then(([cs, dir]) => {
       const map = new Map<string, any>()
@@ -318,6 +321,13 @@ function Compose({ init, onClose }: any) {
           <b>{t('mail.compose')}</b>
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={() => setShowCC(v => !v)}>{t('mail.ccBcc')}</Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground shrink-0">{t('mail.from')}</span>
+          <select className="h-9 flex-1 rounded-md border border-border bg-background text-sm px-2" value={f.from} onChange={e => setF({ ...f, from: e.target.value })}>
+            <option value="">{me?.email || ''}</option>
+            {ids.map((a: any) => <option key={a.id} value={a.email}>{a.name ? `${a.name} <${a.email}>` : a.email}</option>)}
+          </select>
         </div>
         <RecipientInput placeholder={t('mail.to')} value={f.to} onChange={v => setF({ ...f, to: v })} suggestions={sugg} />
         {showCC && <>

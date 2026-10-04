@@ -90,6 +90,7 @@ type Mail struct {
 	Starred     bool      `json:"starred"`
 	Relayed     bool      `json:"relayed"`
 	RelayErr    string    `gorm:"size:500" json:"relay_err"`
+	Status      string    `gorm:"size:20" json:"status"` // sent 文件夹：queued|sending|sent|failed
 	Attempts    int       `json:"attempts"`
 	CreatedAt   time.Time `json:"created_at"`
 }
@@ -146,4 +147,27 @@ type MailAlias struct {
 	Keep      bool      `json:"keep"`                     // 是否同时保留原收件人
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// ExternalAccount 第三方邮箱账号（用户自配）：从该账号 IMAP 收信，并可作为发件身份经其 SMTP 发信。
+// 密码用 AES-GCM 加密存储。
+type ExternalAccount struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	UserID    uint       `gorm:"index" json:"user_id"`
+	Email     string     `gorm:"size:255" json:"email"`
+	Name      string     `gorm:"size:120" json:"name"`
+	IMAPHost  string     `gorm:"size:255" json:"imap_host"`
+	IMAPPort  string     `gorm:"size:10" json:"imap_port"`
+	IMAPSSL   bool       `json:"imap_ssl"`
+	IMAPUser  string     `gorm:"size:255" json:"imap_user"`
+	IMAPPass  string     `gorm:"size:512" json:"-"`
+	SMTPHost  string     `gorm:"size:255" json:"smtp_host"`
+	SMTPPort  string     `gorm:"size:10" json:"smtp_port"`
+	SMTPSSL   bool       `json:"smtp_ssl"`
+	SMTPUser  string     `gorm:"size:255" json:"smtp_user"`
+	SMTPPass  string     `gorm:"size:512" json:"-"`
+	Enabled   bool       `json:"enabled"`
+	LastSync  *time.Time `json:"last_sync"`
+	LastError string     `gorm:"size:500" json:"last_error"`
+	CreatedAt time.Time  `json:"created_at"`
 }

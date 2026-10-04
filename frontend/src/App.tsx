@@ -13,6 +13,7 @@ import AdminRules from './pages/AdminRules'
 import AdminRoutes from './pages/AdminRoutes'
 import AdminAliases from './pages/AdminAliases'
 import Contacts from './pages/Contacts'
+import Accounts from './pages/Accounts'
 import Rules from './pages/Rules'
 import Security from './pages/Security'
 import Privacy from './pages/Privacy'
@@ -28,6 +29,7 @@ export default function App() {
         <Route path="/dns" element={authed() ? <DnsPage /> : <Navigate to="/login" />} />
         <Route path="/setup" element={authed() ? <Setup /> : <Navigate to="/login" />} />
         <Route path="/contacts" element={authed() ? <Contacts /> : <Navigate to="/login" />} />
+        <Route path="/accounts" element={authed() ? <Accounts /> : <Navigate to="/login" />} />
         <Route path="/rules" element={authed() ? <Rules /> : <Navigate to="/login" />} />
         <Route path="/security" element={authed() ? <Security /> : <Navigate to="/login" />} />
         <Route path="/privacy" element={<Privacy />} />

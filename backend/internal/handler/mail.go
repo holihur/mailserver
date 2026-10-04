@@ -7,13 +7,17 @@ import (
 	"strings"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/external"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 
 	"gorm.io/gorm"
 )
 
-type MailBox struct{ DB *gorm.DB }
+type MailBox struct {
+	DB *gorm.DB
+	MQ interface{ EnqueueSend(mailID uint) error }
+}
 
 func uidOf(db *gorm.DB, w http.ResponseWriter, r *http.Request) (uint, bool) {
 	uid, err := auth.UserID(r)
@@ -229,6 +233,7 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
+		From        string               `json:"from"`
 		To          string               `json:"to"`
 		Cc          string               `json:"cc"`
 		Bcc         string               `json:"bcc"`
@@ -243,6 +248,15 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	var me model.User
 	m.DB.First(&me, uid)
+	// 发件身份：本人地址，或已绑定的第三方账号
+	from := me.Email
+	if f := strings.ToLower(strings.TrimSpace(in.From)); f != "" && f != strings.ToLower(me.Email) {
+		if external.Find(m.DB, uid, f) == nil {
+			writeJSON(w, 400, map[string]string{"error": "发件身份未授权"})
+			return
+		}
+		from = f
+	}
 	folder := in.Folder
 	if folder != "draft" {
 		folder = "sent"
@@ -260,8 +274,14 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		b, _ := json.Marshal(in.Attachments)
 		attJSON = string(b)
 	}
-	mail := model.Mail{UserID: uid, From: me.Email, To: in.To, Cc: in.Cc, Bcc: in.Bcc,
+	mail := model.Mail{UserID: uid, From: from, To: in.To, Cc: in.Cc, Bcc: in.Bcc,
 		Subject: in.Subject, Body: in.Body, Attachments: attJSON, Folder: folder, Read: true}
+	if folder == "sent" {
+		mail.Status = "queued"
+	}
 	m.DB.Create(&mail)
+	if folder == "sent" && m.MQ != nil {
+		_ = m.MQ.EnqueueSend(mail.ID)
+	}
 	writeJSON(w, 201, mail)
 }

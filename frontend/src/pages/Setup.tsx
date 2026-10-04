@@ -111,16 +111,18 @@ export default function Setup() {
             <Button variant="outline" size="sm" onClick={load}><RefreshCw />{t('common.refresh')}</Button>
           </div>
           {outbox.length === 0 && <p className="text-sm text-muted-foreground">{t('setup.noOutbox')}</p>}
-          {outbox.map(m => (
-            <div key={m.id} className="flex items-center gap-2 text-sm border-t border-border py-2">
-              {m.relayed
-                ? <span className="text-green-600 flex items-center gap-1 text-xs"><CheckCircle2 size={14} />OK</span>
-                : m.attempts >= 8
-                  ? <span className="text-red-500 flex items-center gap-1 text-xs"><XCircle size={14} />{t('users.disabled')}</span>
-                  : <span className="text-yellow-600 flex items-center gap-1 text-xs"><Clock size={14} />{m.attempts}</span>}
-              <span className="truncate flex-1">→ {m.to}《{m.subject || t('mail.noSubject')}》</span>
-            </div>
-          ))}
+          {outbox.map(m => {
+            const st = m.status || (m.relayed ? 'sent' : m.attempts >= 8 ? 'failed' : 'queued')
+            const label = st === 'sent' ? t('mail.stSent') : st === 'failed' ? t('mail.stFailed') : st === 'sending' ? t('mail.stSending') : t('mail.stQueued')
+            const Icon = st === 'sent' ? CheckCircle2 : st === 'failed' ? XCircle : Clock
+            const color = st === 'sent' ? 'text-green-600' : st === 'failed' ? 'text-red-500' : st === 'sending' ? 'text-blue-500' : 'text-yellow-600'
+            return (
+              <div key={m.id} className="flex items-center gap-2 text-sm border-t border-border py-2">
+                <span className={`flex items-center gap-1 text-xs shrink-0 ${color}`}><Icon size={14} />{label}</span>
+                <span className="truncate flex-1">→ {m.to}《{m.subject || t('mail.noSubject')}》</span>
+              </div>
+            )
+          })}
           {outbox.some(m => !m.relayed && m.relay_err) && (
             <pre className="text-xs font-mono bg-muted/60 rounded-md p-3 mt-2 whitespace-pre-wrap">{outbox.find(m => !m.relayed && m.relay_err)?.relay_err}</pre>
           )}

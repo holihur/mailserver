@@ -252,7 +252,7 @@ func (s *submitter) checkUser(email, pass string) bool {
 func (s *submitter) queueMail(raw string) {
 	subject, body, atts := message.ParseInbound(raw)
 	for _, to := range s.rcpts {
-		m := model.Mail{UserID: s.user.ID, From: s.user.Email, To: to, Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true}
+		m := model.Mail{UserID: s.user.ID, From: s.user.Email, To: to, Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true, Status: "queued"}
 		s.db.Create(&m)
 	}
 	s.reply(fmt.Sprintf("250 OK queued for %d rcpt(s)", len(s.rcpts)))

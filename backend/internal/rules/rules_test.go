@@ -90,3 +90,20 @@ func TestActionFolder(t *testing.T) {
 		t.Fatalf("非法目标应回退 trash，得到 %s", got)
 	}
 }
+
+func TestForwardAction(t *testing.T) {
+	list := []model.MailRule{{ID: 1, UserID: 5, Enabled: true, Expression: `subject.contains("x")`, Action: "forward", ForwardTo: "d@x.com, e@y.com"}}
+	d := Evaluate(list, Input{Subject: "x"})
+	if !d.Matched || d.Action != "forward" || len(d.Forward) != 2 {
+		t.Fatalf("forward 命中: %+v", d)
+	}
+	if d.Folder != "trash" {
+		t.Fatalf("forward 的 folder 应为空占位: %s", d.Folder)
+	}
+	if got := SplitTargets("A@x.com; b@y.com,, c@z.com"); len(got) != 3 {
+		t.Fatalf("SplitTargets=%v", got)
+	}
+	if got := SplitTargets("not-an-email, ,"); len(got) != 0 {
+		t.Fatalf("非法目标应被过滤: %v", got)
+	}
+}

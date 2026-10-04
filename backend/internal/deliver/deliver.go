@@ -43,7 +43,7 @@ func Forward(db *gorm.DB, from string, targets []string, subject, body, atts str
 				Subject: subject, Body: body, Attachments: atts, Folder: "inbox"})
 		} else {
 			db.Create(&model.Mail{From: from, To: t,
-				Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true})
+				Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true, Status: "queued"})
 		}
 	}
 }
