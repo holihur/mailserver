@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	github.com/emersion/go-imap v1.2.1
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/cel-go v0.21.0
 	github.com/hibiken/asynq v0.24.1
 	github.com/joho/godotenv v1.5.1
