@@ -64,6 +64,10 @@ func Deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []mode
 
 	// 2) 站外：按域名分组，各自解析路由（relay/direct/discard）
 	msg := buildMsg(c.Name, m, signer)
+	envFrom := m.From
+	if strings.TrimSpace(m.EnvelopeFrom) != "" {
+		envFrom = m.EnvelopeFrom
+	}
 	byDomain := map[string][]string{}
 	var order []string
 	for _, rcpt := range external {
@@ -85,12 +89,12 @@ func Deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []mode
 		case rt != nil && rt.Action == "discard":
 			log.Printf("queue: mail %d to %s discarded by route", m.ID, dom)
 		case rt != nil && rt.Action == "direct":
-			if err := sendDirect(m.From, rcpts, msg); err != nil && firstErr == nil {
+			if err := sendDirect(envFrom, rcpts, msg); err != nil && firstErr == nil {
 				firstErr = err
 			}
 		case rt != nil && rt.Action == "relay":
 			rc := route.Relay(rt)
-			if err := sendSMTP(rc, m.From, rcpts, msg); err != nil {
+			if err := sendSMTP(rc, envFrom, rcpts, msg); err != nil {
 				if rc.From != "" {
 					if err2 := sendSMTP(rc, rc.From, rcpts, msg); err2 == nil {
 						continue
@@ -104,13 +108,13 @@ func Deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []mode
 			// 无匹配路由：用全局中继 / 直连
 			if c.Host == "" {
 				if c.Direct {
-					if err := sendDirect(m.From, rcpts, msg); err != nil && firstErr == nil {
+					if err := sendDirect(envFrom, rcpts, msg); err != nil && firstErr == nil {
 						firstErr = err
 					}
 				} else if firstErr == nil {
 					firstErr = fmt.Errorf("无外发中继：25 出站被封，请配 SMTP_RELAY_HOST，或在后台开启「直连对方 MX」")
 				}
-			} else if err := sendSMTP(c, m.From, rcpts, msg); err != nil {
+			} else if err := sendSMTP(c, envFrom, rcpts, msg); err != nil {
 				if c.From != "" {
 					if err2 := sendSMTP(c, c.From, rcpts, msg); err2 == nil {
 						continue

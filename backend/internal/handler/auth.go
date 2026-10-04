@@ -98,7 +98,7 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]string{"error": "邮箱已注册"})
 		return
 	}
-	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
+	tok, _ := auth.SignSession(u.ID, u.Email, u.TokenVersion, createSession(a.DB, u.ID, r))
 	writeJSON(w, 201, map[string]any{"token": tok, "user": u})
 }
 
@@ -150,7 +150,7 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}
-	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
+	tok, _ := auth.SignSession(u.ID, u.Email, u.TokenVersion, createSession(a.DB, u.ID, r))
 	a.recordLogin(u.ID, u.Email, r, true)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": u})
 }
@@ -259,8 +259,34 @@ func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 换发当前会话的新令牌，其余旧令牌因版本不符立即失效
-	tok, _ := auth.Sign(u.ID, u.Email, newVer)
+	tok, _ := auth.SignSession(u.ID, u.Email, newVer, createSession(a.DB, u.ID, r))
 	writeJSON(w, 200, map[string]any{"ok": true, "token": tok})
+}
+
+// createSession 为新登录创建会话，返回 jti（失败返回空）。
+func createSession(db *gorm.DB, uid uint, r *http.Request) string {
+	jti := auth.NewJTI()
+	if jti == "" {
+		return ""
+	}
+	ip := clientIP(r)
+	ua := r.Header.Get("User-Agent")
+	if len(ua) > 200 {
+		ua = ua[:200]
+	}
+	db.Where("user_id = ? AND expires_at < ?", uid, time.Now()).Delete(&model.Session{})
+	db.Create(&model.Session{JTI: jti, UserID: uid, IP: ip, UserAgent: ua, ExpiresAt: time.Now().Add(72 * time.Hour)})
+	return jti
+}
+
+// sessionValid 校验 jti 对应的会话仍存在（空 jti=旧令牌，跳过）。
+func sessionValid(db *gorm.DB, uid uint, jti string) bool {
+	if jti == "" {
+		return true
+	}
+	var n int64
+	db.Model(&model.Session{}).Where("jti = ? AND user_id = ? AND expires_at > ?", jti, uid, time.Now()).Count(&n)
+	return n == 1
 }
 
 // recordLogin 记录登录事件；首次从某 IP 成功登录时触发告警钩子。
@@ -311,6 +337,41 @@ func (a *Auth) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	}
 	newVer := u.TokenVersion + 1
 	a.DB.Model(&model.User{}).Where("id = ?", uid).Update("token_version", newVer)
-	tok, _ := auth.Sign(u.ID, u.Email, newVer)
+	a.DB.Where("user_id = ?", uid).Delete(&model.Session{})
+	tok, _ := auth.SignSession(u.ID, u.Email, newVer, createSession(a.DB, u.ID, r))
 	writeJSON(w, 200, map[string]any{"ok": true, "token": tok})
+}
+
+// GET /api/me/sessions -> 当前活跃会话
+func (a *Auth) Sessions(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(a.DB, w, r)
+	if !ok {
+		return
+	}
+	var sessions []model.Session
+	a.DB.Where("user_id = ? AND expires_at > ?", uid, time.Now()).Order("created_at DESC").Find(&sessions)
+	if sessions == nil {
+		sessions = []model.Session{}
+	}
+	writeJSON(w, 200, sessions)
+}
+
+// DELETE /api/me/sessions/{jti} -> 踢出指定会话
+func (a *Auth) SessionOne(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(a.DB, w, r)
+	if !ok {
+		return
+	}
+	if r.Method != "DELETE" {
+		w.WriteHeader(405)
+		return
+	}
+	jti := strings.TrimPrefix(r.URL.Path, "/api/me/sessions/")
+	jti = strings.Split(jti, "/")[0]
+	if jti == "" {
+		writeJSON(w, 400, map[string]string{"error": "missing jti"})
+		return
+	}
+	a.DB.Where("jti = ? AND user_id = ?", jti, uid).Delete(&model.Session{})
+	writeJSON(w, 200, map[string]any{"ok": true})
 }

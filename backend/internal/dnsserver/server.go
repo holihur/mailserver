@@ -247,7 +247,9 @@ func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
 	}
 	switch q.Qtype {
 	case dns.TypeSOA:
-		resp.Answer = []dns.RR{s.soaRR(z.Domain)}
+		resp.Answer = s.signAnswers(z.Domain, []dns.RR{s.soaRR(z.Domain)})
+	case dns.TypeDNSKEY:
+		resp.Answer = s.DNSKEYs(z.Domain)
 	case dns.TypeAXFR, dns.TypeIXFR:
 		resp.Rcode = dns.RcodeRefused
 	default:
@@ -270,7 +272,7 @@ func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
 			}
 			resp.Ns = []dns.RR{s.soaRR(z.Domain)}
 		} else {
-			resp.Answer = ans
+			resp.Answer = s.signAnswers(z.Domain, ans)
 		}
 	}
 	_ = w.WriteMsg(resp)

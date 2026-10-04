@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -77,6 +78,44 @@ func main() {
 			fmt.Println("  update   从 GitHub Release 更新到最新版并重启服务")
 			fmt.Println("  backup [文件]   备份数据库与数据目录到 tar.gz（默认自动命名）")
 			fmt.Println("  restore <文件>  从备份恢复")
+			fmt.Println("  migrate-blobs   把存量 base64 附件迁移为 blob")
+			fmt.Println("  gc-blobs        清理未被引用的 blob 文件")
+			return
+		case "migrate-blobs":
+			_ = godotenv.Load()
+			c := config.Load()
+			g, err := db.Open(c.DatabaseURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+			bs, err := blob.New(filepath.Join(c.DataDir, "blobs"))
+			if err != nil {
+				log.Fatal(err)
+			}
+			message.SetBlobStore(bs)
+			n, err := message.MigrateAttachments(g)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("已迁移 %d 封邮件的附件到 blob\n", n)
+			return
+		case "gc-blobs":
+			_ = godotenv.Load()
+			c := config.Load()
+			g, err := db.Open(c.DatabaseURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+			bs, err := blob.New(filepath.Join(c.DataDir, "blobs"))
+			if err != nil {
+				log.Fatal(err)
+			}
+			message.SetBlobStore(bs)
+			n, err := message.GCBlobs(g)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("已清理 %d 个孤儿 blob\n", n)
 			return
 		case "backup":
 			_ = godotenv.Load()
@@ -139,6 +178,13 @@ func main() {
 	} else {
 		message.SetBlobStore(bs)
 	}
+	// SRS：转发时重写信封发件人（用邮件域，保证 SPF 对齐）
+	deliver.SRSSecret = []byte(cfg.JWTSecret)
+	if cfg.DKIMDomain != "" {
+		deliver.SRSAliasDomain = cfg.DKIMDomain
+	} else {
+		deliver.SRSAliasDomain = cfg.Host
+	}
 	if cfg.JWTSecret == "dev-secret-change-me-32chars!!" || len(cfg.JWTSecret) < 16 {
 		log.Println("⚠️  安全警告：JWT_SECRET 为默认值或过短；它同时用于登录令牌与凭证加密，请设置随机 32 位以上")
 	}
@@ -147,6 +193,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// 每日 GC 未被引用的 blob
+	go func() {
+		for {
+			time.Sleep(24 * time.Hour)
+			if n, err := message.GCBlobs(g); err == nil && n > 0 {
+				log.Printf("blob GC 清理 %d 个孤儿文件", n)
+			}
+		}
+	}()
 
 	au := &handler.Auth{DB: g, AdminEmails: cfg.AdminEmails}
 	rl, err := ratelimit.New(cfg.RedisURL)
@@ -238,6 +293,7 @@ func main() {
 	metricsBox := &handler.MetricsBox{DB: g, Health: hc, Version: version, Commit: commit, Token: cfg.MetricsToken}
 	au.RT = rt
 	dns.RT = rt
+	dns.CertDir = cfg.CertDir
 	dns.AdminEmails = cfg.AdminEmails
 
 	host := rt.MailHost
@@ -246,6 +302,26 @@ func main() {
 	go mailsmtp.Serve(":"+cfg.SMTPport, g, maxMsg, cfg.DMARCEnforce, tlsConf)
 	go external.Start(g)
 	handler.StartAuditRetention(g)
+	// 定时备份 + 异地 hook（rclone 等）
+	if cfg.BackupDir != "" {
+		go func() {
+			for {
+				if out, err := backup.Scheduled(g, cfg.DataDir, cfg.BackupDir, cfg.BackupKeep); err != nil {
+					log.Println("定时备份失败:", err)
+				} else {
+					log.Println("定时备份完成:", out)
+					if cfg.BackupHook != "" {
+						cmd := exec.Command("sh", "-c", cfg.BackupHook)
+						cmd.Env = append(os.Environ(), "BACKUP_FILE="+out)
+						if err := cmd.Run(); err != nil {
+							log.Println("备份 hook 失败:", err)
+						}
+					}
+				}
+				time.Sleep(time.Duration(cfg.BackupInterval) * time.Hour)
+			}
+		}()
+	}
 	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, host, g, tlsConf, maxMsg)
 	go pop3.Serve(":"+cfg.Pop3Port, host, g, tlsConf)
 	go imap.Serve(":"+cfg.ImapPort, host, g, tlsConf)
@@ -264,7 +340,15 @@ func main() {
 
 	// 内置权威 DNS（与 API 同一进程/二进制；DNS_ADDR=off 可禁用）
 	if cfg.DNSAddr != "" && !strings.EqualFold(cfg.DNSAddr, "off") && !strings.EqualFold(cfg.DNSAddr, "none") {
-		go dnsserver.New(dns.ZonesPath, cfg.NSHost).Start(cfg.DNSAddr)
+		go func() {
+			if cfg.DNSSECEnable {
+				dnsserver.EnableDNSSEC(filepath.Join(cfg.DataDir, "dnssec"))
+				if ds := dnsserver.DS(cfg.DKIMDomain); ds != nil {
+					log.Printf("DNSSEC 已启用；请到注册商设置 DS: %s", ds.String())
+				}
+			}
+			dnsserver.New(dns.ZonesPath, cfg.NSHost).Start(cfg.DNSAddr)
+		}()
 		log.Println("authoritative dns on", cfg.DNSAddr)
 	}
 
@@ -319,6 +403,8 @@ func main() {
 	mux.HandleFunc("/api/me/password", cors(au.ChangePassword))
 	mux.HandleFunc("/api/me/logins", cors(au.Logins))
 	mux.HandleFunc("/api/me/logout-all", cors(au.LogoutAll))
+	mux.HandleFunc("/api/me/sessions", cors(au.Sessions))
+	mux.HandleFunc("/api/me/sessions/", cors(au.SessionOne))
 	mux.HandleFunc("/api/mails", cors(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			mb.List(w, r)
@@ -387,6 +473,7 @@ func main() {
 	// 管理后台（仅管理员）
 	mux.HandleFunc("/api/admin/overview", cors(ad.Overview))
 	mux.HandleFunc("/api/admin/audit", cors(ad.AuditLogs))
+	mux.HandleFunc("/api/admin/deliverability", cors(dns.Deliverability))
 	mux.HandleFunc("/api/admin/health", cors(ad.HealthStatus))
 	mux.HandleFunc("/api/admin/about", cors(ad.About))
 	mux.HandleFunc("/api/admin/update/check", cors(ad.UpdateCheck))

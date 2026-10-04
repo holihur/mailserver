@@ -57,6 +57,16 @@ type ScheduledMail struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+// Session 网页登录会话（逐会话踢出）。
+type Session struct {
+	JTI       string    `gorm:"primaryKey;size:64" json:"jti"`
+	UserID    uint      `gorm:"index" json:"user_id"`
+	IP        string    `gorm:"size:64" json:"ip"`
+	UserAgent string    `gorm:"size:255" json:"user_agent"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 // LoginEvent 登录历史（成功/失败），用于用户查看与异常告警。
 type LoginEvent struct {
 	ID        uint      `gorm:"primaryKey" json:"id"`
@@ -129,23 +139,24 @@ type Setting struct {
 // folder: inbox / sent / draft / trash
 // Relayed: 发件队列状态（sent 文件夹有效），25 被封时走中继投递
 type Mail struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
-	UserID      uint   `gorm:"index" json:"-"`
-	From        string `gorm:"size:255" json:"from"`
-	To          string `gorm:"size:255" json:"to"`
-	Cc          string `gorm:"size:255" json:"cc"`
-	Bcc         string `gorm:"size:255" json:"bcc"`
-	Subject     string `gorm:"size:500" json:"subject"`
-	Body        string `gorm:"type:text" json:"body"`
-	BodyHTML    string `gorm:"type:text" json:"body_html"`   // 清洗后的 HTML 正文
-	Attachments string `gorm:"type:text" json:"attachments"` // JSON: [{name,type,data(base64),size}]
-	Folder      string `gorm:"size:20;index" json:"folder"`
-	Read        bool   `json:"read"`
-	Starred     bool   `json:"starred"`
-	Relayed     bool   `json:"relayed"`
-	RelayErr    string `gorm:"size:500" json:"relay_err"`
-	Status      string `gorm:"size:20" json:"status"` // sent 文件夹：queued|sending|sent|failed
-	Attempts    int    `json:"attempts"`
+	ID           uint   `gorm:"primaryKey" json:"id"`
+	UserID       uint   `gorm:"index" json:"-"`
+	From         string `gorm:"size:255" json:"from"`
+	EnvelopeFrom string `gorm:"size:255" json:"envelope_from"` // SRS 重写后的信封发件人（空则用 From）
+	To           string `gorm:"size:255" json:"to"`
+	Cc           string `gorm:"size:255" json:"cc"`
+	Bcc          string `gorm:"size:255" json:"bcc"`
+	Subject      string `gorm:"size:500" json:"subject"`
+	Body         string `gorm:"type:text" json:"body"`
+	BodyHTML     string `gorm:"type:text" json:"body_html"`   // 清洗后的 HTML 正文
+	Attachments  string `gorm:"type:text" json:"attachments"` // JSON: [{name,type,data(base64),size}]
+	Folder       string `gorm:"size:20;index" json:"folder"`
+	Read         bool   `json:"read"`
+	Starred      bool   `json:"starred"`
+	Relayed      bool   `json:"relayed"`
+	RelayErr     string `gorm:"size:500" json:"relay_err"`
+	Status       string `gorm:"size:20" json:"status"` // sent 文件夹：queued|sending|sent|failed
+	Attempts     int    `json:"attempts"`
 	// 已读回执（MDN, RFC 3798）
 	ReceiptTo   string     `gorm:"size:255" json:"receipt_to"`   // 非空：收到的邮件要求回执至此地址；发件时表示已请求回执
 	ReceiptSent bool       `json:"receipt_sent"`                 // 收到时：已回复回执

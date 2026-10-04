@@ -60,7 +60,7 @@ func AuditAdmin(db *gorm.DB, next http.Handler) http.Handler {
 		if rec.code >= 400 {
 			return
 		}
-		uid, _, _ := auth.Access(r)
+		uid, _, _, _ := auth.Access(r)
 		var u model.User
 		db.Select("email").First(&u, uid)
 		ip, _, err := net.SplitHostPort(r.RemoteAddr)

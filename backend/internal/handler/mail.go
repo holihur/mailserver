@@ -24,7 +24,7 @@ type MailBox struct {
 }
 
 func uidOf(db *gorm.DB, w http.ResponseWriter, r *http.Request) (uint, bool) {
-	uid, ver, err := auth.Access(r)
+	uid, ver, jti, err := auth.Access(r)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return 0, false
@@ -36,6 +36,10 @@ func uidOf(db *gorm.DB, w http.ResponseWriter, r *http.Request) (uint, bool) {
 	}
 	if u.TokenVersion != ver {
 		writeJSON(w, 401, map[string]string{"error": "登录已失效，请重新登录"})
+		return 0, false
+	}
+	if !sessionValid(db, uid, jti) {
+		writeJSON(w, 401, map[string]string{"error": "会话已被退出"})
 		return 0, false
 	}
 	if u.Disabled {

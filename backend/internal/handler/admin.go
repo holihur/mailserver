@@ -63,13 +63,13 @@ func isAdminEmail(list, email string) bool {
 
 // resolveAdmin: token 有效 + 账号未禁用 + 是管理员。Admin/DNS 等控制面共用。
 func resolveAdmin(db *gorm.DB, rt *runtimecfg.Store, adminEmails string, w http.ResponseWriter, r *http.Request) (*model.User, bool) {
-	uid, ver, err := auth.Access(r)
+	uid, ver, jti, err := auth.Access(r)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return nil, false
 	}
 	var u model.User
-	if err := db.First(&u, uid).Error; err != nil || u.Disabled || u.TokenVersion != ver {
+	if err := db.First(&u, uid).Error; err != nil || u.Disabled || u.TokenVersion != ver || !sessionValid(db, uid, jti) {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return nil, false
 	}

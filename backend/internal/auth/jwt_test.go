@@ -78,9 +78,9 @@ func TestTokenVersion(t *testing.T) {
 	tok, _ := Sign(5, "v@x.y", 3)
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
-	uid, ver, err := Access(req)
-	if err != nil || uid != 5 || ver != 3 {
-		t.Fatalf("Access=%d,%d,err=%v", uid, ver, err)
+	uid, ver, jti, err := Access(req)
+	if err != nil || uid != 5 || ver != 3 || jti != "" {
+		t.Fatalf("Access=%d,%d,%q,err=%v", uid, ver, jti, err)
 	}
 }
 

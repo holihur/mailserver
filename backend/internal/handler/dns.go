@@ -24,6 +24,7 @@ type DNS struct {
 	ZonesPath   string // zones.json 输出路径
 	RT          *runtimecfg.Store
 	AdminEmails string // ADMIN_EMAILS 兜底提权名单（与 Admin 一致）
+	CertDir     string // 证书目录（用于计算 DANE TLSA）
 }
 
 // signer 返回当前 DKIM 签名器（可能为 nil）。

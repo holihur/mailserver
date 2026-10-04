@@ -133,7 +133,7 @@ func (h *TOTPBox) Disable(w http.ResponseWriter, r *http.Request) {
 	}
 	newVer := u.TokenVersion + 1
 	h.DB.Model(&model.User{}).Where("id = ?", u.ID).Updates(map[string]any{"totp_enabled": false, "totp_secret": "", "token_version": newVer})
-	tok, _ := auth.Sign(u.ID, u.Email, newVer)
+	tok, _ := auth.SignSession(u.ID, u.Email, newVer, createSession(h.DB, u.ID, r))
 	writeJSON(w, 200, map[string]any{"ok": true, "enabled": false, "token": tok})
 }
 
@@ -175,7 +175,7 @@ func (a *Auth) LoginTOTP(w http.ResponseWriter, r *http.Request) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}
-	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
+	tok, _ := auth.SignSession(u.ID, u.Email, u.TokenVersion, createSession(a.DB, u.ID, r))
 	a.recordLogin(u.ID, u.Email, r, true)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": u})
 }

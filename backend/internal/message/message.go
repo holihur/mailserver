@@ -148,6 +148,10 @@ func Parts(host string, m *model.Mail) (hdrs [][2]string, body string) {
 			[2]string{"X-Confirm-Reading-To", "<" + r + ">"},
 		)
 	}
+	// 转发时保留原始发件人（SRS 信封重写后可追溯）
+	if strings.TrimSpace(m.EnvelopeFrom) != "" {
+		hdrs = append(hdrs, [2]string{"X-Original-From", m.From})
+	}
 
 	atts := ParseAttachments(m.Attachments)
 	if len(atts) == 0 {

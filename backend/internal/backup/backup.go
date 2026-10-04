@@ -9,8 +9,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Create 导出所有表为 db.json，并连同 dataDir 打包到 out。
@@ -114,11 +117,36 @@ func importDB(db *gorm.DB, data map[string][]map[string]any) error {
 		if len(rows) == 0 {
 			continue
 		}
-		if err := db.Table(t).CreateInBatches(rows, 200).Error; err != nil {
+		if err := db.Table(t).Clauses(clause.OnConflict{DoNothing: true}).CreateInBatches(rows, 200).Error; err != nil {
 			return fmt.Errorf("导入 %s: %w", t, err)
 		}
 	}
 	return nil
+}
+
+// Scheduled 生成一个带时间戳的备份并清理旧份数。
+func Scheduled(db *gorm.DB, dataDir, dir string, keep int) (string, error) {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	out := filepath.Join(dir, "mailserver-"+time.Now().Format("20060102-150405")+".tar.gz")
+	if err := Create(db, dataDir, out); err != nil {
+		return "", err
+	}
+	prune(dir, keep)
+	return out, nil
+}
+
+func prune(dir string, keep int) {
+	if keep <= 0 {
+		return
+	}
+	files, _ := filepath.Glob(filepath.Join(dir, "mailserver-*.tar.gz"))
+	sort.Strings(files)
+	for len(files) > keep {
+		_ = os.Remove(files[0])
+		files = files[1:]
+	}
 }
 
 func writeTar(tw *tar.Writer, name string, b []byte) error {

@@ -42,6 +42,11 @@ type Config struct {
 	SendDailyLimit  int    // 每用户每日发信上限（0=不限）
 	SendPerMinute   int    // 每用户每分钟发信上限（0=不限）
 	MtaStsMode      string // MTA-STS 模式：none（默认）| testing | enforce
+	DNSSECEnable    bool   // 启用 DNSSEC 签名（密钥存 DATA_DIR/dnssec）
+	BackupDir       string // 定时备份目录（空=不启用）
+	BackupInterval  int    // 备份间隔（小时）
+	BackupKeep      int    // 保留份数
+	BackupHook      string // 备份后执行的 shell 命令（如 rclone 上传），可用 $BACKUP_FILE
 	// 日志
 	LogFile       string // 日志文件路径；off/-/stdout 则仅输出 stdout
 	LogMaxMB      int    // 单个日志文件大小上限（MB）
@@ -125,6 +130,11 @@ func Load() Config {
 		SendDailyLimit:  atoiDefault(os.Getenv("SEND_DAILY_LIMIT"), 500),
 		SendPerMinute:   atoiDefault(os.Getenv("SEND_PER_MINUTE"), 20),
 		MtaStsMode:      strings.ToLower(strings.TrimSpace(getenv("MTA_STS_MODE", "none"))),
+		DNSSECEnable:    getenv("DNSSEC_ENABLE", "0") == "1",
+		BackupDir:       os.Getenv("BACKUP_DIR"),
+		BackupInterval:  atoiDefault(os.Getenv("BACKUP_INTERVAL_HOURS"), 24),
+		BackupKeep:      atoiDefault(os.Getenv("BACKUP_KEEP"), 7),
+		BackupHook:      os.Getenv("BACKUP_HOOK"),
 		SubmitPort:      getenv("SUBMIT_PORT", "587"),
 		SubmitTLSPort:   os.Getenv("SUBMIT_TLS_PORT"),
 		Pop3Port:        getenv("POP3_PORT", "110"),

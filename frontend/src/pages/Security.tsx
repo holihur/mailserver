@@ -17,12 +17,14 @@ export default function Security() {
   const [pwNew, setPwNew] = useState('')
   const [pwBusy, setPwBusy] = useState(false)
   const [logins, setLogins] = useState<any[]>([])
+  const [sessions, setSessions] = useState<any[]>([])
   const [mustChange, setMustChange] = useState(false)
 
   async function load() {
     try { const s = await api.totp(); setEnabled(!!s.enabled) } catch { setEnabled(false) }
     api.me().then((m: any) => setMustChange(!!m.must_change_password)).catch(() => {})
     api.logins().then(setLogins).catch(() => {})
+    api.sessions().then(setSessions).catch(() => {})
   }
   useEffect(() => { load() }, [])
 
@@ -32,7 +34,11 @@ export default function Security() {
       const r: any = await api.logoutAll()
       if (r?.token) localStorage.setItem('token', r.token)
       toast(t('security.logoutAllOk'), { type: 'success' })
+      load()
     } catch (e: any) { toast(e.message) }
+  }
+  async function revoke(jti: string) {
+    try { await api.revokeSession(jti); load() } catch (e: any) { toast(e.message) }
   }
 
   async function beginSetup() {
@@ -148,6 +154,23 @@ export default function Security() {
             <p className="text-xs text-muted-foreground">{t('security.passwordHint')}</p>
             <Button size="sm" disabled={pwBusy || pwNew.length < 8}>{t('security.changePassword')}</Button>
           </form>
+        </Card>
+
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <History size={16} />
+            <b className="text-sm">{t('security.activeSessions')}</b>
+          </div>
+          {sessions.length === 0
+            ? <p className="text-sm text-muted-foreground">{t('security.noLogins')}</p>
+            : sessions.map((s: any) => (
+              <div key={s.jti} className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground whitespace-nowrap">{new Date(s.created_at).toLocaleString()}</span>
+                <span className="font-mono">{s.ip}</span>
+                <span className="text-muted-foreground truncate flex-1">{s.user_agent}</span>
+                <Button variant="ghost" size="sm" onClick={() => revoke(s.jti)}>{t('security.revoke')}</Button>
+              </div>
+            ))}
         </Card>
 
         <Card className="p-4 space-y-3">

@@ -61,3 +61,18 @@ func (s *Store) Delete(id string) error {
 }
 
 func (s *Store) path(id string) string { return filepath.Join(s.dir, id) }
+
+// List 返回全部 blob id（合法 sha256 文件）。
+func (s *Store) List() ([]string, error) {
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range entries {
+		if !e.IsDir() && idRe.MatchString(e.Name()) {
+			out = append(out, e.Name())
+		}
+	}
+	return out, nil
+}

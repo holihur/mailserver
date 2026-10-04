@@ -18,6 +18,8 @@ export default function DnsPage() {
   const [newDomain, setNewDomain] = useState({ name: '', ip: '' })
   const [newRec, setNewRec] = useState({ name: '', type: 'A', value: '', ttl: 600, prio: 10 })
   const [zone, setZone] = useState('')
+  const [hints, setHints] = useState<any[]>([])
+  useEffect(() => { api.deliverability().then(setHints).catch(() => {}) }, [])
 
   async function loadDomains() {
     try { setDomains(await api.dnsList()) } catch {} finally { setLoading(false) }
@@ -137,6 +139,20 @@ export default function DnsPage() {
               <Card className="p-4 text-sm space-y-1">
                 <b className="text-sm">{t('dns.checklist')}</b>
                 <pre className="text-xs font-mono bg-muted/60 rounded-md p-3 overflow-x-auto">{`dig @你的服务器IP ${sel.domain.name} NS\n dig @你的服务器IP ${sel.domain.name} MX\n dig @你的服务器IP mail.${sel.domain.name} A\n dig ${sel.domain.name} MX`}</pre>
+              </Card>
+
+              <Card className="p-4 text-sm space-y-2">
+                <b className="text-sm">{t('dns.deliverability')}</b>
+                <p className="text-xs text-muted-foreground">{t('dns.deliverabilityHint')}</p>
+                {hints.length === 0 && <p className="text-xs text-muted-foreground">—</p>}
+                {hints.map((h, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs">
+                    <Badge>{h.type}</Badge>
+                    <span className="font-mono truncate">{h.name}</span>
+                    <span className="text-muted-foreground truncate flex-1">{h.value}</span>
+                    <Button variant="ghost" size="icon" onClick={() => navigator.clipboard.writeText(h.value)} aria-label={t('common.copy')}><Copy size={14} /></Button>
+                  </div>
+                ))}
               </Card>
             </>
           )}

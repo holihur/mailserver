@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"strings"
@@ -24,14 +26,32 @@ func sign(claims jwt.MapClaims) (string, error) {
 	return t.SignedString(secret)
 }
 
+// NewJTI 生成随机会话标识（十六进制）。
+func NewJTI() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(b)
+}
+
 func Sign(userID uint, email string, ver int) (string, error) {
-	return sign(jwt.MapClaims{
+	return SignSession(userID, email, ver, "")
+}
+
+// SignSession 如 Sign，但带会话 jti（用于逐会话踢出）。
+func SignSession(userID uint, email string, ver int, jti string) (string, error) {
+	claims := jwt.MapClaims{
 		"uid":   userID,
 		"email": email,
 		"typ":   typAccess,
 		"ver":   ver,
 		"exp":   time.Now().Add(72 * time.Hour).Unix(),
-	})
+	}
+	if jti != "" {
+		claims["jti"] = jti
+	}
+	return sign(claims)
 }
 
 // SignTOTPChallenge 签发短期挑战令牌，供登录第二因子校验使用。
@@ -68,29 +88,29 @@ func claimUID(m jwt.MapClaims) (uint, error) {
 
 // UserID 解析 Bearer access 令牌。
 func UserID(r *http.Request) (uint, error) {
-	uid, _, err := Access(r)
+	uid, _, _, err := Access(r)
 	return uid, err
 }
 
-// Access 解析 Bearer access 令牌，返回 uid 与 token_version（旧令牌无 ver 视为 0）。
-func Access(r *http.Request) (uint, int, error) {
+// Access 解析 Bearer access 令牌，返回 uid / token_version / jti（旧令牌无 ver/jti 视为 0/空）。
+func Access(r *http.Request) (uint, int, string, error) {
 	h := r.Header.Get("Authorization")
 	if !strings.HasPrefix(h, "Bearer ") {
-		return 0, 0, errors.New("no token")
+		return 0, 0, "", errors.New("no token")
 	}
 	m, err := parse(strings.TrimPrefix(h, "Bearer "))
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
-	// 兼容旧令牌（无 typ）：视为 access；totp 挑战令牌一律拒绝。
 	if t, _ := m["typ"].(string); t != "" && t != typAccess {
-		return 0, 0, errors.New("wrong token type")
+		return 0, 0, "", errors.New("wrong token type")
 	}
 	uid, err := claimUID(m)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, "", err
 	}
-	return uid, claimVersion(m), nil
+	jti, _ := m["jti"].(string)
+	return uid, claimVersion(m), jti, nil
 }
 
 func claimVersion(m jwt.MapClaims) int {

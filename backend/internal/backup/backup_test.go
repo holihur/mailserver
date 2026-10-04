@@ -19,7 +19,7 @@ func TestBackupRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	g.Exec("TRUNCATE users, mails, mail_aliases, mail_rules, contacts, mail_tokens, domains, dns_records, settings, audit_logs, login_events, scheduled_mails, sieve_scripts, mail_folders, mail_routes, external_accounts, dns_providers, acme_configs RESTART IDENTITY CASCADE")
+	g.Exec("TRUNCATE users, mails, mail_aliases, mail_rules, contacts, mail_tokens, domains, dns_records, settings, audit_logs, login_events, scheduled_mails, sieve_scripts, mail_folders, mail_routes, external_accounts, dns_providers, acme_configs, sessions RESTART IDENTITY CASCADE")
 	if err := g.Create(&model.User{Email: "bk@test.local", Name: "bk"}).Error; err != nil {
 		t.Fatal(err)
 	}
@@ -28,7 +28,7 @@ func TestBackupRoundTrip(t *testing.T) {
 	if err := Create(g, "", out); err != nil {
 		t.Fatalf("备份失败: %v", err)
 	}
-	g.Exec("TRUNCATE users RESTART IDENTITY CASCADE")
+	g.Exec("TRUNCATE users, sessions RESTART IDENTITY CASCADE")
 	if err := Restore(g, "", out); err != nil {
 		t.Fatalf("恢复失败: %v", err)
 	}

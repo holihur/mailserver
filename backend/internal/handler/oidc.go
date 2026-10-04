@@ -132,6 +132,6 @@ func (a *Auth) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}
-	jwt, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
+	jwt, _ := auth.SignSession(u.ID, u.Email, u.TokenVersion, createSession(a.DB, u.ID, r))
 	http.Redirect(w, r, "/?oidc_token="+url.QueryEscape(jwt), http.StatusFound)
 }

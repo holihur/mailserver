@@ -12,6 +12,7 @@ import (
 	"mailserver/internal/quota"
 	"mailserver/internal/rules"
 	"mailserver/internal/sieve"
+	"mailserver/internal/srs"
 
 	"gorm.io/gorm"
 )
@@ -25,6 +26,12 @@ type Options struct {
 	Quarantine  bool   // DMARC 隔离：强制投到垃圾箱
 	Bulk        bool   // 批量/自动生成邮件（不发 vacation 回复）
 }
+
+// SRSSecret / SRSAliasDomain 由 main 注入：转发时重写信封发件人。
+var (
+	SRSSecret      []byte
+	SRSAliasDomain string
+)
 
 // VacationHook 由 main 注入：发送 vacation 自动回复（含去重）；未注入则不回复。
 var VacationHook func(db *gorm.DB, uid uint, from, subject, text string)
@@ -165,7 +172,11 @@ func Forward(db *gorm.DB, from string, targets []string, subject, body, atts str
 			db.Create(&model.Mail{UserID: u.ID, From: from, To: t,
 				Subject: subject, Body: body, Attachments: atts, Folder: "inbox"})
 		} else {
-			db.Create(&model.Mail{From: from, To: t,
+			envFrom := from
+			if len(SRSSecret) > 0 && SRSAliasDomain != "" {
+				envFrom = srs.Encode(SRSSecret, from, SRSAliasDomain)
+			}
+			db.Create(&model.Mail{From: from, EnvelopeFrom: envFrom, To: t,
 				Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true, Status: "queued"})
 		}
 	}
