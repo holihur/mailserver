@@ -41,3 +41,56 @@ func TestDNSSECSign(t *testing.T) {
 		t.Fatalf("RRSIG 验签失败: %v", err)
 	}
 }
+
+func TestNSECNegativeProof(t *testing.T) {
+	EnableDNSSEC(t.TempDir())
+	defer EnableDNSSEC("")
+	s := &Server{}
+	z := &Zone{Domain: "example.com", Records: []Rec{
+		{Name: "@", Type: "A", Value: "1.2.3.4"},
+		{Name: "mail", Type: "A", Value: "1.2.3.5"},
+	}}
+
+	var zsk *dns.DNSKEY
+	for _, rr := range s.DNSKEYs("example.com") {
+		if k, ok := rr.(*dns.DNSKEY); ok && k.Flags == 256 {
+			zsk = k
+		}
+	}
+
+	check := func(qname string, wantNX bool) {
+		ns := s.negativeProof(z, qname)
+		var nsec *dns.NSEC
+		var sig *dns.RRSIG
+		for _, rr := range ns {
+			switch v := rr.(type) {
+			case *dns.NSEC:
+				nsec = v
+			case *dns.RRSIG:
+				if v.TypeCovered == dns.TypeNSEC {
+					sig = v
+				}
+			}
+		}
+		if nsec == nil || sig == nil {
+			t.Fatalf("%s: 缺少 NSEC 或其 RRSIG", qname)
+		}
+		if err := sig.Verify(zsk, []dns.RR{nsec}); err != nil {
+			t.Fatalf("%s: NSEC 验签失败: %v", qname, err)
+		}
+		if wantNX && nsec.Hdr.Name == dns.Fqdn(qname) {
+			t.Fatalf("%s: NXDOMAIN 应使用覆盖 NSEC 而非精确匹配", qname)
+		}
+	}
+	check("mail.example.com.", false) // NODATA：精确匹配
+	check("nope.example.com.", true)  // NXDOMAIN：覆盖区间
+}
+
+func TestCanonicalLess(t *testing.T) {
+	order := []string{"example.com.", "a.example.com.", "mail.example.com.", "z.example.com."}
+	for i := 0; i < len(order)-1; i++ {
+		if !canonicalLess(order[i], order[i+1]) {
+			t.Fatalf("%s 应小于 %s", order[i], order[i+1])
+		}
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -132,6 +133,124 @@ func (s *Server) signAnswers(zone string, answers []dns.RR) []dns.RR {
 		set := groups[key]
 		out = append(out, set...)
 		if sig := signRRset(zone, zk.zsk, zk.zskPriv, set); sig != nil {
+			out = append(out, sig)
+		}
+	}
+	return out
+}
+
+// canonicalLess 按 RFC 4034 规范序比较域名（小写、从右向左逐标签）。
+func canonicalLess(a, b string) bool {
+	la := strings.Split(strings.ToLower(strings.TrimSuffix(a, ".")), ".")
+	lb := strings.Split(strings.ToLower(strings.TrimSuffix(b, ".")), ".")
+	i, j := len(la)-1, len(lb)-1
+	for i >= 0 && j >= 0 {
+		if la[i] != lb[j] {
+			return la[i] < lb[j]
+		}
+		i--
+		j--
+	}
+	return i < j
+}
+
+// zoneNSEC 生成 zone 的全部 NSEC 记录（已排序，环形 next）。
+func (s *Server) zoneNSEC(z *Zone) []*dns.NSEC {
+	types := map[string]map[uint16]bool{}
+	add := func(name string, t uint16) {
+		name = dns.Fqdn(strings.ToLower(name))
+		if types[name] == nil {
+			types[name] = map[uint16]bool{}
+		}
+		types[name][t] = true
+	}
+	apex := dns.Fqdn(strings.ToLower(z.Domain))
+	add(apex, dns.TypeSOA)
+	add(apex, dns.TypeNS)
+	add(apex, dns.TypeDNSKEY)
+	for _, r := range z.Records {
+		name := fqdn(r.Name, z.Domain)
+		switch strings.ToUpper(r.Type) {
+		case "A":
+			add(name, dns.TypeA)
+		case "AAAA":
+			add(name, dns.TypeAAAA)
+		case "MX":
+			add(name, dns.TypeMX)
+		case "TXT":
+			add(name, dns.TypeTXT)
+		case "NS":
+			add(name, dns.TypeNS)
+		case "CNAME":
+			add(name, dns.TypeCNAME)
+		case "SRV":
+			add(name, dns.TypeSRV)
+		case "CAA":
+			add(name, dns.TypeCAA)
+		}
+	}
+	names := make([]string, 0, len(types))
+	for n := range types {
+		names = append(names, n)
+	}
+	sort.Slice(names, func(i, j int) bool { return canonicalLess(names[i], names[j]) })
+	out := make([]*dns.NSEC, 0, len(names))
+	for i, n := range names {
+		next := names[(i+1)%len(names)]
+		ts := types[n]
+		ts[dns.TypeNSEC] = true
+		ts[dns.TypeRRSIG] = true
+		bm := make([]uint16, 0, len(ts))
+		for t := range ts {
+			bm = append(bm, t)
+		}
+		sort.Slice(bm, func(a, b int) bool { return bm[a] < bm[b] })
+		out = append(out, &dns.NSEC{
+			Hdr:        dns.RR_Header{Name: n, Rrtype: dns.TypeNSEC, Class: dns.ClassINET, Ttl: 3600},
+			NextDomain: next,
+			TypeBitMap: bm,
+		})
+	}
+	return out
+}
+
+// negativeProof 生成否定应答的 authority：SOA + SOA RRSIG + NSEC + NSEC RRSIG。
+func (s *Server) negativeProof(z *Zone, qname string) []dns.RR {
+	zk := loadKeys(z.Domain)
+	soa := s.soaRR(z.Domain)
+	out := []dns.RR{soa}
+	if zk == nil {
+		return out // 未启用 DNSSEC：仅 SOA
+	}
+	if sig := signRRset(z.Domain, zk.zsk, zk.zskPriv, []dns.RR{soa}); sig != nil {
+		out = append(out, sig)
+	}
+	qname = dns.Fqdn(strings.ToLower(qname))
+	nsecs := s.zoneNSEC(z)
+	var proof *dns.NSEC
+	for _, n := range nsecs { // NODATA：精确匹配
+		if n.Hdr.Name == qname {
+			proof = n
+			break
+		}
+	}
+	if proof == nil { // NXDOMAIN：找覆盖区间
+		for _, n := range nsecs {
+			if canonicalLess(n.Hdr.Name, qname) && canonicalLess(qname, n.NextDomain) {
+				proof = n
+				break
+			}
+		}
+		if proof == nil && len(nsecs) > 0 {
+			last := nsecs[len(nsecs)-1]
+			if canonicalLess(last.Hdr.Name, qname) {
+				proof = last
+			}
+		}
+	}
+	if proof != nil {
+		out = append(out, proof)
+		if sig := signRRset(z.Domain, zk.zsk, zk.zskPriv, []dns.RR{proof}); sig != nil {
 			out = append(out, sig)
 		}
 	}

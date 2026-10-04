@@ -23,7 +23,7 @@
 - **附件 blob 落盘**（#6）：新增内容寻址 `internal/blob`（sha256 去重），入站附件改为落盘（DB 仅存元数据 + blob id），读写路径自动兼容旧 base64；提供 `mailserver migrate-blobs`（存量迁移）与每日 blob GC。
 - **一键 / 定时备份恢复**（#13）：`mailserver backup [文件]` / `restore <文件>` 导出 DB 全表 JSON + `DATA_DIR`（含证书/blob）为 tar.gz；`BACKUP_DIR` 启用定时备份 + 保留份数 + `BACKUP_HOOK` 异地（如 rclone）。
 - **正文全文检索**（#14）：搜索覆盖 **正文**；启用 `pg_trgm` + GIN 索引加速 `ILIKE` 子串搜索（扩展不可用时自动退化）。
-- **投递可达性**（#17）：MTA-STS（`MTA_STS_MODE` 提供 `/.well-known/mta-sts.txt`）；后台可查 MTA-STS/TLS-RPT/DANE(TLSA) 建议记录；`DNSSEC_ENABLE=1` 启用**内置 DNS 签名**（KSK/ZSK + RRSIG + DNSKEY，启动日志给出 DS）。
+- **投递可达性**（#17）：MTA-STS（`MTA_STS_MODE` 提供 `/.well-known/mta-sts.txt`）；后台可查 MTA-STS/TLS-RPT/DANE(TLSA) 建议记录；`DNSSEC_ENABLE=1` 启用**内置 DNS 完整签名**：KSK/ZSK + 正向应答 RRSIG + DNSKEY（KSK 自签）+ **NSEC 否定应答（NXDOMAIN/NODATA 均带 SOA/NSEC 及其 RRSIG）**，启动日志给出 DS。
 - **工程护栏**（#20）：Dependabot、golangci-lint（CI，仅新版问题）、GitHub **CodeQL**、前端 **vitest** 单测（CI 运行）。
 
 ### 修复

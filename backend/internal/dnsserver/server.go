@@ -260,17 +260,19 @@ func (s *Server) handle(w dns.ResponseWriter, req *dns.Msg) {
 			}
 		}
 		if len(ans) == 0 {
-			exists := false
-			for _, r := range z.Records {
-				if strings.EqualFold(fqdn(r.Name, z.Domain), q.Name) {
-					exists = true
-					break
+			exists := strings.EqualFold(q.Name, dns.Fqdn(z.Domain))
+			if !exists {
+				for _, r := range z.Records {
+					if strings.EqualFold(fqdn(r.Name, z.Domain), q.Name) {
+						exists = true
+						break
+					}
 				}
 			}
 			if !exists {
 				resp.Rcode = dns.RcodeNameError
 			}
-			resp.Ns = []dns.RR{s.soaRR(z.Domain)}
+			resp.Ns = s.negativeProof(z, q.Name)
 		} else {
 			resp.Answer = s.signAnswers(z.Domain, ans)
 		}
