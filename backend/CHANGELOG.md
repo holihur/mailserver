@@ -7,6 +7,21 @@
 
 （暂无）
 
+## [v0.13.0] - 2026-10-04
+
+### 安全（严格策略）
+- **OIDC 严格校验**：`id_token` 走 **JWKS 验签**（RS256/ES256 等）+ 校验 `iss` / `aud` / `exp` / `nonce`（授权请求带 nonce），不再仅依赖 userinfo。
+- **HTML 严格白名单清洗**：只保留安全标签/属性，未知标签展开为文字，整体丢弃 script/style/iframe/form/svg 等；去除 on* 事件、style、危险 URL；注释节点移除。
+
+### 性能
+- **路由级代码分割**（React.lazy + Suspense）：首屏只加载 React/Router + 登录页，其余页面按需加载。
+- **React 运行时独立 chunk**，利于长期缓存；`MailApp` 等页面各自成块。
+- **服务端 gzip + 缓存头**：静态资源 gzip 压缩；`/assets/*` 使用 `immutable` 长缓存，HTML 不缓存。
+- 搜索**防抖**（300ms）；列表项 `content-visibility` 跳过离屏渲染。
+
+### 界面
+- 邮件列表：发件人/时间移至**底部右侧**，主题与摘要更突出。
+
 ## [v0.12.0] - 2026-10-04
 
 ### 新增

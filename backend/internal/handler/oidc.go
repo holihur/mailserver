@@ -46,11 +46,16 @@ func (a *Auth) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := randToken()
+	nonce := randToken()
 	http.SetCookie(w, &http.Cookie{
 		Name: "oidc_state", Value: state, Path: "/", HttpOnly: true,
 		SameSite: http.SameSiteLaxMode, MaxAge: 600, Secure: r.TLS != nil,
 	})
-	http.Redirect(w, r, p.AuthCodeURL(a.RT.OIDCClientID(), a.oidcRedirectURI(r), state), http.StatusFound)
+	http.SetCookie(w, &http.Cookie{
+		Name: "oidc_nonce", Value: nonce, Path: "/", HttpOnly: true,
+		SameSite: http.SameSiteLaxMode, MaxAge: 600, Secure: r.TLS != nil,
+	})
+	http.Redirect(w, r, p.AuthCodeURL(a.RT.OIDCClientID(), a.oidcRedirectURI(r), state, nonce), http.StatusFound)
 }
 
 func (a *Auth) OIDCCallback(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +72,10 @@ func (a *Auth) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?oidc_error=state", http.StatusFound)
 		return
 	}
+	nonce := ""
+	if c, err := r.Cookie("oidc_nonce"); err == nil {
+		nonce = c.Value
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	p, err := oidc.Discover(ctx, a.RT.OIDCIssuer())
@@ -74,14 +83,15 @@ func (a *Auth) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?oidc_error=discovery", http.StatusFound)
 		return
 	}
-	tok, err := p.Exchange(ctx, a.RT.OIDCClientID(), a.RT.OIDCClientSecret(), q.Get("code"), a.oidcRedirectURI(r))
+	_, idToken, err := p.Exchange(ctx, a.RT.OIDCClientID(), a.RT.OIDCClientSecret(), q.Get("code"), a.oidcRedirectURI(r))
 	if err != nil {
 		http.Redirect(w, r, "/login?oidc_error=token", http.StatusFound)
 		return
 	}
-	ui, err := p.UserInfo(ctx, tok)
+	// 严格校验 id_token：签名(JWKS) + iss/aud/exp + nonce
+	ui, err := p.VerifyIDToken(ctx, idToken, a.RT.OIDCClientID(), nonce)
 	if err != nil {
-		http.Redirect(w, r, "/login?oidc_error=userinfo", http.StatusFound)
+		http.Redirect(w, r, "/login?oidc_error=idtoken", http.StatusFound)
 		return
 	}
 	email := strings.ToLower(strings.TrimSpace(ui.Email))

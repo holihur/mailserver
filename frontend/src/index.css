@@ -59,3 +59,9 @@ html, body { overflow-x: hidden; }
 
 /* 安全区（iPhone 刘海/底部） */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* 离屏列表项跳过渲染，提升长列表滚动性能 */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}

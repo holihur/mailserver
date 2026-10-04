@@ -44,6 +44,7 @@ export default function MailApp() {
   const [installEvt, setInstallEvt] = useState<any>(null)
   const prevUnread = useRef(0)
   const touch = useRef<{ x: number; moved: boolean }>({ x: 0, moved: false })
+  const firstQ = useRef(true)
   const [preview, setPreview] = useState<any>(null)
   const [showImages, setShowImages] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -92,6 +93,12 @@ export default function MailApp() {
     window.addEventListener('beforeinstallprompt', h)
     return () => window.removeEventListener('beforeinstallprompt', h)
   }, [])
+  // 搜索防抖（300ms）
+  useEffect(() => {
+    if (firstQ.current) { firstQ.current = false; return }
+    const id = setTimeout(() => { setPage(1); load(1, sort) }, 300)
+    return () => clearTimeout(id)
+  }, [q])
 
   const [selectMode, setSelectMode] = useState(false)
   const [checked, setChecked] = useState<number[]>([])
@@ -309,21 +316,25 @@ export default function MailApp() {
                     if (dx < -60) { await api.trash(m.id); load() }
                     else if (dx > 60) { await api.patch(m.id, { read: !m.read }); load() }
                   }}
-                  className={cn('w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60 transition-colors',
+                  className={cn('cv-auto w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60 transition-colors',
                     (selectMode ? checked.includes(m.id) : sel?.id === m.id) && 'bg-muted', !m.read && 'bg-primary/5')}>
                   <div className="flex items-center gap-2">
                     {selectMode && <input type="checkbox" readOnly checked={checked.includes(m.id)} className="pointer-events-none shrink-0" />}
                     {!m.read && !selectMode && <span className="size-2 rounded-full bg-primary shrink-0" />}
-                    <span className={cn('truncate flex-1 text-sm', !m.read ? 'font-semibold' : 'text-muted-foreground')}>
-                      {folder === 'sent' ? m.to : m.from}
+                    <span className={cn('truncate flex-1 text-sm', !m.read ? 'font-semibold' : 'text-foreground')}>
+                      {m.subject || t('mail.noSubject')}
                     </span>
                     {attList(m.attachments).length > 0 && <Paperclip size={12} className="text-muted-foreground shrink-0" />}
                     {!selectMode && <Star size={14} className={cn('shrink-0', m.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground')}
                       onClick={async e => { e.stopPropagation(); await api.patch(m.id, { starred: !m.starred }); load() }} />}
                   </div>
-                  <div className={cn('text-sm truncate mt-0.5', m.read ? 'text-muted-foreground' : 'font-medium')}>{m.subject || t('mail.noSubject')}</div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xs text-muted-foreground truncate flex-1">{m.body?.slice(0, 80)}</span>
+                  <div className="mt-0.5">
+                    <span className="text-xs text-muted-foreground line-clamp-1">{m.body?.slice(0, 80)}</span>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 mt-0.5">
+                    <span className={cn('text-xs truncate max-w-[70%]', m.read ? 'text-muted-foreground' : 'font-medium')}>
+                      {folder === 'sent' ? m.to : m.from}
+                    </span>
                     <span className="text-[10px] text-muted-foreground shrink-0">{fmtWhen(m.created_at)}</span>
                   </div>
                 </button>
