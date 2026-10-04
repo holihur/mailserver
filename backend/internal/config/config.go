@@ -36,6 +36,11 @@ type Config struct {
 	RelayUser       string
 	RelayPass       string
 	RelayFrom       string
+	MaxMessageMB    int    // 单封邮件大小上限（MB，入站/提交）
+	DMARCEnforce    string // DMARC 执行：""=跟随域策略；none/quarantine/reject 覆盖
+	MetricsToken    string // METRICS_TOKEN：/metrics 鉴权（空=仅本机）
+	SendDailyLimit  int    // 每用户每日发信上限（0=不限）
+	SendPerMinute   int    // 每用户每分钟发信上限（0=不限）
 	// 日志
 	LogFile       string // 日志文件路径；off/-/stdout 则仅输出 stdout
 	LogMaxMB      int    // 单个日志文件大小上限（MB）
@@ -113,6 +118,11 @@ func Load() Config {
 		RelayUser:       os.Getenv("SMTP_RELAY_USER"),
 		RelayPass:       os.Getenv("SMTP_RELAY_PASS"),
 		RelayFrom:       getenv("SMTP_RELAY_FROM", "noreply@example.com"),
+		MaxMessageMB:    atoiDefault(os.Getenv("MAX_MESSAGE_MB"), 25),
+		DMARCEnforce:    strings.ToLower(strings.TrimSpace(getenv("DMARC_ENFORCE", "none"))),
+		MetricsToken:    os.Getenv("METRICS_TOKEN"),
+		SendDailyLimit:  atoiDefault(os.Getenv("SEND_DAILY_LIMIT"), 500),
+		SendPerMinute:   atoiDefault(os.Getenv("SEND_PER_MINUTE"), 20),
 		SubmitPort:      getenv("SUBMIT_PORT", "587"),
 		SubmitTLSPort:   os.Getenv("SUBMIT_TLS_PORT"),
 		Pop3Port:        getenv("POP3_PORT", "110"),

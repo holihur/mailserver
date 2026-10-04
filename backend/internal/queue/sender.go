@@ -235,6 +235,9 @@ func mxHosts(dom string) []string {
 
 // 组装 RFC5322；发件域==签名域且配了私钥时加 DKIM-Signature（签的就是实际发出的头）
 func buildMsg(host string, m *model.Mail, signer *dkim.Signer) []byte {
+	if m.IsMDN {
+		return message.BuildMDN(host, m)
+	}
 	hdrs, body := message.Parts(host, m)
 	var extra []string
 	if signer != nil && signer.Match(m.From) {

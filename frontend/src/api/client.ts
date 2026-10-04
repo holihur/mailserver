@@ -27,6 +27,7 @@ export const api = {
   gdprExport: () => req('/api/gdpr/export'),
   gdprDelete: (password) => req('/api/gdpr/delete', { method: 'POST', body: JSON.stringify({ password }) }),
   me: () => req('/api/me'),
+  changePassword: (oldPw, newPw) => req('/api/me/password', { method: 'POST', body: JSON.stringify({ old: oldPw, new: newPw }) }),
   list: (folder = 'inbox', q = '', page = 1, sort = 'newest') =>
     req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}`),
   unread: () => req('/api/mails/unread'),
@@ -98,6 +99,7 @@ export const api = {
   dnsRecDelete: (id, rid) => req(`/api/domains/${id}/records/${rid}`, { method: 'DELETE' }),
   dnsZone: async (id) => { const r = await fetch((import.meta.env.VITE_API || '') + `/api/domains/${id}/zone`, { headers: localStorage.getItem('token') ? { Authorization: 'Bearer ' + localStorage.getItem('token') } : {} }); return r.text() },
   adminOverview: () => req('/api/admin/overview'),
+  auditLogs: () => req('/api/admin/audit'),
   adminHealth: () => req('/api/admin/health'),
   adminAbout: () => req('/api/admin/about'),
   adminUpdateCheck: () => req('/api/admin/update/check'),

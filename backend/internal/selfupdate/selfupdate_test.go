@@ -118,3 +118,20 @@ func TestDiffers(t *testing.T) {
 		}
 	}
 }
+
+func TestRepoAllowed(t *testing.T) {
+	os.Unsetenv("MAILSERVER_REPO_ALLOW_ANY")
+	if !RepoAllowed("holihur/mailserver") {
+		t.Fatal("官方仓库应允许")
+	}
+	if !RepoAllowed("Holihur/mailserver") {
+		t.Fatal("大小写不敏感")
+	}
+	if RepoAllowed("evil/mailserver") {
+		t.Fatal("未知仓库应拒绝")
+	}
+	t.Setenv("MAILSERVER_REPO_ALLOW_ANY", "1")
+	if !RepoAllowed("evil/mailserver") {
+		t.Fatal("放开后应允许")
+	}
+}

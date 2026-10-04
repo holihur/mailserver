@@ -131,8 +131,10 @@ func (h *TOTPBox) Disable(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "动态验证码错误"})
 		return
 	}
-	h.DB.Model(&u).Updates(map[string]any{"totp_enabled": false, "totp_secret": ""})
-	writeJSON(w, 200, map[string]any{"ok": true, "enabled": false})
+	newVer := u.TokenVersion + 1
+	h.DB.Model(&model.User{}).Where("id = ?", u.ID).Updates(map[string]any{"totp_enabled": false, "totp_secret": "", "token_version": newVer})
+	tok, _ := auth.Sign(u.ID, u.Email, newVer)
+	writeJSON(w, 200, map[string]any{"ok": true, "enabled": false, "token": tok})
 }
 
 // POST /api/login/totp {challenge, code} -> 登录第二因子，返回 access 令牌
@@ -172,6 +174,6 @@ func (a *Auth) LoginTOTP(w http.ResponseWriter, r *http.Request) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}
-	tok, _ := auth.Sign(u.ID, u.Email)
+	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": u})
 }

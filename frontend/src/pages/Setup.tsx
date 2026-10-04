@@ -15,6 +15,8 @@ const SCOPES: [string, string][] = [
   ['mcp', 'token.scopeMcp'],
 ]
 const ALL_SCOPES = SCOPES.map(s => s[0])
+// 默认最小权限：客户端收信+发信；其余按需勾选。
+const DEFAULT_SCOPES = ['imap', 'smtp']
 
 export default function Setup() {
   const { t } = useI18n()
@@ -24,7 +26,7 @@ export default function Setup() {
   const [me, setMe] = useState<any>(null)
   const [tokName, setTokName] = useState('')
   const [tokCidrs, setTokCidrs] = useState('')
-  const [tokScopes, setTokScopes] = useState<string[]>(ALL_SCOPES)
+  const [tokScopes, setTokScopes] = useState<string[]>(DEFAULT_SCOPES)
   const [newToken, setNewToken] = useState('')
   const host = location.hostname
 
@@ -39,12 +41,12 @@ export default function Setup() {
   async function createToken(e: any) {
     e.preventDefault()
     try {
-      const scopes = tokScopes.length === ALL_SCOPES.length ? '' : tokScopes.join(',')
+      const scopes = tokScopes.join(',') // 显式列表，不再用空串代表全选（防未来静默扩权）
       const r = await api.tokenCreate(tokName, tokCidrs, scopes)
       setNewToken(r.token)
       setTokName('')
       setTokCidrs('')
-      setTokScopes(ALL_SCOPES)
+      setTokScopes(DEFAULT_SCOPES)
       setTokens(await api.tokens())
     } catch (err: any) { toast(err.message) }
   }
@@ -77,12 +79,19 @@ export default function Setup() {
           <form onSubmit={createToken} className="space-y-2">
             <div className="flex gap-2">
               <Input placeholder={t('token.namePlaceholder')} value={tokName} onChange={e => setTokName(e.target.value)} />
-              <Button size="sm" type="submit" className="shrink-0"><Plus />{t('token.generate')}</Button>
+              <Button size="sm" type="submit" className="shrink-0" disabled={tokScopes.length === 0}><Plus />{t('token.generate')}</Button>
             </div>
             <Input className="font-mono text-xs" placeholder={t('token.cidrPlaceholder')} value={tokCidrs} onChange={e => setTokCidrs(e.target.value)} />
             <p className="text-xs text-muted-foreground">{t('token.cidrHint')}</p>
             <div className="space-y-1">
-              <p className="text-xs font-medium">{t('token.scopes')}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-medium">{t('token.scopes')}</p>
+                <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <input type="checkbox" checked={tokScopes.length === ALL_SCOPES.length}
+                    onChange={e => setTokScopes(e.target.checked ? ALL_SCOPES : DEFAULT_SCOPES)} />
+                  {t('token.scopeSelectAll')}
+                </label>
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
                 {SCOPES.map(([k, key]) => (
                   <label key={k} className="flex items-center gap-1.5 text-xs">
@@ -113,7 +122,7 @@ export default function Setup() {
                   <span className="text-xs text-muted-foreground hidden sm:inline">
                     {tk.last_used ? t('token.lastUsed', { t: new Date(tk.last_used).toLocaleDateString() }) : t('token.neverUsed')}
                     {tk.allowed_cidrs ? ` · ${tk.allowed_cidrs}` : ''}
-                    {tk.scopes ? ` · ${tk.scopes}` : ` · ${t('token.scopeAll')}`}
+                    {tk.scopes ? ` · ${tk.scopes}` : ` · ${t('token.scopeLegacyAll')}`}
                   </span>
                   <div className="flex-1" />
                   <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => revokeToken(tk.id)}><Trash2 /></Button>

@@ -7,7 +7,7 @@ import (
 
 func TestSignAndParse(t *testing.T) {
 	SetSecret("unit-test-secret")
-	tok, err := Sign(42, "a@b.c")
+	tok, err := Sign(42, "a@b.c", 0)
 	if err != nil || tok == "" {
 		t.Fatalf("sign: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestUserIDErrors(t *testing.T) {
 	}
 	// 另一个密钥签的 token 应校验失败
 	SetSecret("other-secret")
-	tok, _ := Sign(1, "x@y.z")
+	tok, _ := Sign(1, "x@y.z", 0)
 	SetSecret("unit-test-secret")
 	req3 := httptest.NewRequest("GET", "/", nil)
 	req3.Header.Set("Authorization", "Bearer "+tok)
@@ -67,15 +67,26 @@ func TestTokenTypes(t *testing.T) {
 	}
 
 	// access 令牌不能当挑战令牌
-	acc, _ := Sign(7, "u@x.y")
+	acc, _ := Sign(7, "u@x.y", 0)
 	if _, err := TOTPChallengeUserID(acc); err == nil {
 		t.Fatal("access 令牌不应通过 TOTPChallengeUserID")
 	}
 }
 
+func TestTokenVersion(t *testing.T) {
+	SetSecret("unit-test-secret")
+	tok, _ := Sign(5, "v@x.y", 3)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	uid, ver, err := Access(req)
+	if err != nil || uid != 5 || ver != 3 {
+		t.Fatalf("Access=%d,%d,err=%v", uid, ver, err)
+	}
+}
+
 func TestClaimUIDZero(t *testing.T) {
 	SetSecret("unit-test-secret")
-	tok, _ := Sign(0, "x@y.z")
+	tok, _ := Sign(0, "x@y.z", 0)
 	req := httptest.NewRequest("GET", "/", nil)
 	req.Header.Set("Authorization", "Bearer "+tok)
 	if _, err := UserID(req); err == nil {

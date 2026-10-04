@@ -19,6 +19,7 @@ import (
 	"mailserver/internal/certstore"
 	"mailserver/internal/config"
 	"mailserver/internal/db"
+	"mailserver/internal/deliver"
 	"mailserver/internal/dnsserver"
 	"mailserver/internal/external"
 	"mailserver/internal/handler"
@@ -29,6 +30,7 @@ import (
 	"mailserver/internal/mailqueue"
 	"mailserver/internal/managesieve"
 	"mailserver/internal/mcp"
+	"mailserver/internal/model"
 	"mailserver/internal/pop3"
 	"mailserver/internal/ratelimit"
 	"mailserver/internal/runtimecfg"
@@ -37,6 +39,7 @@ import (
 	mailsmtp "mailserver/internal/smtp"
 
 	"github.com/joho/godotenv"
+	"gorm.io/gorm"
 )
 
 // 版本信息（GoReleaser 通过 -ldflags -X main.version=... 注入）
@@ -122,11 +125,26 @@ func main() {
 	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
 	rt := runtimecfg.New(g, cfg)
 	// asynq 发信队列（Redis 后端）：入队 + worker + 定时兜底
-	mq, err := mailqueue.NewClient(cfg.RedisURL)
+	mq, err := mailqueue.NewClient(cfg.RedisURL, g, cfg.SendDailyLimit, cfg.SendPerMinute)
 	if err != nil {
 		log.Fatal("发信队列需要 Redis（REDIS_URL）：", err)
 	}
 	mb.MQ = mq
+	// SIP Sieve vacation：发自动回复，按（用户,发件人）7 天去重
+	deliver.VacationHook = func(db *gorm.DB, uid uint, from, subject, text string) {
+		if !mq.AllowVacation(uid, from, 7) {
+			return
+		}
+		var u model.User
+		if err := db.First(&u, uid).Error; err != nil {
+			return
+		}
+		m := model.Mail{UserID: uid, From: u.Email, To: from, Subject: "自动回复: " + subject, Body: text, Folder: "sent", Read: true, Status: "queued"}
+		if err := db.Create(&m).Error; err != nil {
+			return
+		}
+		_ = mq.EnqueueSend(m.ID)
+	}
 	defer mq.Close()
 	mcpSrv := &mcp.Server{DB: g, MQ: mq}
 	if err := mailqueue.Start(cfg.RedisURL, g, rt); err != nil {
@@ -159,23 +177,25 @@ func main() {
 	hc.Start(20 * time.Second)
 	ad.Health = hc
 	jmapSrv := &jmap.Server{DB: g, MQ: mq, BlobDir: filepath.Join(cfg.DataDir, "blobs")}
-	metricsBox := &handler.MetricsBox{DB: g, Health: hc, Version: version, Commit: commit}
+	metricsBox := &handler.MetricsBox{DB: g, Health: hc, Version: version, Commit: commit, Token: cfg.MetricsToken}
 	au.RT = rt
 	dns.RT = rt
 	dns.AdminEmails = cfg.AdminEmails
 
 	host := rt.MailHost
+	maxMsg := int64(cfg.MaxMessageMB) << 20
 
-	go mailsmtp.Serve(":"+cfg.SMTPport, g)
+	go mailsmtp.Serve(":"+cfg.SMTPport, g, maxMsg, cfg.DMARCEnforce)
 	go external.Start(g)
-	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, host, g, tlsConf)
+	handler.StartAuditRetention(g)
+	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, host, g, tlsConf, maxMsg)
 	go pop3.Serve(":"+cfg.Pop3Port, host, g, tlsConf)
 	go imap.Serve(":"+cfg.ImapPort, host, g, tlsConf)
 	if cfg.ImapTLSPort != "" {
 		go imap.ServeTLS(":"+cfg.ImapTLSPort, host, g, tlsConf)
 	}
 	if cfg.SubmitTLSPort != "" {
-		go mailsmtp.ServeSubmitTLS(":"+cfg.SubmitTLSPort, host, g, tlsConf)
+		go mailsmtp.ServeSubmitTLS(":"+cfg.SubmitTLSPort, host, g, tlsConf, maxMsg)
 	}
 	if cfg.Pop3TLSPort != "" {
 		go pop3.ServeTLS(":"+cfg.Pop3TLSPort, host, g, tlsConf)
@@ -238,6 +258,7 @@ func main() {
 	mux.HandleFunc("/api/gdpr/export", cors(gdpr.Export))
 	mux.HandleFunc("/api/gdpr/delete", cors(gdpr.Delete))
 	mux.HandleFunc("/api/me", cors(au.Me))
+	mux.HandleFunc("/api/me/password", cors(au.ChangePassword))
 	mux.HandleFunc("/api/mails", cors(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			mb.List(w, r)
@@ -281,6 +302,7 @@ func main() {
 	mux.HandleFunc("/api/domains/", cors(dns.DomainOne))
 	// 管理后台（仅管理员）
 	mux.HandleFunc("/api/admin/overview", cors(ad.Overview))
+	mux.HandleFunc("/api/admin/audit", cors(ad.AuditLogs))
 	mux.HandleFunc("/api/admin/health", cors(ad.HealthStatus))
 	mux.HandleFunc("/api/admin/about", cors(ad.About))
 	mux.HandleFunc("/api/admin/update/check", cors(ad.UpdateCheck))
@@ -323,7 +345,7 @@ func main() {
 	fmt.Println("api on :" + cfg.Port)
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           securityHeaders(mux),
+		Handler:           securityHeaders(handler.AuditAdmin(g, mux)),
 		ReadHeaderTimeout: 15 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}

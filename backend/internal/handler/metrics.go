@@ -3,7 +3,9 @@ package handler
 // Prometheus 指标：GET /metrics（文本格式 0.0.4）。仅暴露聚合指标，不含个人数据。
 
 import (
+	"crypto/subtle"
 	"fmt"
+	"net"
 	"net/http"
 	"runtime"
 	"strings"
@@ -19,9 +21,32 @@ type MetricsBox struct {
 	Health  *health.Collector
 	Version string
 	Commit  string
+	Token   string // METRICS_TOKEN：非空则要求 Bearer token；为空则仅允许本机
+}
+
+// authorized 校验抓取方：配了 token 则比对 Bearer；否则仅允许本机（127.0.0.1/::1）。
+func (h *MetricsBox) authorized(r *http.Request) bool {
+	if h.Token != "" {
+		hdr := r.Header.Get("Authorization")
+		if !strings.HasPrefix(hdr, "Bearer ") {
+			return false
+		}
+		tok := strings.TrimSpace(strings.TrimPrefix(hdr, "Bearer "))
+		return subtle.ConstantTimeCompare([]byte(tok), []byte(h.Token)) == 1
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (h *MetricsBox) Serve(w http.ResponseWriter, r *http.Request) {
+	if !h.authorized(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	var b strings.Builder
 

@@ -24,11 +24,12 @@ func sign(claims jwt.MapClaims) (string, error) {
 	return t.SignedString(secret)
 }
 
-func Sign(userID uint, email string) (string, error) {
+func Sign(userID uint, email string, ver int) (string, error) {
 	return sign(jwt.MapClaims{
 		"uid":   userID,
 		"email": email,
 		"typ":   typAccess,
+		"ver":   ver,
 		"exp":   time.Now().Add(72 * time.Hour).Unix(),
 	})
 }
@@ -67,19 +68,36 @@ func claimUID(m jwt.MapClaims) (uint, error) {
 
 // UserID 解析 Bearer access 令牌。
 func UserID(r *http.Request) (uint, error) {
+	uid, _, err := Access(r)
+	return uid, err
+}
+
+// Access 解析 Bearer access 令牌，返回 uid 与 token_version（旧令牌无 ver 视为 0）。
+func Access(r *http.Request) (uint, int, error) {
 	h := r.Header.Get("Authorization")
 	if !strings.HasPrefix(h, "Bearer ") {
-		return 0, errors.New("no token")
+		return 0, 0, errors.New("no token")
 	}
 	m, err := parse(strings.TrimPrefix(h, "Bearer "))
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	// 兼容旧令牌（无 typ）：视为 access；totp 挑战令牌一律拒绝。
 	if t, _ := m["typ"].(string); t != "" && t != typAccess {
-		return 0, errors.New("wrong token type")
+		return 0, 0, errors.New("wrong token type")
 	}
-	return claimUID(m)
+	uid, err := claimUID(m)
+	if err != nil {
+		return 0, 0, err
+	}
+	return uid, claimVersion(m), nil
+}
+
+func claimVersion(m jwt.MapClaims) int {
+	if v, ok := m["ver"].(float64); ok {
+		return int(v)
+	}
+	return 0
 }
 
 // TOTPChallengeUserID 解析登录第二因子的挑战令牌（typ=totp）。

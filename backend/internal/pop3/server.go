@@ -8,11 +8,14 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/authguard"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 
@@ -126,7 +129,12 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 			s.r = bufio.NewReader(conn)
 			s.w = bufio.NewWriter(conn)
 			s.tls = true
+			s.name = "" // TLS 后重置未完成认证的用户名，防状态穿越
 		case "USER":
+			if tlsConf != nil && !s.tls {
+				s.err("STARTTLS required")
+				continue
+			}
 			if s.user != nil {
 				s.err("already authed")
 				continue
@@ -138,15 +146,29 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 			}
 			s.ok("send PASS")
 		case "PASS":
+			if tlsConf != nil && !s.tls {
+				s.err("STARTTLS required")
+				continue
+			}
 			if s.name == "" || s.user != nil {
 				s.err("need USER first")
 				continue
 			}
-			u, err := auth.AuthenticateMail(s.db, s.name, arg, auth.HostOf(s.conn.RemoteAddr().String()), auth.ScopePOP3)
+			ip := auth.HostOf(s.conn.RemoteAddr().String())
+			if authguard.Default.Blocked(ip) {
+				log.Printf("auth blocked proto=pop3 ip=%s user=%s", ip, s.name)
+				s.err("too many attempts, try later")
+				continue
+			}
+			u, err := auth.AuthenticateMail(s.db, s.name, arg, ip, auth.ScopePOP3)
 			if err != nil {
+				authguard.Default.Fail(ip)
+				log.Printf("auth failure proto=pop3 ip=%s user=%s err=%v", ip, s.name, err)
+				time.Sleep(500 * time.Millisecond)
 				s.err(err.Error())
 				continue
 			}
+			authguard.Default.Reset(ip)
 			s.user = u
 			s.loadBox()
 			s.ok("mailbox locked, %d message(s)", len(s.box))

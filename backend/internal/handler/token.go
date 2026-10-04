@@ -51,6 +51,9 @@ func (h *TokenBox) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		scopes := auth.NormalizeScopes(in.Scopes)
+		if scopes == "" {
+			scopes = "imap,smtp" // 新令牌默认最小权限；如需全权限请显式传全部 scopes
+		}
 		if err := auth.ValidScopes(scopes); err != nil {
 			writeJSON(w, 400, map[string]string{"error": err.Error()})
 			return

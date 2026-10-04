@@ -13,6 +13,7 @@ const AdminSSL = lazy(() => import('./pages/AdminSSL'))
 const AdminProviders = lazy(() => import('./pages/AdminProviders'))
 const AdminUsers = lazy(() => import('./pages/AdminUsers'))
 const AdminAbout = lazy(() => import('./pages/AdminAbout'))
+const AdminAudit = lazy(() => import('./pages/AdminAudit'))
 const AdminRules = lazy(() => import('./pages/AdminRules'))
 const AdminRoutes = lazy(() => import('./pages/AdminRoutes'))
 const AdminAliases = lazy(() => import('./pages/AdminAliases'))
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="/admin/providers" element={authed() ? <AdminProviders /> : <Navigate to="/login" />} />
           <Route path="/admin/users" element={authed() ? <AdminUsers /> : <Navigate to="/login" />} />
           <Route path="/admin/about" element={authed() ? <AdminAbout /> : <Navigate to="/login" />} />
+          <Route path="/admin/audit" element={authed() ? <AdminAudit /> : <Navigate to="/login" />} />
           <Route path="/admin/rules" element={authed() ? <AdminRules /> : <Navigate to="/login" />} />
           <Route path="/admin/routes" element={authed() ? <AdminRoutes /> : <Navigate to="/login" />} />
           <Route path="/admin/aliases" element={authed() ? <AdminAliases /> : <Navigate to="/login" />} />

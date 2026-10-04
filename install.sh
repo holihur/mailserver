@@ -268,13 +268,19 @@ install_binary() {
   CLEANUP_DIRS+=("$tmp")
 
   log "下载二进制 (${TAG} / linux-${arch})…"
-  download "${GH}/releases/download/${TAG}/mailserver_${TAG}_linux_${arch}.tar.gz" "${tmp}/api.tar.gz"
+  local pkg="mailserver_${TAG}_linux_${arch}.tar.gz"
+  download "${GH}/releases/download/${TAG}/${pkg}" "${tmp}/${pkg}"
+  log "下载校验和并校验 sha256…"
+  download "${GH}/releases/download/${TAG}/checksums.txt" "${tmp}/checksums.txt"
+  if ! ( cd "${tmp}" && grep -E "[ *]${pkg}$" checksums.txt | sha256sum -c - ); then
+    die "sha256 校验失败，已中止安装（勿使用不可信的下载）"
+  fi
 
   mkdir -p "${DIR}/bin" "${DIR}/data" /etc/mailserver
 
   # 单二进制：已内嵌前端与权威 DNS
   mkdir -p "${tmp}/x"
-  tar -xzf "${tmp}/api.tar.gz" -C "${tmp}/x"
+  tar -xzf "${tmp}/${pkg}" -C "${tmp}/x"
   install -m 0755 "${tmp}/x/mailserver" "${DIR}/bin/mailserver"
   if [ -f "${tmp}/x/.env.example" ]; then
     cp "${tmp}/x/.env.example" /etc/mailserver/mailserver.env.example

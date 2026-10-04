@@ -109,6 +109,13 @@ func (a *Auth) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		u = model.User{Email: email, Name: name, PassHash: string(hash)}
 		var n int64
 		a.DB.Model(&model.User{}).Count(&n)
+		if n > 0 {
+			at := strings.LastIndex(email, "@")
+			if at <= 0 || !a.isHostedEmailDomain(email[at+1:]) {
+				http.Redirect(w, r, "/login?oidc_error=domain", http.StatusFound)
+				return
+			}
+		}
 		if n == 0 || isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 			u.Admin = true
 		}
@@ -125,6 +132,6 @@ func (a *Auth) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}
-	jwt, _ := auth.Sign(u.ID, u.Email)
+	jwt, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
 	http.Redirect(w, r, "/?oidc_token="+url.QueryEscape(jwt), http.StatusFound)
 }

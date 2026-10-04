@@ -12,6 +12,9 @@ export default function Security() {
   const [setup, setSetup] = useState<any>(null) // {secret, url}
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pwOld, setPwOld] = useState('')
+  const [pwNew, setPwNew] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
 
   async function load() {
     try { const s = await api.totp(); setEnabled(!!s.enabled) } catch { setEnabled(false) }
@@ -32,9 +35,20 @@ export default function Security() {
   async function disable() {
     setBusy(true)
     try {
-      await api.totpDisable(code)
+      const r: any = await api.totpDisable(code)
+      if (r?.token) localStorage.setItem('token', r.token)
       setCode(''); await load()
     } catch (e: any) { toast(e.message) } finally { setBusy(false) }
+  }
+  async function changePw(e: any) {
+    e.preventDefault()
+    setPwBusy(true)
+    try {
+      const r: any = await api.changePassword(pwOld, pwNew)
+      if (r?.token) localStorage.setItem('token', r.token)
+      setPwOld(''); setPwNew('')
+      toast(t('security.passwordChanged'), { type: 'success' })
+    } catch (e: any) { toast(e.message, { type: 'error' }) } finally { setPwBusy(false) }
   }
   function copy(s: string) { navigator.clipboard?.writeText(s) }
 
@@ -104,6 +118,19 @@ export default function Security() {
               <Button size="sm" variant="destructive" disabled={busy || code.length !== 6} onClick={disable}>{t('security.disable')}</Button>
             </div>
           )}
+        </Card>
+
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <KeyRound size={16} />
+            <b className="text-sm">{t('security.passwordTitle')}</b>
+          </div>
+          <form onSubmit={changePw} className="space-y-2">
+            <Input type="password" autoComplete="current-password" placeholder={t('security.oldPassword')} value={pwOld} onChange={e => setPwOld(e.target.value)} required />
+            <Input type="password" autoComplete="new-password" placeholder={t('security.newPassword')} value={pwNew} onChange={e => setPwNew(e.target.value)} required />
+            <p className="text-xs text-muted-foreground">{t('security.passwordHint')}</p>
+            <Button size="sm" disabled={pwBusy || pwNew.length < 8}>{t('security.changePassword')}</Button>
+          </form>
         </Card>
 
         <Card className="p-4 space-y-3">

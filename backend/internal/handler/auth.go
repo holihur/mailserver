@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"strings"
@@ -27,6 +28,16 @@ func clientIP(r *http.Request) string {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+// isHostedEmailDomain 判断邮箱域名是否已在 domains 表托管（唯一依据）。
+func (a *Auth) isHostedEmailDomain(domain string) bool {
+	domain = strings.ToLower(strings.TrimSpace(domain))
+	if domain == "" {
+		return false
+	}
+	var dm model.Domain
+	return a.DB.Where("LOWER(name) = ?", domain).First(&dm).Error == nil
 }
 
 type Auth struct {
@@ -56,16 +67,26 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 429, map[string]string{"error": "注册过于频繁，请稍后再试"})
 		return
 	}
-	if len(in.Pass) < 6 || in.Email == "" {
-		writeJSON(w, 400, map[string]string{"error": "email/password 非法"})
+	email := strings.ToLower(strings.TrimSpace(in.Email))
+	at := strings.LastIndex(email, "@")
+	if at <= 0 || at == len(email)-1 {
+		writeJSON(w, 400, map[string]string{"error": "邮箱格式不正确"})
 		return
 	}
-	email := strings.ToLower(strings.TrimSpace(in.Email))
+	if err := validatePassword(in.Pass, email); err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
 	var n int64
 	a.DB.Model(&model.User{}).Count(&n)
 	// 默认关闭注册；首个用户始终可注册（否则无人能进）
 	if n > 0 && (a.RT == nil || !a.RT.RegistrationEnabled()) {
 		writeJSON(w, 403, map[string]string{"error": "注册已关闭，请联系管理员开通账号"})
+		return
+	}
+	// 邮箱后缀必须是托管域名（与管理员建号一致）；首个引导管理员不受限
+	if n > 0 && !a.isHostedEmailDomain(email[at+1:]) {
+		writeJSON(w, 403, map[string]string{"error": "该邮箱域名未托管，无法注册；请联系管理员"})
 		return
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.DefaultCost)
@@ -77,7 +98,7 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 409, map[string]string{"error": "邮箱已注册"})
 		return
 	}
-	tok, _ := auth.Sign(u.ID, u.Email)
+	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
 	writeJSON(w, 201, map[string]any{"token": tok, "user": u})
 }
 
@@ -126,7 +147,7 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		u.Admin = true
 		a.DB.Model(&u).Update("admin", true)
 	}
-	tok, _ := auth.Sign(u.ID, u.Email)
+	tok, _ := auth.Sign(u.ID, u.Email, u.TokenVersion)
 	writeJSON(w, 200, map[string]any{"token": tok, "user": u})
 }
 
@@ -167,4 +188,70 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 	}
 	u.QuotaUsed = quota.Usage(a.DB, uid)
 	writeJSON(w, 200, u)
+}
+
+// 常见弱密码（小写）拦截，配合长度要求。
+var weakPasswords = map[string]bool{
+	"password": true, "password1": true, "passw0rd": true, "12345678": true,
+	"123456789": true, "1234567890": true, "qwertyui": true, "qwerty123": true,
+	"11111111": true, "abc12345": true, "iloveyou": true, "admin123": true,
+	"letmein1": true, "welcome1": true, "changeme": true,
+}
+
+// validatePassword 校验新密码：至少 8 位 + 非常见弱密码 + 不等于账号名。
+func validatePassword(pw, email string) error {
+	if len([]rune(pw)) < 8 {
+		return errors.New("密码至少 8 位")
+	}
+	if weakPasswords[strings.ToLower(pw)] {
+		return errors.New("密码过于常见，请更换")
+	}
+	if local := strings.SplitN(strings.ToLower(strings.TrimSpace(email)), "@", 2)[0]; local != "" && strings.EqualFold(pw, local) {
+		return errors.New("密码不能与账号名相同")
+	}
+	return nil
+}
+
+// POST /api/me/password {old,new}：本人修改密码；成功后 token_version++，旧令牌全部失效。
+func (a *Auth) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(a.DB, w, r)
+	if !ok {
+		return
+	}
+	if r.Method != "POST" {
+		w.WriteHeader(405)
+		return
+	}
+	var in struct {
+		Old string `json:"old"`
+		New string `json:"new"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "bad body"})
+		return
+	}
+	var u model.User
+	if err := a.DB.First(&u, uid).Error; err != nil {
+		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PassHash), []byte(in.Old)) != nil {
+		writeJSON(w, 400, map[string]string{"error": "原密码错误"})
+		return
+	}
+	if err := validatePassword(in.New, u.Email); err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
+		return
+	}
+	hash, _ := bcrypt.GenerateFromPassword([]byte(in.New), bcrypt.DefaultCost)
+	newVer := u.TokenVersion + 1
+	if err := a.DB.Model(&model.User{}).Where("id = ?", uid).Updates(map[string]any{
+		"pass_hash": string(hash), "token_version": newVer,
+	}).Error; err != nil {
+		writeJSON(w, 500, map[string]string{"error": "保存失败"})
+		return
+	}
+	// 换发当前会话的新令牌，其余旧令牌因版本不符立即失效
+	tok, _ := auth.Sign(u.ID, u.Email, newVer)
+	writeJSON(w, 200, map[string]any{"ok": true, "token": tok})
 }

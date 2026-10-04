@@ -5,7 +5,25 @@
 
 ## [未发布] / Unreleased
 
-（暂无）
+### 安全
+- **自助注册限制邮箱后缀**：只允许**已托管域名**（`domains` 表）注册，与管理员建号规则一致；首个引导管理员不受限，同时校验邮箱格式（必须含 `@`）。OIDC 自动建号同样受此限制（失败跳转 `oidc_error=domain`）。
+- **自助改密 + JWT 撤销**（#9）：新增 `POST /api/me/password`（验旧密码；新密码 ≥8 位 + 弱密码拦截）；`users.token_version` 写入 JWT，鉴权时比对，**改密 / 管理员重置密码 / 关闭 TOTP** 时自增，旧 access token 立即失效；注册与管理员建号同步改为 ≥8 位。「账户安全」页新增改密入口。
+- **明文端口认证保护**（#3）：IMAP/POP3/ManageSieve 在**配了证书但未加密**时拒绝明文认证（IMAP 通告 `LOGINDISABLED`，POP3 要求先 `STLS`，ManageSieve 不通告 SASL）；STARTTLS 后重置会话状态。
+- **协议层认证失败限流**（#4）：新增进程内 `authguard`（默认 10 分钟 30 次/IP），IMAP/POP3/SMTP 提交/ManageSieve 认证失败计数 + 0.5s 延迟 + 日志（便于 fail2ban），成功即清零，不依赖 Redis。
+- **供应链加固**（#5）：`install.sh` 下载后校验 `checksums.txt` 的 sha256，失败即中止；GoReleaser 增加 cosign keyless 签名 + SBOM，Docker 构建开启 provenance/SBOM 证明；`selfupdate` 限制更新源为 `holihur/*`（`MAILSERVER_REPO_ALLOW_ANY=1` 可放开）。
+- **入站发件人认证**（#7）：新增 `emailauth`（SPF / DKIM 验签 / DMARC 对齐），入站邮件计算并将结果写入 `mails.auth_results`，前端详情展示；`DMARC_ENFORCE=none|quarantine|reject` 可配置隔离/拒收（默认仅标记，避免误杀）。
+- **管理员操作审计**（#10）：新增 `audit_logs` 表，`/api/admin/*` 写操作自动记录操作人/动作/路径/来源 IP，敏感字段脱敏；后台「审计日志」页可查（保留 180 天）。
+- **图片代理 SSRF 加固**（#11）：连接时二次校验 IP（防 DNS rebinding）、禁止重定向、只允许公网可路由地址（含拒绝 CGNAT/保留段/IPv4-mapped）。
+- **发信节流**（#12）：每用户每日/每分钟发信配额（`SEND_DAILY_LIMIT=500`、`SEND_PER_MINUTE=20`），超限拒绝入队并标记失败，覆盖网页/JMAP/MCP/SMTP 提交。
+- **PAT 最小权限**（#18）：新建应用专用密码默认只勾 `imap,smtp`，显式全选才存全量（不再用空串代表全选，防止未来 scope 静默扩权）；旧空-scope token 标「全权限（旧）」。
+- **/metrics 鉴权**（#19）：配 `METRICS_TOKEN` 则要求 Bearer，否则仅允许本机访问，不再公网裸奔。
+
+### 修复
+- **入站 SMTP 多收件人静默丢信**（#1）：`RCPT TO` 改为逐个收集并逐个投递，`MAIL FROM`/`RSET` 清空收件人，另补 DATA 段 `.` 透明传输；补单测。
+- **邮件大小上限写死 1MB**（#2）：新增可配置 `MAX_MESSAGE_MB`（默认 25），入站 / 提交统一；超限仍回 `552 5.3.4` 但**保持协议同步**（丢弃剩余数据直到结束符），不再协议错位；补单测。
+- **IMAP 假 IDLE + 缺扩展**（#8）：IDLE 改为阻塞等 DONE 的同时每 3s 推送 `EXISTS`（不再死等）；新增 `MOVE`/`UIDPLUS`（COPYUID/APPENDUID）/`NAMESPACE`/`ID`/`QUOTA`（GETQUOTA/GETQUOTAROOT）；连接加 30 分钟读超时；补单测。
+- **零环路保护**（#15）：入站按 `Received` 跳数 >50 拒收；别名改为递归展开（visited + 深度上限），互指/自指不再滚雪球；补单测。
+- **Sieve `reject` 空操作**（#16）：实现 `reject`/`ereject`（拒收不投递）；未知动作改为**编译期报错**（`CHECKSCRIPT`/`PUTSCRIPT` 返回 NO），不再静默吞掉；新增 `vacation` 自动回复（`VacationHook` + Redis 7 天去重）；ManageSieve 能力改为从引擎支持集生成；补单测。
 
 ## [v0.15.0] - 2026-10-04
 

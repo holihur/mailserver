@@ -36,6 +36,23 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# 供应链：为产物生成 SBOM；用 cosign keyless(GitHub OIDC) 签名校验和文件。
+sboms:
+  - artifacts: archive
+
+signs:
+  - cmd: cosign
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: checksum
+    output: true
+
 changelog:
   disable: true
 

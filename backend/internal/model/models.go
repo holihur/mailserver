@@ -3,18 +3,20 @@ package model
 import "time"
 
 type User struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	Email       string    `gorm:"uniqueIndex;size:255" json:"email"`
-	Name        string    `gorm:"size:100" json:"name"`
-	Signature   string    `gorm:"size:1000" json:"signature"` // 邮件签名
-	QuotaMB     int       `json:"quota_mb"`                   // 存储配额（MB），0=不限
-	QuotaUsed   int64     `gorm:"-" json:"quota_used"`        // 已用字节（仅展示）
-	PassHash    string    `gorm:"size:255" json:"-"`
-	Admin       bool      `json:"admin"`             // 管理员：可进 /api/admin 管理后台
-	Disabled    bool      `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
-	TOTPSecret  string    `gorm:"size:255" json:"-"` // AES-GCM 加密的 TOTP 密钥
-	TOTPEnabled bool      `json:"totp_enabled"`      // 登录是否要求动态验证码
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	Email       string `gorm:"uniqueIndex;size:255" json:"email"`
+	Name        string `gorm:"size:100" json:"name"`
+	Signature   string `gorm:"size:1000" json:"signature"` // 邮件签名
+	QuotaMB     int    `json:"quota_mb"`                   // 存储配额（MB），0=不限
+	QuotaUsed   int64  `gorm:"-" json:"quota_used"`        // 已用字节（仅展示）
+	PassHash    string `gorm:"size:255" json:"-"`
+	Admin       bool   `json:"admin"`             // 管理员：可进 /api/admin 管理后台
+	Disabled    bool   `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
+	TOTPSecret  string `gorm:"size:255" json:"-"` // AES-GCM 加密的 TOTP 密钥
+	TOTPEnabled bool   `json:"totp_enabled"`      // 登录是否要求动态验证码
+	// TokenVersion 令牌版本：改密/重置/关闭 TOTP 时自增，旧 access token 立即失效。
+	TokenVersion int       `gorm:"not null;default:0" json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // MailToken 邮件客户端专用令牌（PAT，应用专用密码）。
@@ -44,12 +46,25 @@ type ScheduledMail struct {
 	Subject     string     `gorm:"size:500" json:"subject"`
 	Body        string     `gorm:"type:text" json:"body"`
 	Attachments string     `gorm:"type:text" json:"attachments"`
+	ReceiptTo   string     `gorm:"size:255" json:"receipt_to"`
 	SendAt      time.Time  `gorm:"index" json:"send_at"`
 	Repeat      string     `gorm:"size:20" json:"repeat"` // "" | daily | weekly | monthly
 	Enabled     bool       `json:"enabled"`
 	LastSent    *time.Time `json:"last_sent"`
 	LastError   string     `gorm:"size:500" json:"last_error"`
 	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// AuditLog 管理员高危操作审计日志（脱敏后记录）。
+type AuditLog struct {
+	ID         uint      `gorm:"primaryKey" json:"id"`
+	ActorID    uint      `gorm:"index" json:"actor_id"`
+	ActorEmail string    `gorm:"size:255" json:"actor_email"`
+	Action     string    `gorm:"size:20" json:"action"`  // 方法：POST/PATCH/DELETE
+	Target     string    `gorm:"size:255" json:"target"` // 接口路径
+	Detail     string    `gorm:"size:1000" json:"detail"`
+	IP         string    `gorm:"size:64" json:"ip"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 // ---- 自托管域名/DNS ----
@@ -101,24 +116,32 @@ type Setting struct {
 // folder: inbox / sent / draft / trash
 // Relayed: 发件队列状态（sent 文件夹有效），25 被封时走中继投递
 type Mail struct {
-	ID          uint      `gorm:"primaryKey" json:"id"`
-	UserID      uint      `gorm:"index" json:"-"`
-	From        string    `gorm:"size:255" json:"from"`
-	To          string    `gorm:"size:255" json:"to"`
-	Cc          string    `gorm:"size:255" json:"cc"`
-	Bcc         string    `gorm:"size:255" json:"bcc"`
-	Subject     string    `gorm:"size:500" json:"subject"`
-	Body        string    `gorm:"type:text" json:"body"`
-	BodyHTML    string    `gorm:"type:text" json:"body_html"`   // 清洗后的 HTML 正文
-	Attachments string    `gorm:"type:text" json:"attachments"` // JSON: [{name,type,data(base64),size}]
-	Folder      string    `gorm:"size:20;index" json:"folder"`
-	Read        bool      `json:"read"`
-	Starred     bool      `json:"starred"`
-	Relayed     bool      `json:"relayed"`
-	RelayErr    string    `gorm:"size:500" json:"relay_err"`
-	Status      string    `gorm:"size:20" json:"status"` // sent 文件夹：queued|sending|sent|failed
-	Attempts    int       `json:"attempts"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	UserID      uint   `gorm:"index" json:"-"`
+	From        string `gorm:"size:255" json:"from"`
+	To          string `gorm:"size:255" json:"to"`
+	Cc          string `gorm:"size:255" json:"cc"`
+	Bcc         string `gorm:"size:255" json:"bcc"`
+	Subject     string `gorm:"size:500" json:"subject"`
+	Body        string `gorm:"type:text" json:"body"`
+	BodyHTML    string `gorm:"type:text" json:"body_html"`   // 清洗后的 HTML 正文
+	Attachments string `gorm:"type:text" json:"attachments"` // JSON: [{name,type,data(base64),size}]
+	Folder      string `gorm:"size:20;index" json:"folder"`
+	Read        bool   `json:"read"`
+	Starred     bool   `json:"starred"`
+	Relayed     bool   `json:"relayed"`
+	RelayErr    string `gorm:"size:500" json:"relay_err"`
+	Status      string `gorm:"size:20" json:"status"` // sent 文件夹：queued|sending|sent|failed
+	Attempts    int    `json:"attempts"`
+	// 已读回执（MDN, RFC 3798）
+	ReceiptTo   string     `gorm:"size:255" json:"receipt_to"`   // 非空：收到的邮件要求回执至此地址；发件时表示已请求回执
+	ReceiptSent bool       `json:"receipt_sent"`                 // 收到时：已回复回执
+	ReceiptRead bool       `json:"receipt_read"`                 // 发出时：已收到对方回执
+	ReceiptAt   *time.Time `json:"receipt_at"`                   // 回执到达时间
+	IsMDN       bool       `json:"is_mdn"`                       // 本条本身是一封已读回执
+	ReceiptFor  uint       `json:"receipt_for"`                  // MDN 关联的原邮件 ID
+	AuthResults string     `gorm:"size:255" json:"auth_results"` // 入站认证结果，如 "spf=pass; dkim=fail; dmarc=fail"
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 // MailRule 基于 CEL 的收信规则：表达式命中后把邮件投递到指定文件夹（默认 trash）。

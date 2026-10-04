@@ -466,6 +466,11 @@ export default function MailApp() {
                         {t('mail.fromTo', { from: sel.from, to: sel.to })} · {new Date(sel.created_at).toLocaleString()}
                       </p>
                       {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
+                      {sel.auth_results && (
+                        <p className={cn('text-[11px] mt-0.5', sel.auth_results.includes('dmarc=fail') ? 'text-red-500' : sel.auth_results.includes('dmarc=pass') ? 'text-green-600' : 'text-muted-foreground')}>
+                          {sel.auth_results}
+                        </p>
+                      )}
                     </div>
                     <Dropdown align="right" trigger={
                       <Button variant="ghost" size="icon" aria-label={t('mail.actions')}><MoreVertical /></Button>

@@ -157,12 +157,34 @@ func TestNotParen(t *testing.T) {
 }
 
 func TestDefaultBranch(t *testing.T) {
-	// fileinto 后跟 ident（非 tag/str/num），走 parseCommand 的 default 分支
-	p, err := Compile(`fileinto foo; keep;`)
+	// fileinto 后跟 ident（非 tag/str/num）→ 解析成独立命令；未知命令现在编译期报错，不再静默跳过
+	if _, err := Compile(`fileinto foo; keep;`); err == nil {
+		t.Fatal("未知命令 foo 应编译报错")
+	}
+}
+
+func TestRejectVacationAndValidate(t *testing.T) {
+	p, err := Compile(`require ["reject"]; if header :contains "Subject" "x" { reject "no thanks"; }`)
 	if err != nil {
 		t.Fatalf("compile: %v", err)
 	}
-	_ = p.Execute(NewContext(nil, 1))
+	res := p.Execute(NewContext(map[string]string{"Subject": "x"}, 10))
+	if len(res.Actions) != 1 || res.Actions[0].Type != "reject" || res.Actions[0].Arg != "no thanks" {
+		t.Fatalf("reject 动作不正确: %+v", res.Actions)
+	}
+
+	pv, err := Compile(`require ["vacation"]; vacation :days 7 "out of office";`)
+	if err != nil {
+		t.Fatalf("compile vacation: %v", err)
+	}
+	res = pv.Execute(NewContext(nil, 1))
+	if len(res.Actions) != 1 || res.Actions[0].Type != "vacation" || res.Actions[0].Arg != "out of office" {
+		t.Fatalf("vacation 动作不正确: %+v", res.Actions)
+	}
+
+	if _, err := Compile(`bogus_action "x";`); err == nil {
+		t.Fatal("未知动作应编译报错")
+	}
 }
 
 func FuzzSieve(f *testing.F) {

@@ -36,8 +36,8 @@ func setupDNSTest(t *testing.T) (d *DNS, adminTok, userTok string) {
 	if err := g.Create(&user).Error; err != nil {
 		t.Fatal(err)
 	}
-	adminTok, _ = auth.Sign(admin.ID, admin.Email)
-	userTok, _ = auth.Sign(user.ID, user.Email)
+	adminTok, _ = auth.Sign(admin.ID, admin.Email, admin.TokenVersion)
+	userTok, _ = auth.Sign(user.ID, user.Email, user.TokenVersion)
 	d = &DNS{DB: g, ZonesPath: filepath.Join(t.TempDir(), "zones.json")}
 	return d, adminTok, userTok
 }

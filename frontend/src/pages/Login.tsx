@@ -60,9 +60,10 @@ export default function Login() {
           <span className="grid place-items-center size-9 rounded-md bg-primary text-primary-foreground"><Mail size={18} /></span>
           <div><h1 className="font-semibold">{BRAND}</h1><p className="text-xs text-muted-foreground">{t('login.title')}</p></div>
         </div>
-        {new URLSearchParams(location.search).get('oidc_error') && (
-          <p className="text-sm text-red-500" role="alert">{t('login.oidcError')}</p>
-        )}
+        {(() => {
+          const e = new URLSearchParams(location.search).get('oidc_error')
+          return e ? <p className="text-sm text-red-500" role="alert">{e === 'domain' ? t('login.oidcDomain') : t('login.oidcError')}</p> : null
+        })()}
         {oidc && (
           <a href="/api/oidc/login" className="block">
             <Button variant="outline" className="w-full" type="button"><LogIn />{t('login.sso')}</Button>

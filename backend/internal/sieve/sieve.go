@@ -42,7 +42,20 @@ func NewContext(hdr map[string]string, size int) Context {
 // Program 是编译后的脚本。
 type Program struct{ cmds []command }
 
-// Compile 解析脚本（不做语义/能力检查）。
+// 支持的动作与能力。
+var actionNames = map[string]bool{
+	"keep": true, "discard": true, "fileinto": true, "redirect": true,
+	"addflag": true, "setflag": true, "stop": true,
+	"reject": true, "ereject": true, "vacation": true,
+}
+var controlNames = map[string]bool{"require": true, "if": true, "elsif": true, "else": true}
+
+// Capabilities 返回脚本引擎实际支持的能力（供 ManageSieve 通告，避免“吹牛不兼现”）。
+func Capabilities() []string {
+	return []string{"fileinto", "reject", "ereject", "vacation", "imap4flags"}
+}
+
+// Compile 解析脚本并校验未知命令（未知直接报错，不再静默跳过）。
 func Compile(script string) (*Program, error) {
 	toks, err := lex(script)
 	if err != nil {
@@ -56,7 +69,31 @@ func Compile(script string) (*Program, error) {
 	if p.i < len(p.t) {
 		return nil, fmt.Errorf("脚本尾部有多余内容")
 	}
+	if err := validateBlock(cmds); err != nil {
+		return nil, err
+	}
 	return &Program{cmds: cmds}, nil
+}
+
+func validateBlock(cmds []command) error {
+	for i := range cmds {
+		if err := validate(&cmds[i]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validate(c *command) error {
+	for ; c != nil; c = c.next {
+		if !actionNames[c.name] && !controlNames[c.name] {
+			return fmt.Errorf("不支持的命令/动作: %s", c.name)
+		}
+		if err := validateBlock(c.block); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // Execute 执行脚本。
@@ -419,9 +456,25 @@ func (in *interp) execOne(c command) {
 		for _, a := range c.args {
 			in.acts = append(in.acts, Action{"addflag", a})
 		}
+	case "reject", "ereject":
+		arg := ""
+		if len(c.args) > 0 {
+			arg = c.args[len(c.args)-1]
+		}
+		in.acts = append(in.acts, Action{"reject", arg})
+	case "vacation":
+		in.acts = append(in.acts, Action{"vacation", vacationText(&c)})
 	case "stop":
 		in.stopped = true
 	}
+}
+
+// vacationText 取 vacation 的正文（最后一个字符串参数，忽略 :days/:subject 等选项）。
+func vacationText(c *command) string {
+	if len(c.args) == 0 {
+		return ""
+	}
+	return c.args[len(c.args)-1]
 }
 
 func (in *interp) eval(t *test) bool {

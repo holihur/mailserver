@@ -28,6 +28,15 @@ const (
 	binName     = "mailserver"
 )
 
+// RepoAllowed 判断更新源是否允许：默认只允许 holihur/*，
+// 以防被恶意引导到仿冒仓库；MAILSERVER_REPO_ALLOW_ANY=1 可放开。
+func RepoAllowed(repo string) bool {
+	if os.Getenv("MAILSERVER_REPO_ALLOW_ANY") == "1" {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(repo)), "holihur/")
+}
+
 // Options 控制更新行为。
 type Options struct {
 	Repo    string // GitHub owner/repo
@@ -49,6 +58,9 @@ func Latest(ctx context.Context, repo string) (string, error) {
 	if repo == "" {
 		repo = DefaultRepo
 	}
+	if !RepoAllowed(repo) {
+		return "", fmt.Errorf("不允许的更新源: %s", repo)
+	}
 	return latestTag(ctx, &http.Client{Timeout: 20 * time.Second}, repo)
 }
 
@@ -62,6 +74,9 @@ func Differs(current, latest string) bool {
 func Run(ctx context.Context, o Options) error {
 	if o.Repo == "" {
 		o.Repo = DefaultRepo
+	}
+	if !RepoAllowed(o.Repo) {
+		return fmt.Errorf("不允许的更新源: %s（如确需，设置 MAILSERVER_REPO_ALLOW_ANY=1）", o.Repo)
 	}
 	client := &http.Client{Timeout: 5 * time.Minute}
 

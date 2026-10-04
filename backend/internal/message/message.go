@@ -68,6 +68,13 @@ func Parts(host string, m *model.Mail) (hdrs [][2]string, body string) {
 		[2]string{"Message-ID", fmt.Sprintf("<%d@%s>", m.ID, host)},
 		[2]string{"MIME-Version", "1.0"},
 	)
+	// 请求已读回执（MDN）：带 Disposition-Notification-To / X-Confirm-Reading-To
+	if r := strings.TrimSpace(m.ReceiptTo); r != "" {
+		hdrs = append(hdrs,
+			[2]string{"Disposition-Notification-To", "<" + r + ">"},
+			[2]string{"X-Confirm-Reading-To", "<" + r + ">"},
+		)
+	}
 
 	atts := ParseAttachments(m.Attachments)
 	if len(atts) == 0 {

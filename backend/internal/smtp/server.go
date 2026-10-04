@@ -7,11 +7,13 @@ import (
 	"bufio"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
 	"mailserver/internal/alias"
 	"mailserver/internal/deliver"
+	"mailserver/internal/emailauth"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/quota"
@@ -19,32 +21,37 @@ import (
 	"gorm.io/gorm"
 )
 
-func Serve(addr string, db *gorm.DB) {
+func Serve(addr string, db *gorm.DB, maxBytes int64, dmarc string) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		fmt.Println("smtp listen fail:", err)
 		return
 	}
-	fmt.Println("smtp inbound on", addr)
+	fmt.Println("smtp inbound on", addr, "max", maxBytes>>20, "MB")
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		go handle(c, db)
+		go handle(c, db, maxBytes, dmarc)
 	}
 }
 
-func handle(c net.Conn, db *gorm.DB) {
+func handle(c net.Conn, db *gorm.DB, maxBytes int64, dmarc string) {
+	if maxBytes <= 0 {
+		maxBytes = 25 << 20
+	}
+	remoteIP, _, _ := net.SplitHostPort(c.RemoteAddr().String())
 	defer c.Close()
 	r := bufio.NewReader(c)
 	w := bufio.NewWriter(c)
 	reply := func(s string) { w.WriteString(s + "\r\n"); w.Flush() }
 	reply("220 mailserver ESMTP ready")
 
-	var from, to string
+	var from string
+	var rcpts []string
 	var data strings.Builder
-	inData := false
+	inData, overLimit := false, false
 
 	for {
 		_ = c.SetReadDeadline(time.Now().Add(5 * time.Minute))
@@ -54,17 +61,32 @@ func handle(c net.Conn, db *gorm.DB) {
 		}
 		line = strings.TrimRight(line, "\r\n")
 		if inData {
+			if overLimit {
+				// 超限：丢弃剩余内容直至结束符，再回 552，保持协议同步
+				if line == "." {
+					inData, overLimit = false, false
+					data.Reset()
+					reply("552 5.3.4 message too large")
+				}
+				continue
+			}
 			if line == "." {
 				inData = false
-				saveMail(db, from, to, data.String())
+				for _, rcpt := range rcpts {
+					saveMail(db, from, rcpt, remoteIP, data.String(), dmarc)
+				}
 				data.Reset()
+				rcpts = nil
 				reply("250 OK: queued")
 				continue
 			}
+			if strings.HasPrefix(line, ".") {
+				line = line[1:] // 透明传输：去掉一个前导点
+			}
 			data.WriteString(line + "\n")
-			if data.Len() > 1<<20 { // 1MB 截断，防爆内存
-				inData = false
-				reply("552 too large")
+			if int64(data.Len()) > maxBytes { // 超限：转入丢弃模式，防爆内存
+				overLimit = true
+				data.Reset()
 			}
 			continue
 		}
@@ -78,6 +100,7 @@ func handle(c net.Conn, db *gorm.DB) {
 			reply("250-Hello\r\n250 8BITMIME")
 		case strings.HasPrefix(up, "MAIL FROM:"):
 			from = extractAddr(line)
+			rcpts = nil // 新邮件：清空上一封的收件人
 			reply("250 OK")
 		case strings.HasPrefix(up, "RCPT TO:"):
 			addr := extractAddr(line)
@@ -91,16 +114,21 @@ func handle(c net.Conn, db *gorm.DB) {
 				reply("452 4.2.2 Mailbox full")
 				continue
 			}
-			to = addr
+			rcpts = append(rcpts, addr)
 			reply("250 OK")
 		case strings.HasPrefix(up, "DATA"):
+			if len(rcpts) == 0 {
+				reply("503 5.5.1 need RCPT first")
+				continue
+			}
 			reply("354 End with .")
 			inData = true
 		case strings.HasPrefix(up, "QUIT"):
 			reply("221 Bye")
 			return
 		case strings.HasPrefix(up, "RSET"):
-			from, to = "", ""
+			from = ""
+			rcpts = nil
 			data.Reset()
 			reply("250 OK")
 		default:
@@ -120,17 +148,48 @@ func extractAddr(s string) string {
 	return s
 }
 
-func saveMail(db *gorm.DB, from, to, raw string) {
-	subject, body, htmlBody, atts := message.ParseInbound(raw)
+func saveMail(db *gorm.DB, from, to, remoteIP, raw, dmarcEnforce string) {
+	in := message.ParseInboundFull(raw)
+	subject, body, htmlBody, atts := in.Subject, in.Body, in.HTML, in.Attachments
 	to = strings.ToLower(strings.TrimSpace(to))
+	// 环路保护：Received 跳数过高直接拒收（防两站互指滚雪球）
+	if message.ReceivedCount(raw) > 50 {
+		fmt.Printf("inbound loop rejected: received hops>50 from=%s to=%s\n", from, to)
+		return
+	}
 
-	// 别名 / 转发：命中则投递到全部目标（本地进收件箱，外部自动转发）
+	// 发件人认证（SPF/DKIM/DMARC）；SPF/DKIM 结果写入邮件，DMARC 按站点配置隔离/拒收（默认 none）
+	res := emailauth.Evaluate(emailauth.NetLookup, net.ParseIP(remoteIP), from, []byte(raw))
+	opts := deliver.Options{ReceiptTo: in.ReceiptTo, IsMDN: in.IsMDN, AuthResults: res.String()}
+	if res.DMARC == "fail" {
+		switch dmarcEnforce {
+		case "reject":
+			fmt.Printf("inbound dmarc reject from=%s ip=%s\n", from, remoteIP)
+			return
+		case "quarantine":
+			opts.Quarantine = true
+		}
+	}
+
+	// 别名 / 转发：递归展开（带 visited 防自指/环路），本地进收件箱，外部自动转发
 	if al := alias.Match(db, to); al != nil {
-		deliver.Forward(db, from, alias.Targets(al.Targets), subject, body, atts)
+		visited := map[string]bool{to: true}
+		var targets []string
+		for _, t := range alias.Targets(al.Targets) {
+			targets = append(targets, expandAliases(db, t, visited, 0)...)
+		}
+		if len(targets) == 0 {
+			fmt.Printf("alias loop rejected: %s\n", to)
+			return
+		}
+		deliver.Forward(db, from, targets, subject, body, atts)
 		if al.Keep {
 			var u model.User
 			if err := db.Where("LOWER(email) = ?", to).First(&u).Error; err == nil {
-				deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts)
+				if in.IsMDN {
+					markReceipt(db, u.ID, in.OriginalID)
+				}
+				deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts, opts)
 			}
 		}
 		return
@@ -141,7 +200,51 @@ func saveMail(db *gorm.DB, from, to, raw string) {
 	if err := db.Where("LOWER(email) = ?", to).First(&u).Error; err != nil {
 		return
 	}
-	deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts)
+	if in.IsMDN {
+		markReceipt(db, u.ID, in.OriginalID)
+	}
+	deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts, opts)
+}
+
+// expandAliases 递归展开别名到最终地址（visited + 深度上限，防别名自指/环路）。
+func expandAliases(db *gorm.DB, addr string, visited map[string]bool, depth int) []string {
+	addr = strings.ToLower(strings.TrimSpace(addr))
+	if addr == "" || depth > 10 || visited[addr] {
+		return nil
+	}
+	visited[addr] = true
+	al := alias.Match(db, addr)
+	if al == nil {
+		return []string{addr}
+	}
+	var out []string
+	for _, t := range alias.Targets(al.Targets) {
+		out = append(out, expandAliases(db, t, visited, depth+1)...)
+	}
+	return out
+}
+
+// markReceipt 把用户「已发送」中的原邮件标记为已收到对方回执。
+func markReceipt(db *gorm.DB, uid uint, originalID string) {
+	id := numericPrefix(originalID)
+	if id == 0 {
+		return
+	}
+	now := time.Now()
+	db.Model(&model.Mail{}).Where("id = ? AND user_id = ? AND folder = ?", id, uid, "sent").
+		Updates(map[string]any{"receipt_read": true, "receipt_at": now})
+}
+
+// numericPrefix 取 "<id>@host" 中的数字 id。
+func numericPrefix(s string) uint {
+	if i := strings.IndexByte(s, '@'); i >= 0 {
+		s = s[:i]
+	}
+	n, err := strconv.ParseUint(strings.TrimSpace(s), 10, 64)
+	if err != nil {
+		return 0
+	}
+	return uint(n)
 }
 
 // recipientExists 判断收件人是否为本地已有用户或别名（RCPT 阶段就拒绝未知收件人，避免静默丢信）。

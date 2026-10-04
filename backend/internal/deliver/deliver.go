@@ -16,16 +16,32 @@ import (
 	"gorm.io/gorm"
 )
 
+// Options 投递时可选的回执 / 认证元数据。
+type Options struct {
+	ReceiptTo   string // 要求回执的地址（请求方）
+	IsMDN       bool   // 本条是已读回执
+	ReceiptFor  uint   // MDN 关联的原邮件 ID
+	AuthResults string // SPF/DKIM/DMARC 结果描述
+	Quarantine  bool   // DMARC 隔离：强制投到垃圾箱
+}
+
+// VacationHook 由 main 注入：发送 vacation 自动回复（含去重）；未注入则不回复。
+var VacationHook func(db *gorm.DB, uid uint, from, subject, text string)
+
 // ToUser 把邮件投递给用户：
 //  1. 超出配额则丢弃（入站 SMTP 已在 RCPT 阶段拒绝）；
 //  2. 若有启用的 Sieve 脚本且命中，按脚本动作处理（fileinto/redirect/discard/keep）；
 //  3. 否则按 CEL 规则处理（trash/move/forward）。
-func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, htmlBody, atts string) {
+func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, htmlBody, atts string, opts ...Options) {
+	o := Options{}
+	if len(opts) > 0 {
+		o = opts[0]
+	}
 	if quota.Exceeded(db, u) {
 		return
 	}
 	htmlSafe := htmlsanitize.Sanitize(htmlBody)
-	if sieveDeliver(db, u, from, to, cc, subject, body, htmlSafe, atts) {
+	if sieveDeliver(db, u, from, to, cc, subject, body, htmlSafe, atts, o) {
 		return
 	}
 	d := rules.Apply(db, u.ID, rules.Input{
@@ -34,16 +50,26 @@ func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, htmlBo
 	}, "inbox")
 	if d.Action == "forward" && len(d.Forward) > 0 {
 		Forward(db, from, d.Forward, subject, body, atts)
+		folder := "inbox"
+		if o.Quarantine {
+			folder = "trash"
+		}
 		db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Cc: cc, Bcc: bcc,
-			Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: "inbox"})
+			Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: folder,
+			ReceiptTo: o.ReceiptTo, IsMDN: o.IsMDN, ReceiptFor: o.ReceiptFor, AuthResults: o.AuthResults})
 		return
 	}
+	folder := d.Folder
+	if o.Quarantine {
+		folder = "trash"
+	}
 	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Cc: cc, Bcc: bcc,
-		Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: d.Folder})
+		Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: folder,
+		ReceiptTo: o.ReceiptTo, IsMDN: o.IsMDN, ReceiptFor: o.ReceiptFor, AuthResults: o.AuthResults})
 }
 
 // sieveDeliver 执行用户的启用脚本；返回 true 表示已处理（不再走 CEL 规则）。
-func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, htmlSafe, atts string) bool {
+func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, htmlSafe, atts string, o Options) bool {
 	var sc model.SieveScript
 	if err := db.Where("user_id = ? AND active = ?", u.ID, true).First(&sc).Error; err != nil {
 		return false
@@ -60,10 +86,15 @@ func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, htmlS
 	}
 	var folders, redirects []string
 	discard, seen := false, false
+	reject, vacation := false, ""
 	for _, a := range res.Actions {
 		switch a.Type {
 		case "discard":
 			discard = true
+		case "reject", "ereject":
+			reject = true
+		case "vacation":
+			vacation = a.Arg
 		case "fileinto":
 			folders = append(folders, sieveFolderKey(db, u.ID, a.Arg))
 		case "redirect":
@@ -74,8 +105,11 @@ func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, htmlS
 			}
 		}
 	}
-	if discard {
-		return true
+	if discard || reject {
+		return true // 拒收/丢弃：不投递
+	}
+	if vacation != "" && VacationHook != nil && from != "" && !strings.EqualFold(strings.TrimSpace(from), u.Email) {
+		VacationHook(db, u.ID, from, subject, vacation)
 	}
 	for _, r := range redirects {
 		Forward(db, from, []string{r}, subject, body, atts)
@@ -84,8 +118,12 @@ func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, htmlS
 		folders = []string{"inbox"}
 	}
 	for _, f := range folders {
+		if o.Quarantine {
+			f = "trash"
+		}
 		db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Cc: cc,
-			Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: f, Read: seen})
+			Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: f, Read: seen,
+			ReceiptTo: o.ReceiptTo, IsMDN: o.IsMDN, ReceiptFor: o.ReceiptFor, AuthResults: o.AuthResults})
 	}
 	return true
 }

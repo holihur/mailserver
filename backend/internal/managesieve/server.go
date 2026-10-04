@@ -8,12 +8,14 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/authguard"
 	"mailserver/internal/model"
 	"mailserver/internal/sieve"
 
@@ -56,8 +58,10 @@ func (s *sess) bye(msg string) { s.line("BYE %q", msg) }
 
 func (s *sess) capability() {
 	s.line(`"IMPLEMENTATION" "Sweetcorn ManageSieve"`)
-	s.line(`"SIEVE" "fileinto reject imap4flags"`)
-	s.line(`"SASL" "PLAIN"`)
+	s.line(`"SIEVE" "%s"`, strings.Join(sieve.Capabilities(), " "))
+	if s.tls || s.tlsConf == nil {
+		s.line(`"SASL" "PLAIN"`)
+	}
 	if s.tlsConf != nil && !s.tls {
 		s.line(`"STARTTLS"`)
 	}
@@ -107,7 +111,12 @@ func handle(conn net.Conn, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
 			s.r = bufio.NewReader(conn)
 			s.w = bufio.NewWriter(conn)
 			s.tls = true
+			s.user = nil // TLS 后重置已认证状态，防状态穿越
 		case "AUTHENTICATE":
+			if s.tlsConf != nil && !s.tls {
+				s.no("STARTTLS required")
+				continue
+			}
 			s.authenticate(rest)
 		case "LISTSCRIPTS":
 			if s.needAuth() {
@@ -219,11 +228,21 @@ func (s *sess) authenticate(rest string) {
 		s.no("Bad credentials")
 		return
 	}
-	u, err := auth.AuthenticateMail(s.db, p[1], p[2], auth.HostOf(s.conn.RemoteAddr().String()), auth.ScopeSieve)
+	ip := auth.HostOf(s.conn.RemoteAddr().String())
+	if authguard.Default.Blocked(ip) {
+		log.Printf("auth blocked proto=managesieve ip=%s", ip)
+		s.no("Too many attempts, try later")
+		return
+	}
+	u, err := auth.AuthenticateMail(s.db, p[1], p[2], ip, auth.ScopeSieve)
 	if err != nil {
+		authguard.Default.Fail(ip)
+		log.Printf("auth failure proto=managesieve ip=%s user=%s err=%v", ip, p[1], err)
+		time.Sleep(500 * time.Millisecond)
 		s.no("Authentication failed")
 		return
 	}
+	authguard.Default.Reset(ip)
 	s.user = u
 	s.ok("Authentication successful")
 }

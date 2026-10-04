@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,14 +24,18 @@ type MailBox struct {
 }
 
 func uidOf(db *gorm.DB, w http.ResponseWriter, r *http.Request) (uint, bool) {
-	uid, err := auth.UserID(r)
+	uid, ver, err := auth.Access(r)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return 0, false
 	}
 	var u model.User
-	if err := db.Select("id", "disabled").First(&u, uid).Error; err != nil {
+	if err := db.Select("id", "disabled", "token_version").First(&u, uid).Error; err != nil {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
+		return 0, false
+	}
+	if u.TokenVersion != ver {
+		writeJSON(w, 401, map[string]string{"error": "登录已失效，请重新登录"})
 		return 0, false
 	}
 	if u.Disabled {
@@ -108,6 +113,32 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true})
 		return
 	}
+	// POST /api/mails/{id}/receipt：回复已读回执（MDN）
+	if strings.HasSuffix(rest, "/receipt") {
+		if r.Method != "POST" {
+			w.WriteHeader(405)
+			return
+		}
+		if mail.Folder != "inbox" || strings.TrimSpace(mail.ReceiptTo) == "" || mail.ReceiptSent {
+			writeJSON(w, 400, map[string]string{"error": "该邮件无需回执"})
+			return
+		}
+		var me model.User
+		m.DB.First(&me, uid)
+		mdn := model.Mail{UserID: uid, From: me.Email, To: mail.ReceiptTo,
+			Subject: "已读回执: " + mail.Subject, Body: mdnBody(me.Email, mail),
+			Folder: "sent", Read: true, Status: "queued", IsMDN: true, ReceiptFor: mail.ID}
+		if err := m.DB.Create(&mdn).Error; err != nil {
+			writeJSON(w, 500, map[string]string{"error": "保存失败"})
+			return
+		}
+		if m.MQ != nil {
+			_ = m.MQ.EnqueueSend(mdn.ID)
+		}
+		m.DB.Model(&mail).Update("receipt_sent", true)
+		writeJSON(w, 200, map[string]any{"ok": true, "id": mdn.ID})
+		return
+	}
 	switch r.Method {
 	case "GET":
 		if !mail.Read {
@@ -172,6 +203,12 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 		m.DB.Model(&mail).Update("folder", "trash")
 		writeJSON(w, 200, map[string]any{"ok": true, "deleted": false})
 	}
+}
+
+// mdnBody 生成已读回执的纯文本说明部分。
+func mdnBody(who string, mail model.Mail) string {
+	return fmt.Sprintf("这是 %s 发出的已读回执。\n\n原邮件主题: %s\n原邮件发件人: %s\n阅读时间: %s\n",
+		who, mail.Subject, mail.From, time.Now().Format(time.RFC1123))
 }
 
 // GET /api/outbox  最近 20 封发件的投递状态（25 被封排障用）
@@ -286,6 +323,7 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		Folder      string               `json:"folder"`
 		SendAt      string               `json:"send_at"` // RFC3339，未来时间=定时发送
 		Repeat      string               `json:"repeat"`  // "" | daily | weekly | monthly
+		Receipt     bool                 `json:"receipt"` // 请求已读回执
 		Attachments []message.Attachment `json:"attachments"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<20)).Decode(&in); err != nil {
@@ -321,6 +359,10 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		attJSON = string(b)
 	}
 	// 定时 / 周期性发送：未来时间的非草稿邮件先入库，由队列到点发出
+	receiptTo := ""
+	if in.Receipt {
+		receiptTo = from
+	}
 	if folder == "sent" && strings.TrimSpace(in.SendAt) != "" {
 		t, err := time.Parse(time.RFC3339, strings.TrimSpace(in.SendAt))
 		if err != nil {
@@ -334,7 +376,7 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		if t.After(time.Now()) {
 			sm := model.ScheduledMail{UserID: uid, From: from, To: in.To, Cc: in.Cc, Bcc: in.Bcc,
-				Subject: in.Subject, Body: in.Body, Attachments: attJSON, SendAt: t, Repeat: rep, Enabled: true}
+				Subject: in.Subject, Body: in.Body, Attachments: attJSON, ReceiptTo: receiptTo, SendAt: t, Repeat: rep, Enabled: true}
 			if err := m.DB.Create(&sm).Error; err != nil {
 				writeJSON(w, 500, map[string]string{"error": "保存失败"})
 				return
@@ -345,7 +387,7 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	mail := model.Mail{UserID: uid, From: from, To: in.To, Cc: in.Cc, Bcc: in.Bcc,
-		Subject: in.Subject, Body: in.Body, Attachments: attJSON, Folder: folder, Read: true}
+		Subject: in.Subject, Body: in.Body, Attachments: attJSON, Folder: folder, Read: true, ReceiptTo: receiptTo}
 	if folder == "sent" {
 		mail.Status = "queued"
 	}

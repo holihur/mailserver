@@ -10,10 +10,13 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net"
 	"strings"
+	"time"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/authguard"
 	"mailserver/internal/contacts"
 	"mailserver/internal/htmlsanitize"
 	"mailserver/internal/message"
@@ -22,24 +25,24 @@ import (
 	"gorm.io/gorm"
 )
 
-func ServeSubmit(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
+func ServeSubmit(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config, maxBytes int64) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		fmt.Println("submit listen fail:", err)
 		return
 	}
-	fmt.Println("smtp submit on", addr, "tls=", tlsConf != nil)
+	fmt.Println("smtp submit on", addr, "tls=", tlsConf != nil, "max", maxBytes>>20, "MB")
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		go handleSubmit(c, host, db, tlsConf, false)
+		go handleSubmit(c, host, db, tlsConf, false, maxBytes)
 	}
 }
 
 // 465 隐式 TLS：连接即握手
-func ServeSubmitTLS(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config) {
+func ServeSubmitTLS(addr string, host func() string, db *gorm.DB, tlsConf *tls.Config, maxBytes int64) {
 	if tlsConf == nil {
 		fmt.Println("submit-tls skipped: no cert")
 		return
@@ -49,13 +52,13 @@ func ServeSubmitTLS(addr string, host func() string, db *gorm.DB, tlsConf *tls.C
 		fmt.Println("submit-tls listen fail:", err)
 		return
 	}
-	fmt.Println("smtp submit-tls on", addr)
+	fmt.Println("smtp submit-tls on", addr, "max", maxBytes>>20, "MB")
 	for {
 		c, err := ln.Accept()
 		if err != nil {
 			continue
 		}
-		go handleSubmit(c, host, db, tlsConf, true)
+		go handleSubmit(c, host, db, tlsConf, true, maxBytes)
 	}
 }
 
@@ -73,12 +76,15 @@ type submitter struct {
 
 func (s *submitter) reply(msg string) { s.w.WriteString(msg + "\r\n"); s.w.Flush() }
 
-func handleSubmit(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
+func handleSubmit(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool, maxBytes int64) {
+	if maxBytes <= 0 {
+		maxBytes = 25 << 20
+	}
 	defer conn.Close()
 	s := &submitter{r: bufio.NewReader(conn), w: bufio.NewWriter(conn), db: db, host: host, remote: conn.RemoteAddr().String(), tls: encrypted}
 	s.reply("220 " + host() + " ESMTP Sweetcorn")
 	var data strings.Builder
-	inData := false
+	inData, overLimit := false, false
 
 	for {
 		line, err := s.r.ReadString('\n')
@@ -87,20 +93,28 @@ func handleSubmit(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.C
 		}
 		line = strings.TrimRight(line, "\r\n")
 		if inData {
+			if overLimit {
+				// 超限：丢弃剩余内容直至结束符，再回 552，保持协议同步
+				if line == "." {
+					inData, overLimit = false, false
+					data.Reset()
+					s.reply("552 5.3.4 message too large")
+				}
+				continue
+			}
 			if line == "." {
 				inData = false
 				s.queueMail(data.String())
 				data.Reset()
 				continue
 			}
-			if strings.HasPrefix(line, "..") {
+			if strings.HasPrefix(line, ".") {
 				line = line[1:] // 透明传输解义
 			}
 			data.WriteString(line + "\n")
-			if data.Len() > 1<<20 {
-				inData = false
+			if int64(data.Len()) > maxBytes {
+				overLimit = true
 				data.Reset()
-				s.reply("552 too large")
 			}
 			continue
 		}
@@ -243,10 +257,19 @@ func (s *submitter) doAuth(arg string) bool {
 }
 
 func (s *submitter) checkUser(email, pass string) bool {
-	u, err := auth.AuthenticateMail(s.db, email, pass, auth.HostOf(s.remote), auth.ScopeSMTP)
-	if err != nil {
+	ip := auth.HostOf(s.remote)
+	if authguard.Default.Blocked(ip) {
+		log.Printf("auth blocked proto=smtp-submit ip=%s user=%s", ip, email)
 		return false
 	}
+	u, err := auth.AuthenticateMail(s.db, email, pass, ip, auth.ScopeSMTP)
+	if err != nil {
+		authguard.Default.Fail(ip)
+		log.Printf("auth failure proto=smtp-submit ip=%s user=%s err=%v", ip, email, err)
+		time.Sleep(500 * time.Millisecond)
+		return false
+	}
+	authguard.Default.Reset(ip)
 	s.user = u
 	return true
 }

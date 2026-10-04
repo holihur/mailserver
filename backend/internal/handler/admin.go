@@ -63,13 +63,13 @@ func isAdminEmail(list, email string) bool {
 
 // resolveAdmin: token 有效 + 账号未禁用 + 是管理员。Admin/DNS 等控制面共用。
 func resolveAdmin(db *gorm.DB, rt *runtimecfg.Store, adminEmails string, w http.ResponseWriter, r *http.Request) (*model.User, bool) {
-	uid, err := auth.UserID(r)
+	uid, ver, err := auth.Access(r)
 	if err != nil {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return nil, false
 	}
 	var u model.User
-	if err := db.First(&u, uid).Error; err != nil || u.Disabled {
+	if err := db.First(&u, uid).Error; err != nil || u.Disabled || u.TokenVersion != ver {
 		writeJSON(w, 401, map[string]string{"error": "unauthorized"})
 		return nil, false
 	}
@@ -157,8 +157,12 @@ func (a *Admin) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	email := strings.ToLower(strings.TrimSpace(in.Email))
 	at := strings.LastIndex(email, "@")
-	if at <= 0 || at == len(email)-1 || len(in.Pass) < 6 {
-		writeJSON(w, 400, map[string]string{"error": "邮箱或密码非法（密码≥6位）"})
+	if at <= 0 || at == len(email)-1 {
+		writeJSON(w, 400, map[string]string{"error": "邮箱格式不正确"})
+		return
+	}
+	if err := validatePassword(in.Pass, email); err != nil {
+		writeJSON(w, 400, map[string]string{"error": err.Error()})
 		return
 	}
 	// 邮箱域名必须已托管，否则建了也收不到信
@@ -215,9 +219,11 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, 400, map[string]string{"error": "bad body"})
 			return
 		}
-		if in.Pass != nil && *in.Pass != "" && len(*in.Pass) < 6 {
-			writeJSON(w, 400, map[string]string{"error": "密码至少6位"})
-			return
+		if in.Pass != nil && *in.Pass != "" {
+			if err := validatePassword(*in.Pass, u.Email); err != nil {
+				writeJSON(w, 400, map[string]string{"error": err.Error()})
+				return
+			}
 		}
 		// 防锁死：不能动自己的管理员身份和禁用开关
 		if uint(id) == me.ID && ((in.Admin != nil && !*in.Admin) || (in.Disabled != nil && *in.Disabled)) {
@@ -231,6 +237,7 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 		if in.Pass != nil && *in.Pass != "" {
 			hash, _ := bcrypt.GenerateFromPassword([]byte(*in.Pass), bcrypt.DefaultCost)
 			upd["pass_hash"] = string(hash)
+			upd["token_version"] = gorm.Expr("token_version + ?", 1) // 重置密码后旧令牌立即失效
 		}
 		if in.Disabled != nil {
 			upd["disabled"] = *in.Disabled

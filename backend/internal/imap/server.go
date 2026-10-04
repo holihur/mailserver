@@ -10,14 +10,17 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	"mailserver/internal/auth"
+	"mailserver/internal/authguard"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/quota"
 
 	"gorm.io/gorm"
 )
@@ -124,6 +127,7 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 	s.w.WriteString("* OK Sweetcorn IMAP4rev1 ready\r\n")
 	s.w.Flush()
 	for {
+		_ = s.conn.SetReadDeadline(time.Now().Add(30 * time.Minute))
 		line, err := s.r.ReadString('\n')
 		if err != nil {
 			return
@@ -143,9 +147,9 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 
 		switch cmd {
 		case "CAPABILITY":
-			capa := "IMAP4rev1 LITERAL+ AUTH=PLAIN IDLE"
+			capa := "IMAP4rev1 LITERAL+ AUTH=PLAIN IDLE MOVE UIDPLUS NAMESPACE ID QUOTA"
 			if tlsConf != nil && !s.tls {
-				capa += " STARTTLS"
+				capa += " STARTTLS LOGINDISABLED"
 			}
 			s.untagged("CAPABILITY " + capa)
 			s.w.Flush()
@@ -166,7 +170,13 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 			s.r = bufio.NewReader(conn)
 			s.w = bufio.NewWriter(conn)
 			s.tls = true
+			// RFC 2595：STARTTLS 后重置会话状态，防状态穿越
+			s.user, s.mbox, s.folder, s.items = nil, "", "", nil
 		case "LOGIN":
+			if tlsConf != nil && !s.tls {
+				no("[PRIVACYREQUIRED] LOGIN disabled, use STARTTLS")
+				continue
+			}
 			u, p, good := parse2quoted(rest)
 			if !good || !s.login(u, p) {
 				no("login failed")
@@ -174,6 +184,10 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 			}
 			ok("logged in")
 		case "AUTHENTICATE":
+			if tlsConf != nil && !s.tls {
+				no("[PRIVACYREQUIRED] AUTH disabled, use STARTTLS")
+				continue
+			}
 			if !s.doAuthPlain(rest) {
 				no("auth failed")
 				continue
@@ -279,10 +293,16 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 				s.w.Flush()
 				ok("search done")
 			case "COPY":
-				if s.copySeq(rest2, true) {
-					ok("copy done")
+				if src, dst, good := s.copySeq(rest2, true); good {
+					ok(fmt.Sprintf("[COPYUID 1 %s %s] copy done", uidsStr(src, true), uidsStr(dst, true)))
 				} else {
 					no("copy failed")
+				}
+			case "MOVE":
+				if src, dst, good := s.moveSeq(rest2, true); good {
+					ok(fmt.Sprintf("[COPYUID 1 %s %s] move done", uidsStr(src, true), uidsStr(dst, true)))
+				} else {
+					no("move failed")
 				}
 			default:
 				bad("unsupported UID command")
@@ -309,10 +329,19 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 			if !s.needSelected(tag) {
 				continue
 			}
-			if s.copySeq(rest, false) {
-				ok("copy done")
+			if src, dst, good := s.copySeq(rest, false); good {
+				ok(fmt.Sprintf("[COPYUID 1 %s %s] copy done", uidsStr(src, true), uidsStr(dst, true)))
 			} else {
 				no("copy failed")
+			}
+		case "MOVE":
+			if !s.needSelected(tag) {
+				continue
+			}
+			if src, dst, good := s.moveSeq(rest, false); good {
+				ok(fmt.Sprintf("[COPYUID 1 %s %s] move done", uidsStr(src, true), uidsStr(dst, true)))
+			} else {
+				no("move failed")
 			}
 		case "EXPUNGE":
 			if !s.needSelected(tag) {
@@ -336,23 +365,36 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 			if !s.needAuth(tag) {
 				continue
 			}
-			if s.doAppend(rest) {
-				ok("appended")
+			if uid, good := s.doAppend(rest); good {
+				ok(fmt.Sprintf("[APPENDUID 1 %d] appended", uid))
 			} else {
 				no("append failed")
 			}
+		case "NAMESPACE":
+			s.untagged(`NAMESPACE (("" "/")) NIL NIL`)
+			s.w.Flush()
+			ok("namespace done")
+		case "ID":
+			s.untagged(`ID ("name" "Sweetcorn" "version" "1.0")`)
+			s.w.Flush()
+			ok("id done")
+		case "GETQUOTA":
+			if !s.needAuth(tag) {
+				continue
+			}
+			s.quota()
+			ok("quota done")
+		case "GETQUOTAROOT":
+			if !s.needAuth(tag) {
+				continue
+			}
+			s.untagged("QUOTAROOT %s \"\"", firstToken(rest))
+			s.quota()
+			ok("quota done")
 		case "IDLE":
 			s.w.WriteString("+ idling\r\n")
 			s.w.Flush()
-			for {
-				l, err := s.r.ReadString('\n')
-				if err != nil {
-					return
-				}
-				if strings.TrimRight(l, "\r\n") == "DONE" {
-					break
-				}
-			}
+			s.idle()
 			ok("idle done")
 		case "CREATE", "DELETE", "RENAME", "SUBSCRIBE", "UNSUBSCRIBE":
 			ok("ok")
@@ -449,10 +491,19 @@ func (s *session) needSelected(tag string) bool {
 }
 
 func (s *session) login(email, pass string) bool {
-	u, err := auth.AuthenticateMail(s.db, email, pass, auth.HostOf(s.conn.RemoteAddr().String()), auth.ScopeIMAP)
-	if err != nil {
+	ip := auth.HostOf(s.conn.RemoteAddr().String())
+	if authguard.Default.Blocked(ip) {
+		log.Printf("auth blocked proto=imap ip=%s user=%s", ip, email)
 		return false
 	}
+	u, err := auth.AuthenticateMail(s.db, email, pass, ip, auth.ScopeIMAP)
+	if err != nil {
+		authguard.Default.Fail(ip)
+		log.Printf("auth failure proto=imap ip=%s user=%s err=%v", ip, email, err)
+		time.Sleep(500 * time.Millisecond)
+		return false
+	}
+	authguard.Default.Reset(ip)
 	s.user = u
 	return true
 }
@@ -1009,15 +1060,15 @@ func (s *session) expunge(report bool) {
 	s.items = kept
 }
 
-func (s *session) copySeq(rest string, uidMode bool) bool {
+func (s *session) copySeq(rest string, uidMode bool) ([]uint32, []uint32, bool) {
 	i := strings.LastIndex(rest, " ")
 	if i < 0 {
-		return false
+		return nil, nil, false
 	}
 	set, mbox := strings.TrimSpace(rest[:i]), strings.Trim(strings.TrimSpace(rest[i+1:]), "\"")
 	_, folder, good := toFolder(mbox)
 	if !good {
-		return false
+		return nil, nil, false
 	}
 	var seqs []int
 	if uidMode {
@@ -1025,27 +1076,114 @@ func (s *session) copySeq(rest string, uidMode bool) bool {
 	} else {
 		seqs = expandSeq(set, len(s.items))
 	}
+	var srcUIDs, dstUIDs []uint32
 	for _, seq := range seqs {
 		if seq < 1 || seq > len(s.items) {
 			continue
 		}
 		it := s.items[seq-1]
-		s.db.Create(&model.Mail{UserID: s.user.ID, From: it.from, To: it.to,
-			Subject: it.subject, Body: it.body, Folder: folder, Read: it.read, Starred: it.starred})
+		nm := model.Mail{UserID: s.user.ID, From: it.from, To: it.to,
+			Subject: it.subject, Body: it.body, Folder: folder, Read: it.read, Starred: it.starred}
+		s.db.Create(&nm)
+		srcUIDs = append(srcUIDs, it.id)
+		dstUIDs = append(dstUIDs, uint32(nm.ID))
 	}
-	return true
+	return srcUIDs, dstUIDs, true
+}
+
+// moveSeq 实现 MOVE（RFC 6851）：直接改 folder，向客户端发 EXPUNGE，返回源/目标 UID。
+func (s *session) moveSeq(rest string, uidMode bool) ([]uint32, []uint32, bool) {
+	i := strings.LastIndex(rest, " ")
+	if i < 0 {
+		return nil, nil, false
+	}
+	set, mbox := strings.TrimSpace(rest[:i]), strings.Trim(strings.TrimSpace(rest[i+1:]), "\"")
+	_, folder, good := toFolder(mbox)
+	if !good {
+		return nil, nil, false
+	}
+	var seqs []int
+	if uidMode {
+		seqs = s.uidsToSeqs(expandUID(set, s.maxUID()))
+	} else {
+		seqs = expandSeq(set, len(s.items))
+	}
+	moved := map[uint32]bool{}
+	var srcUIDs, dstUIDs []uint32
+	for _, seq := range seqs {
+		if seq < 1 || seq > len(s.items) {
+			continue
+		}
+		it := s.items[seq-1]
+		s.db.Model(&model.Mail{}).Where("id = ?", it.id).Update("folder", folder)
+		moved[it.id] = true
+		srcUIDs = append(srcUIDs, it.id)
+		dstUIDs = append(dstUIDs, it.id)
+	}
+	var removed []int
+	kept := s.items[:0:0]
+	for idx, it := range s.items {
+		if moved[it.id] {
+			removed = append(removed, idx+1)
+		} else {
+			kept = append(kept, it)
+		}
+	}
+	for j := len(removed) - 1; j >= 0; j-- {
+		s.untagged("%d EXPUNGE", removed[j])
+	}
+	s.items = kept
+	s.untagged("%d EXISTS", len(s.items))
+	s.w.Flush()
+	return srcUIDs, dstUIDs, true
+}
+
+// quota 回复 QUOTA "" (STORAGE used limit)，单位 KB（0=不限）。
+func (s *session) quota() {
+	used := quota.Usage(s.db, s.user.ID) / 1024
+	limit := int64(s.user.QuotaMB) * 1024
+	s.untagged("QUOTA \"\" (STORAGE %d %d)", used, limit)
+	s.w.Flush()
+}
+
+// idle 实现真 IDLE：阻塞等待 DONE，同时每 3s 轮询邮箱变化并推送 EXISTS。
+func (s *session) idle() {
+	if s.conn == nil {
+		return
+	}
+	base := len(s.items)
+	deadline := time.Now().Add(29 * time.Minute)
+	for time.Now().Before(deadline) {
+		_ = s.conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+		line, err := s.r.ReadString('\n')
+		if err == nil {
+			_ = strings.TrimSpace(line) // 客户端应回 DONE；其它输入也结束 IDLE
+			break
+		}
+		_ = s.conn.SetReadDeadline(time.Time{})
+		if s.mbox != "" {
+			var n int64
+			s.db.Model(&model.Mail{}).Where("user_id = ? AND folder = ?", s.user.ID, s.folder).Count(&n)
+			if int(n) != base {
+				s.untagged("%d EXISTS", n)
+				s.w.Flush()
+				base = int(n)
+			}
+		}
+	}
+	_ = s.conn.SetReadDeadline(time.Time{})
 }
 
 // APPEND mbox [flags] {n[+]}
-func (s *session) doAppend(rest string) bool {
+func (s *session) doAppend(rest string) (uint, bool) {
 	lb := strings.LastIndex(rest, "{")
 	rb := strings.LastIndex(rest, "}")
 	if lb < 0 || rb < 0 || rb < lb {
-		return false
+		return 0, false
 	}
 	n, _ := strconv.Atoi(strings.TrimSuffix(rest[lb+1:rb], "+"))
 	if n <= 0 || n > 2<<20 {
-		return false
+		return 0, false
 	}
 	mbox := strings.TrimSpace(rest[:lb])
 	flags := ""
@@ -1058,7 +1196,7 @@ func (s *session) doAppend(rest string) bool {
 	}
 	_, folder, good := toFolder(strings.Trim(mbox, "\""))
 	if !good {
-		return false
+		return 0, false
 	}
 	literalPlus := strings.HasSuffix(rest[lb+1:rb], "+")
 	if !literalPlus {
@@ -1070,7 +1208,7 @@ func (s *session) doAppend(rest string) bool {
 	for read < n {
 		k, err := s.r.Read(buf[read:])
 		if err != nil || k <= 0 {
-			return false
+			return 0, false
 		}
 		read += k
 	}
@@ -1095,7 +1233,7 @@ func (s *session) doAppend(rest string) bool {
 	if folder == s.folder && s.mbox != "" {
 		s.loadBox()
 	}
-	return true
+	return m.ID, true
 }
 
 func splitRaw(raw string) (subject, body string) {
