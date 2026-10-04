@@ -131,5 +131,5 @@ sudo /opt/mailserver/bin/mailserver version   # 查看当前版本
 推送 `v*` 标签触发 CI：GoReleaser 编译 Linux amd64/arm64 单二进制（内嵌前端 + DNS），并推送多架构 Docker 镜像到 GHCR。
 
 ```bash
-git tag v0.14.0 && git push origin v0.14.0
+git tag v0.15.0 && git push origin v0.15.0
 ```
