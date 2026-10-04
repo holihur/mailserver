@@ -75,7 +75,7 @@ export default function MailApp() {
         {me && <Badge className="max-w-[38vw] truncate">{me.email}</Badge>}
         <div className="flex-1" />
         {me?.admin && <Link to="/dns" title={t('nav.dns')}><Button variant="ghost" size="icon" aria-label={t('nav.dns')}><Globe /></Button></Link>}
-        <Link to="/setup" title={t('nav.setup')} className="hidden sm:block"><Button variant="ghost" size="icon" aria-label={t('nav.setup')}><Settings /></Button></Link>
+        <Link to="/setup" title={t('nav.setup')}><Button variant="ghost" size="icon" aria-label={t('nav.setup')}><Settings /></Button></Link>
         {me?.admin && <Link to="/admin" title={t('nav.admin')}><Button variant="ghost" size="icon" aria-label={t('nav.admin')}><ShieldCheck /></Button></Link>}
         <div className="hidden sm:flex items-center">
           <LangToggle />
