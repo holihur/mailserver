@@ -52,7 +52,7 @@ func Deliver(db *gorm.DB, c runtimecfg.Relay, signer *dkim.Signer, routes []mode
 	for _, rcpt := range recipients {
 		var u model.User
 		if err := db.Where("LOWER(email) = ?", strings.ToLower(rcpt)).First(&u).Error; err == nil {
-			localdeliver.ToUser(db, &u, m.From, rcpt, m.Cc, m.Bcc, m.Subject, m.Body, m.Attachments)
+			localdeliver.ToUser(db, &u, m.From, rcpt, m.Cc, m.Bcc, m.Subject, m.Body, m.BodyHTML, m.Attachments)
 		} else {
 			external = append(external, rcpt)
 		}

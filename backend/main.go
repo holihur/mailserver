@@ -91,6 +91,7 @@ func main() {
 	extBox := &handler.ExternalBox{DB: g}
 	folderBox := &handler.FolderBox{DB: g}
 	sieveBox := &handler.SieveBox{DB: g}
+	proxyBox := &handler.ProxyBox{DB: g}
 	totpBox := &handler.TOTPBox{DB: g}
 	gdpr := &handler.GDPRBox{DB: g}
 	dns := handler.NewDNS(g, cfg.DataDir)
@@ -200,6 +201,8 @@ func main() {
 	mux.HandleFunc("/api/site", cors(au.Site))
 	mux.HandleFunc("/api/login", cors(au.Login))
 	mux.HandleFunc("/api/login/totp", cors(au.LoginTOTP))
+	mux.HandleFunc("/api/oidc/login", cors(au.OIDCLogin))
+	mux.HandleFunc("/api/oidc/callback", cors(au.OIDCCallback))
 	mux.HandleFunc("/api/totp", cors(totpBox.Status))
 	mux.HandleFunc("/api/totp/setup", cors(totpBox.Setup))
 	mux.HandleFunc("/api/totp/enable", cors(totpBox.Enable))
@@ -236,6 +239,7 @@ func main() {
 	mux.HandleFunc("/api/sieve", cors(sieveBox.List))
 	mux.HandleFunc("/api/sieve/check", cors(sieveBox.Check))
 	mux.HandleFunc("/api/sieve/", cors(sieveBox.One))
+	mux.HandleFunc("/api/proxy/image", cors(proxyBox.Image))
 	mux.HandleFunc("/mcp", cors(mcpSrv.Handler))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))

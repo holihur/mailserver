@@ -9,7 +9,7 @@ import { Plus, Trash2, KeyRound, Loader2, AlertCircle, CheckCircle2, UserCog } f
 export default function AdminUsers() {
   const { t } = useI18n()
   const [users, setUsers] = useState([])
-  const [form, setForm] = useState({ email: '', name: '', password: '' })
+  const [form, setForm] = useState({ email: '', name: '', password: '', quota_mb: 0 })
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState('')
 
@@ -23,7 +23,7 @@ export default function AdminUsers() {
     setBusy('create'); setMsg('')
     try {
       await api.adminUserCreate(form)
-      setForm({ email: '', name: '', password: '' })
+      setForm({ email: '', name: '', password: '', quota_mb: 0 })
       setMsg(t('users.create'))
       load()
     } catch (e) { setMsg(e.message) } finally { setBusy('') }
@@ -48,7 +48,7 @@ export default function AdminUsers() {
     <AdminShell title={t('users.title')} desc={t('users.desc')}>
       <Card className="p-4">
         <div className="flex items-center gap-2 mb-3"><UserCog size={16} /><b className="text-sm">{t('users.create')}</b></div>
-        <form onSubmit={create} className="grid sm:grid-cols-4 gap-3 items-end">
+        <form onSubmit={create} className="grid sm:grid-cols-5 gap-3 items-end">
           <label className="text-sm space-y-1">
             <span className="font-medium">{t('users.email')}</span>
             <Input type="email" placeholder="user@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
@@ -60,6 +60,10 @@ export default function AdminUsers() {
           <label className="text-sm space-y-1">
             <span className="font-medium">{t('users.password')}</span>
             <Input type="text" placeholder="≥6" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} required />
+          </label>
+          <label className="text-sm space-y-1">
+            <span className="font-medium">{t('users.quota')}</span>
+            <Input type="number" placeholder="MB" value={form.quota_mb} onChange={e => setForm({ ...form, quota_mb: +e.target.value })} />
           </label>
           <Button disabled={busy === 'create'}>
             {busy === 'create' ? <Loader2 className="animate-spin" /> : <Plus />}{t('common.create')}

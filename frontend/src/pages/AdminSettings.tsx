@@ -9,6 +9,7 @@ export default function AdminSettings() {
   const { t } = useI18n()
   const [s, setS] = useState(null)
   const [relayPass, setRelayPass] = useState('')
+  const [oidcSecret, setOidcSecret] = useState('')
   const [dkim, setDkim] = useState(null)
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
@@ -32,10 +33,15 @@ export default function AdminSettings() {
         registration_enabled: s.registration_enabled ? '1' : '0',
         relay_insecure: s.relay_insecure ? '1' : '0',
         direct_send: s.direct_send ? '1' : '0',
+        oidc_enabled: s.oidc_enabled ? '1' : '0',
+        oidc_issuer: s.oidc_issuer || '',
+        oidc_client_id: s.oidc_client_id || '',
+        oidc_auto_create: s.oidc_auto_create ? '1' : '0',
       }
       if (relayPass) body.relay_pass = relayPass
+      if (oidcSecret) body.oidc_client_secret = oidcSecret
       const out = await api.settingsPatch(body)
-      setS(out); setRelayPass('')
+      setS(out); setRelayPass(''); setOidcSecret('')
       setMsg(t('settings.saved'))
     } catch (e) { setMsg(e.message) } finally { setBusy('') }
   }
@@ -111,6 +117,25 @@ export default function AdminSettings() {
                 onChange={e => field('direct_send', e.target.checked ? '1' : '0')} />
               <span>{t('settings.directSendHint')}</span>
             </label>
+          </Card>
+
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center gap-2"><KeyRound size={16} /><b className="text-sm">{t('settings.oidc')}</b></div>
+            <p className="text-xs text-muted-foreground">{t('settings.oidcHint')}</p>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!s.oidc_enabled} onChange={e => field('oidc_enabled', e.target.checked ? '1' : '0')} />
+              {t('settings.oidcEnable')}
+            </label>
+            <Field label={t('settings.oidcIssuer')}><Input placeholder="https://accounts.google.com" value={s.oidc_issuer || ''} onChange={e => field('oidc_issuer', e.target.value)} /></Field>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label={t('settings.oidcClientId')}><Input value={s.oidc_client_id || ''} onChange={e => field('oidc_client_id', e.target.value)} /></Field>
+              <Field label={t('settings.oidcClientSecret')}><Input type="password" placeholder={s.oidc_client_secret_set ? t('settings.relayPassKeep') : ''} value={oidcSecret} onChange={e => setOidcSecret(e.target.value)} /></Field>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!s.oidc_auto_create} onChange={e => field('oidc_auto_create', e.target.checked ? '1' : '0')} />
+              {t('settings.oidcAutoCreate')}
+            </label>
+            <p className="text-xs text-muted-foreground break-all">{t('settings.oidcRedirect', { url: location.origin + '/api/oidc/callback' })}</p>
           </Card>
 
           <Card className="p-4 space-y-3">

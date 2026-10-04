@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { Button, Input, Card } from '../components/ui/controls'
 import { FooterControls } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { Mail, Loader2 } from 'lucide-react'
+import { Mail, Loader2, LogIn } from 'lucide-react'
 import { BRAND } from '../lib/brand'
 
 export default function Login() {
@@ -14,10 +14,11 @@ export default function Login() {
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const [regOpen, setRegOpen] = useState(false)
+  const [oidc, setOidc] = useState(false)
   const [challenge, setChallenge] = useState<string | null>(null)
   const [code, setCode] = useState('')
 
-  useEffect(() => { api.site().then((s: any) => setRegOpen(!!s.registration)).catch(() => {}) }, [])
+  useEffect(() => { api.site().then((s: any) => { setRegOpen(!!s.registration); setOidc(!!s.oidc) }).catch(() => {}) }, [])
   useEffect(() => { if (!regOpen && mode === 'register') setMode('login') }, [regOpen, mode])
 
   async function submit(e) {
@@ -59,6 +60,14 @@ export default function Login() {
           <span className="grid place-items-center size-9 rounded-md bg-primary text-primary-foreground"><Mail size={18} /></span>
           <div><h1 className="font-semibold">{BRAND}</h1><p className="text-xs text-muted-foreground">{t('login.title')}</p></div>
         </div>
+        {new URLSearchParams(location.search).get('oidc_error') && (
+          <p className="text-sm text-red-500" role="alert">{t('login.oidcError')}</p>
+        )}
+        {oidc && (
+          <a href="/api/oidc/login" className="block">
+            <Button variant="outline" className="w-full" type="button"><LogIn />{t('login.sso')}</Button>
+          </a>
+        )}
         {challenge ? (
           <form onSubmit={submitCode} className="space-y-3">
             <p className="text-sm text-muted-foreground">{t('login.totpHint')}</p>

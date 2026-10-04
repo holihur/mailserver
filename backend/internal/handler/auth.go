@@ -9,6 +9,7 @@ import (
 
 	"mailserver/internal/auth"
 	"mailserver/internal/model"
+	"mailserver/internal/quota"
 	"mailserver/internal/ratelimit"
 	"mailserver/internal/runtimecfg"
 
@@ -85,7 +86,8 @@ func (a *Auth) Site(w http.ResponseWriter, r *http.Request) {
 	var n int64
 	a.DB.Model(&model.User{}).Count(&n)
 	open := n == 0 || (a.RT != nil && a.RT.RegistrationEnabled())
-	writeJSON(w, 200, map[string]any{"registration": open, "has_users": n > 0})
+	oidcOn := a.RT != nil && a.RT.OIDCEnabled() && a.RT.OIDCIssuer() != ""
+	writeJSON(w, 200, map[string]any{"registration": open, "has_users": n > 0, "oidc": oidcOn})
 }
 
 func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
@@ -163,5 +165,6 @@ func (a *Auth) Me(w http.ResponseWriter, r *http.Request) {
 		}
 		a.DB.First(&u, uid)
 	}
+	u.QuotaUsed = quota.Usage(a.DB, uid)
 	writeJSON(w, 200, u)
 }

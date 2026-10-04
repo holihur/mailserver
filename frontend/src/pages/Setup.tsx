@@ -11,6 +11,7 @@ export default function Setup() {
   const [outbox, setOutbox] = useState([])
   const [dkim, setDkim] = useState(null)
   const [tokens, setTokens] = useState<any[]>([])
+  const [me, setMe] = useState<any>(null)
   const [tokName, setTokName] = useState('')
   const [tokCidrs, setTokCidrs] = useState('')
   const [newToken, setNewToken] = useState('')
@@ -20,6 +21,7 @@ export default function Setup() {
     try { setOutbox(await api.outbox()) } catch {}
     try { setDkim(await api.dkimGet()) } catch {}
     try { setTokens(await api.tokens()) } catch {}
+    try { setMe(await api.me()) } catch {}
   }
   useEffect(() => { load() }, [])
 
@@ -98,6 +100,18 @@ export default function Setup() {
           <b className="text-sm">{t('token.mcpTitle')}</b>
           <p className="text-sm text-muted-foreground break-all">{t('token.mcpHint', { url: location.origin + '/mcp' })}</p>
         </Card>
+
+        {me?.quota_mb > 0 && (
+          <Card className="p-4 text-sm">
+            <b className="text-sm">{t('setup.quota')}</b>
+            <p className="text-muted-foreground mt-1">
+              {(me.quota_used / 1024 / 1024).toFixed(1)} MB / {me.quota_mb} MB
+            </p>
+            <div className="mt-2 h-2 rounded bg-muted overflow-hidden">
+              <div className="h-full bg-primary" style={{ width: Math.min(100, (me.quota_used / (me.quota_mb * 1024 * 1024)) * 100) + '%' }} />
+            </div>
+          </Card>
+        )}
 
         <Card className="p-4 overflow-x-auto">
           <b className="text-sm">{t('setup.clientParams')}</b>

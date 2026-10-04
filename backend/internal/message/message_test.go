@@ -72,7 +72,7 @@ func TestPartsAttachments(t *testing.T) {
 
 func TestParseInboundEncodedSubject(t *testing.T) {
 	raw := "From: a@b.c\r\nTo: x@y.z\r\nSubject: =?utf-8?b?5YWl56uZIFNNVFAg6Ieq5rWL?=\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nhello\r\n"
-	subj, body, atts := ParseInbound(raw)
+	subj, body, _, atts := ParseInbound(raw)
 	if subj != "入站 SMTP 自测" {
 		t.Fatalf("subject=%q", subj)
 	}
@@ -102,7 +102,7 @@ func TestParseInboundMultipartAttachment(t *testing.T) {
 		"--B--",
 		"",
 	}, "\r\n")
-	subj, body, atts := ParseInbound(raw)
+	subj, body, _, atts := ParseInbound(raw)
 	if subj != "hi" || body != "正文" {
 		t.Fatalf("subj=%q body=%q", subj, body)
 	}
@@ -114,7 +114,7 @@ func TestParseInboundMultipartAttachment(t *testing.T) {
 
 func TestParseInboundQuotedPrintable(t *testing.T) {
 	raw := "Subject: t\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\nh=C3=A9llo\r\n"
-	_, body, _ := ParseInbound(raw)
+	_, body, _, _ := ParseInbound(raw)
 	if strings.TrimRight(body, "\r\n") != "héllo" {
 		t.Fatalf("body=%q", body)
 	}
@@ -129,5 +129,20 @@ func TestParseAttachments(t *testing.T) {
 	}
 	if a := ParseAttachments(`[{"name":"x","type":"text/plain","data":"eA=="}]`); len(a) != 1 || a[0].Name != "x" {
 		t.Fatalf("got %v", a)
+	}
+}
+
+func TestParseInboundHTML(t *testing.T) {
+	raw := "Subject: hi\r\nContent-Type: text/html; charset=utf-8\r\n\r\n" +
+		"<html><body><p>Hello <b>World</b></p></body></html>"
+	subj, body, htmlBody, _ := ParseInbound(raw)
+	if subj != "hi" {
+		t.Fatalf("subj=%q", subj)
+	}
+	if !strings.Contains(htmlBody, "<b>World</b>") {
+		t.Fatalf("html=%q", htmlBody)
+	}
+	if !strings.Contains(body, "Hello") || strings.Contains(body, "<") {
+		t.Fatalf("body 应为纯文本=%q", body)
 	}
 }

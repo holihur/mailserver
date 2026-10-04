@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"mailserver/internal/htmlsanitize"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/runtimecfg"
@@ -120,9 +121,9 @@ func Sync(db *gorm.DB, a *model.ExternalAccount) error {
 		if msg.Envelope != nil && len(msg.Envelope.From) > 0 {
 			from = msg.Envelope.From[0].Address()
 		}
-		subject, body, atts := message.ParseInbound(string(raw))
+		subject, body, htmlBody, atts := message.ParseInbound(string(raw))
 		db.Create(&model.Mail{UserID: a.UserID, From: from, To: a.Email,
-			Subject: subject, Body: body, Attachments: atts, Folder: "inbox"})
+			Subject: subject, Body: body, BodyHTML: htmlsanitize.Sanitize(htmlBody), Attachments: atts, Folder: "inbox"})
 		// 服务端标记已读，避免下次重复拉取
 		s := new(imap.SeqSet)
 		s.AddNum(msg.Uid)

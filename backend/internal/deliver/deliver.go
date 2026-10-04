@@ -1,4 +1,4 @@
-// Package deliver 统一本地投递：先应用用户 Sieve 脚本，再应用 CEL 收信规则。
+// Package deliver 统一本地投递：先应用用户 Sieve 脚本，再应用 CEL 收信规则；HTML 正文清洗后入库。
 // 被入站 SMTP 与发件队列（本站互投）共用，保证行为一致。
 package deliver
 
@@ -6,8 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"mailserver/internal/htmlsanitize"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/quota"
 	"mailserver/internal/rules"
 	"mailserver/internal/sieve"
 
@@ -15,10 +17,15 @@ import (
 )
 
 // ToUser 把邮件投递给用户：
-//  1. 若有启用的 Sieve 脚本且命中，按脚本动作处理（fileinto/redirect/discard/keep）；
-//  2. 否则按 CEL 规则处理（trash/move/forward）。
-func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, atts string) {
-	if sieveDeliver(db, u, from, to, cc, subject, body, atts) {
+//  1. 超出配额则丢弃（入站 SMTP 已在 RCPT 阶段拒绝）；
+//  2. 若有启用的 Sieve 脚本且命中，按脚本动作处理（fileinto/redirect/discard/keep）；
+//  3. 否则按 CEL 规则处理（trash/move/forward）。
+func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, htmlBody, atts string) {
+	if quota.Exceeded(db, u) {
+		return
+	}
+	htmlSafe := htmlsanitize.Sanitize(htmlBody)
+	if sieveDeliver(db, u, from, to, cc, subject, body, htmlSafe, atts) {
 		return
 	}
 	d := rules.Apply(db, u.ID, rules.Input{
@@ -28,15 +35,15 @@ func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, atts s
 	if d.Action == "forward" && len(d.Forward) > 0 {
 		Forward(db, from, d.Forward, subject, body, atts)
 		db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Cc: cc, Bcc: bcc,
-			Subject: subject, Body: body, Attachments: atts, Folder: "inbox"})
+			Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: "inbox"})
 		return
 	}
 	db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Cc: cc, Bcc: bcc,
-		Subject: subject, Body: body, Attachments: atts, Folder: d.Folder})
+		Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: d.Folder})
 }
 
 // sieveDeliver 执行用户的启用脚本；返回 true 表示已处理（不再走 CEL 规则）。
-func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, atts string) bool {
+func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, htmlSafe, atts string) bool {
 	var sc model.SieveScript
 	if err := db.Where("user_id = ? AND active = ?", u.ID, true).First(&sc).Error; err != nil {
 		return false
@@ -78,7 +85,7 @@ func sieveDeliver(db *gorm.DB, u *model.User, from, to, cc, subject, body, atts 
 	}
 	for _, f := range folders {
 		db.Create(&model.Mail{UserID: u.ID, From: from, To: to, Cc: cc,
-			Subject: subject, Body: body, Attachments: atts, Folder: f, Read: seen})
+			Subject: subject, Body: body, BodyHTML: htmlSafe, Attachments: atts, Folder: f, Read: seen})
 	}
 	return true
 }

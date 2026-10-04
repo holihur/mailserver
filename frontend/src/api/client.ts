@@ -30,6 +30,11 @@ export const api = {
   list: (folder = 'inbox', q = '', page = 1, sort = 'newest') =>
     req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}`),
   unread: () => req('/api/mails/unread'),
+  proxyImage: async (u: string) => {
+    const r = await fetch(`${BASE}/api/proxy/image?u=${encodeURIComponent(u)}`, { headers: headers() })
+    if (!r.ok) throw new Error('image fetch failed')
+    return URL.createObjectURL(await r.blob())
+  },
   get: (id) => req(`/api/mails/${id}`),
   send: (b) => req('/api/mails', { method: 'POST', body: JSON.stringify(b) }),
   patch: (id, b) => req(`/api/mails/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),

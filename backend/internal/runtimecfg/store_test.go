@@ -170,3 +170,24 @@ func TestStoreDKIM(t *testing.T) {
 		t.Fatal("signer should be cleared on error")
 	}
 }
+
+func TestStoreOIDC(t *testing.T) {
+	s := &Store{vals: map[string]string{}}
+	if s.OIDCEnabled() {
+		t.Fatal("默认应关闭 OIDC")
+	}
+	s.vals[KeyOIDCEnabled] = "1"
+	s.vals[KeyOIDCIssuer] = "https://id.example"
+	s.vals[KeyOIDCClientID] = "cid"
+	s.vals[KeyOIDCClientSecret] = "sec"
+	s.vals[KeyOIDCAutoCreate] = "on"
+	if !s.OIDCEnabled() || s.OIDCIssuer() != "https://id.example" || s.OIDCClientID() != "cid" ||
+		s.OIDCClientSecret() != "sec" || !s.OIDCAutoCreate() {
+		t.Fatalf("oidc 读取异常")
+	}
+	snap := s.Snapshot()
+	if snap["oidc_enabled"] != true || snap["oidc_issuer"] != "https://id.example" ||
+		snap["oidc_client_secret_set"] != true || snap["oidc_auto_create"] != true {
+		t.Fatalf("snapshot: %+v", snap)
+	}
+}

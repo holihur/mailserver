@@ -144,9 +144,10 @@ func (a *Admin) Users(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/users {email, name, password} -> 在托管域名下新建邮箱账号
 func (a *Admin) createUser(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Email string `json:"email"`
-		Name  string `json:"name"`
-		Pass  string `json:"password"`
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Pass    string `json:"password"`
+		QuotaMB int    `json:"quota_mb"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "bad body"})
@@ -169,7 +170,7 @@ func (a *Admin) createUser(w http.ResponseWriter, r *http.Request) {
 		name = email[:at]
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.DefaultCost)
-	u := model.User{Email: email, Name: name, PassHash: string(hash)}
+	u := model.User{Email: email, Name: name, PassHash: string(hash), QuotaMB: in.QuotaMB}
 	if isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 		u.Admin = true
 	}
@@ -205,6 +206,7 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 			Pass     *string `json:"password"`
 			Disabled *bool   `json:"disabled"`
 			Admin    *bool   `json:"admin"`
+			QuotaMB  *int    `json:"quota_mb"`
 			TOTPOff  *bool   `json:"totp_off"` // 重置（关闭并清除）两步验证
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
@@ -245,6 +247,9 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 		if in.TOTPOff != nil && *in.TOTPOff {
 			upd["totp_enabled"] = false
 			upd["totp_secret"] = ""
+		}
+		if in.QuotaMB != nil {
+			upd["quota_mb"] = *in.QuotaMB
 		}
 		if len(upd) > 0 {
 			a.DB.Model(&u).Updates(upd)

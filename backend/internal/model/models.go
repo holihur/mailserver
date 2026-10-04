@@ -7,6 +7,8 @@ type User struct {
 	Email       string    `gorm:"uniqueIndex;size:255" json:"email"`
 	Name        string    `gorm:"size:100" json:"name"`
 	Signature   string    `gorm:"size:1000" json:"signature"` // 邮件签名
+	QuotaMB     int       `json:"quota_mb"`                   // 存储配额（MB），0=不限
+	QuotaUsed   int64     `gorm:"-" json:"quota_used"`        // 已用字节（仅展示）
 	PassHash    string    `gorm:"size:255" json:"-"`
 	Admin       bool      `json:"admin"`             // 管理员：可进 /api/admin 管理后台
 	Disabled    bool      `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
@@ -86,6 +88,7 @@ type Mail struct {
 	Bcc         string    `gorm:"size:255" json:"bcc"`
 	Subject     string    `gorm:"size:500" json:"subject"`
 	Body        string    `gorm:"type:text" json:"body"`
+	BodyHTML    string    `gorm:"type:text" json:"body_html"`   // 清洗后的 HTML 正文
 	Attachments string    `gorm:"type:text" json:"attachments"` // JSON: [{name,type,data(base64),size}]
 	Folder      string    `gorm:"size:20;index" json:"folder"`
 	Read        bool      `json:"read"`

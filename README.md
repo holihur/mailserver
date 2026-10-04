@@ -48,10 +48,10 @@ Sweetcorn 的取舍：**不搭 Postfix/Dovecot 套件**，用单进程 + 单二�
 | ActiveSync (EAS) | 移动端原生邮件 / 日历 / 联系人 | Z-Push、SOGo | 后期 |
 | 反垃圾 / 反病毒 | Rspamd / SpamAssassin + ClamAV | mailcow / Mailu / iRedMail | 后期 |
 | 全文检索 | 索引式搜索（Solr / Xapian） | mailcow(Solr)、Mailu(Xapian) | 后期 |
-| 每用户配额 | 存储配额与告警 | mailcow / Mailu | 后期 |
-| LDAP / OIDC SSO | 目录服务与单点登录 | Mailu / iRedMail / Stalwart | 后期 |
+| 每用户配额 | 存储配额与告警 | mailcow / Mailu | ✅ 已支持（入站拒绝 + 用量展示） |
+| LDAP / OIDC SSO | 目录服务与单点登录 | Mailu / iRedMail / Stalwart | ✅ OIDC 已支持，LDAP 后期 |
 | IMAP ACL / 共享邮箱 | 委派与共享 | Dovecot 系 | 后期 |
-| 会话聚合 / HTML 渲染 | 邮件串、HTML 正文与远程图片拦截 | 主流 Webmail | 后期 |
+| 会话聚合 / HTML 渲染 | 邮件串、HTML 正文与远程图片拦截 | 主流 Webmail | ✅ HTML 渲染已支持（清洗 + 远程图片代理），会话聚合后期 |
 | 监控 / 指标 | Prometheus / Grafana、审计日志 | mailcow | 后期 |
 | 备份 / 恢复 | 一键备份与恢复 | mailcow | 后期 |
 

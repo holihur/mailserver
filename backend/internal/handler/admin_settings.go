@@ -24,19 +24,24 @@ import (
 )
 
 var settingKeys = map[string]bool{
-	runtimecfg.KeyMailHost:       true,
-	runtimecfg.KeyPublicIP:       true,
-	runtimecfg.KeyAdminEmails:    true,
-	runtimecfg.KeyRelayHost:      true,
-	runtimecfg.KeyRelayPort:      true,
-	runtimecfg.KeyRelayUser:      true,
-	runtimecfg.KeyRelayPass:      true,
-	runtimecfg.KeyRelayFrom:      true,
-	runtimecfg.KeyRelayInsecure:  true,
-	runtimecfg.KeyDirectSend:     true,
-	runtimecfg.KeyRegistration:   true,
-	runtimecfg.KeyAutoUpdate:     true,
-	runtimecfg.KeyUpdateInterval: true,
+	runtimecfg.KeyMailHost:         true,
+	runtimecfg.KeyPublicIP:         true,
+	runtimecfg.KeyAdminEmails:      true,
+	runtimecfg.KeyRelayHost:        true,
+	runtimecfg.KeyRelayPort:        true,
+	runtimecfg.KeyRelayUser:        true,
+	runtimecfg.KeyRelayPass:        true,
+	runtimecfg.KeyRelayFrom:        true,
+	runtimecfg.KeyRelayInsecure:    true,
+	runtimecfg.KeyDirectSend:       true,
+	runtimecfg.KeyRegistration:     true,
+	runtimecfg.KeyAutoUpdate:       true,
+	runtimecfg.KeyUpdateInterval:   true,
+	runtimecfg.KeyOIDCEnabled:      true,
+	runtimecfg.KeyOIDCIssuer:       true,
+	runtimecfg.KeyOIDCClientID:     true,
+	runtimecfg.KeyOIDCClientSecret: true,
+	runtimecfg.KeyOIDCAutoCreate:   true,
 }
 
 // GET /api/admin/settings   PATCH /api/admin/settings
@@ -63,10 +68,13 @@ func (a *Admin) Settings(w http.ResponseWriter, r *http.Request) {
 			if k == runtimecfg.KeyRelayPass && v == "" {
 				continue
 			}
+			if k == runtimecfg.KeyOIDCClientSecret && v == "" {
+				continue
+			}
 			if k == runtimecfg.KeyMailHost {
 				v = strings.Trim(strings.ToLower(v), ".")
 			}
-			if k == runtimecfg.KeyRegistration || k == runtimecfg.KeyRelayInsecure || k == runtimecfg.KeyDirectSend || k == runtimecfg.KeyAutoUpdate {
+			if k == runtimecfg.KeyRegistration || k == runtimecfg.KeyRelayInsecure || k == runtimecfg.KeyDirectSend || k == runtimecfg.KeyAutoUpdate || k == runtimecfg.KeyOIDCEnabled || k == runtimecfg.KeyOIDCAutoCreate {
 				if v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "on") {
 					v = "1"
 				} else {

@@ -14,6 +14,7 @@ import (
 	"mailserver/internal/deliver"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/quota"
 
 	"gorm.io/gorm"
 )
@@ -84,6 +85,12 @@ func handle(c net.Conn, db *gorm.DB) {
 				reply("550 5.1.1 User unknown")
 				continue
 			}
+			// 配额：超限则拒绝（4xx，发件方会重试/退信）
+			var qu model.User
+			if err := db.Where("LOWER(email) = ?", strings.ToLower(strings.TrimSpace(addr))).First(&qu).Error; err == nil && quota.Exceeded(db, &qu) {
+				reply("452 4.2.2 Mailbox full")
+				continue
+			}
 			to = addr
 			reply("250 OK")
 		case strings.HasPrefix(up, "DATA"):
@@ -114,7 +121,7 @@ func extractAddr(s string) string {
 }
 
 func saveMail(db *gorm.DB, from, to, raw string) {
-	subject, body, atts := message.ParseInbound(raw)
+	subject, body, htmlBody, atts := message.ParseInbound(raw)
 	to = strings.ToLower(strings.TrimSpace(to))
 
 	// 别名 / 转发：命中则投递到全部目标（本地进收件箱，外部自动转发）
@@ -123,7 +130,7 @@ func saveMail(db *gorm.DB, from, to, raw string) {
 		if al.Keep {
 			var u model.User
 			if err := db.Where("LOWER(email) = ?", to).First(&u).Error; err == nil {
-				deliver.ToUser(db, &u, from, to, "", "", subject, body, atts)
+				deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts)
 			}
 		}
 		return
@@ -134,7 +141,7 @@ func saveMail(db *gorm.DB, from, to, raw string) {
 	if err := db.Where("LOWER(email) = ?", to).First(&u).Error; err != nil {
 		return
 	}
-	deliver.ToUser(db, &u, from, to, "", "", subject, body, atts)
+	deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts)
 }
 
 // recipientExists 判断收件人是否为本地已有用户或别名（RCPT 阶段就拒绝未知收件人，避免静默丢信）。

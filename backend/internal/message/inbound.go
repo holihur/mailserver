@@ -10,6 +10,8 @@ import (
 	"mime/quotedprintable"
 	"net/mail"
 	"strings"
+
+	"golang.org/x/net/html"
 )
 
 const (
@@ -19,22 +21,31 @@ const (
 )
 
 // ParseInbound 解析收到的原始邮件：解码 RFC2047 主题、按传输编码解码正文、
-// 从 multipart 中提取附件（base64 存 JSON）。找不到时退化为原文。
-func ParseInbound(raw string) (subject, body, attachments string) {
+// 从 multipart 中提取附件（base64 存 JSON）与 HTML 正文。找不到时退化为原文。
+// 返回：主题、纯文本正文、HTML 正文（可能为空）、附件 JSON。
+func ParseInbound(raw string) (subject, body, htmlBody, attachments string) {
 	msg, err := mail.ReadMessage(strings.NewReader(raw))
 	if err != nil {
-		return fallback(raw)
+		s, b, a := fallback(raw)
+		return s, b, "", a
 	}
 	subject = decodeHeader(msg.Header.Get("Subject"))
 	ct := msg.Header.Get("Content-Type")
 	mediaType, params, _ := mime.ParseMediaType(ct)
 	if strings.HasPrefix(mediaType, "multipart/") {
-		atts, text := parseMultipart(msg.Body, params["boundary"], 0)
+		atts, text, html := parseMultipart(msg.Body, params["boundary"], 0)
 		body = text
+		htmlBody = html
 		attachments = marshalAtts(atts)
 	} else {
 		b, _ := io.ReadAll(io.LimitReader(msg.Body, maxPart))
-		body = string(decodeBytes(b, msg.Header.Get("Content-Transfer-Encoding")))
+		dec := decodeBytes(b, msg.Header.Get("Content-Transfer-Encoding"))
+		if mediaType == "text/html" {
+			htmlBody = string(dec)
+			body = htmlToText(htmlBody)
+		} else {
+			body = string(dec)
+		}
 	}
 	if strings.TrimSpace(subject) == "" {
 		subject = "(无主题)"
@@ -42,17 +53,20 @@ func ParseInbound(raw string) (subject, body, attachments string) {
 	if len(body) > maxBody {
 		body = body[:maxBody]
 	}
-	return subject, body, attachments
+	if len(htmlBody) > maxBody*2 {
+		htmlBody = htmlBody[:maxBody*2]
+	}
+	return subject, body, htmlBody, attachments
 }
 
-func parseMultipart(r io.Reader, boundary string, depth int) ([]Attachment, string) {
+func parseMultipart(r io.Reader, boundary string, depth int) ([]Attachment, string, string) {
 	if depth > 5 {
 		b, _ := io.ReadAll(io.LimitReader(r, maxPart))
-		return nil, string(b)
+		return nil, string(b), ""
 	}
 	if boundary == "" {
 		b, _ := io.ReadAll(io.LimitReader(r, maxPart))
-		return nil, string(b)
+		return nil, string(b), ""
 	}
 	mr := multipart.NewReader(r, boundary)
 	var atts []Attachment
@@ -71,10 +85,13 @@ func parseMultipart(r io.Reader, boundary string, depth int) ([]Attachment, stri
 		data, _ := io.ReadAll(io.LimitReader(p, maxPart))
 
 		if strings.HasPrefix(mt, "multipart/") {
-			subAt, subText := parseMultipart(bytes.NewReader(data), params["boundary"], depth+1)
+			subAt, subText, subHTML := parseMultipart(bytes.NewReader(data), params["boundary"], depth+1)
 			atts = append(atts, subAt...)
 			if text == "" {
 				text = subText
+			}
+			if html == "" {
+				html = subHTML
 			}
 			continue
 		}
@@ -100,9 +117,9 @@ func parseMultipart(r io.Reader, boundary string, depth int) ([]Attachment, stri
 		}
 	}
 	if text == "" {
-		text = html
+		text = htmlToText(html)
 	}
-	return atts, text
+	return atts, text, html
 }
 
 func decodeHeader(s string) string {
@@ -125,6 +142,42 @@ func decodeBytes(b []byte, cte string) []byte {
 		return out
 	}
 	return b
+}
+
+// htmlToText 提取 HTML 纯文本（用于列表摘要与纯文本回退）。
+func htmlToText(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return ""
+	}
+	doc, err := html.Parse(strings.NewReader(s))
+	if err != nil {
+		return s
+	}
+	var b strings.Builder
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			b.WriteString(n.Data)
+		}
+		if n.Type == html.ElementNode {
+			switch n.Data {
+			case "br", "p", "div", "li", "tr", "h1", "h2", "h3":
+				b.WriteString("\n")
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	lines := strings.Split(b.String(), "\n")
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if t := strings.TrimSpace(l); t != "" {
+			out = append(out, t)
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 func marshalAtts(a []Attachment) string {

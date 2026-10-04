@@ -45,6 +45,8 @@ export default function MailApp() {
   const prevUnread = useRef(0)
   const touch = useRef<{ x: number; moved: boolean }>({ x: 0, moved: false })
   const [preview, setPreview] = useState<any>(null)
+  const [showImages, setShowImages] = useState(false)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -110,8 +112,23 @@ export default function MailApp() {
   async function open(id) {
     const d = await api.get(id)
     setSel(d)
+    setShowImages(false)
     setView('read')
     setItems(items.map(i => i.id === id ? { ...i, read: true } : i))
+  }
+
+  async function revealImages() {
+    setShowImages(true)
+    const el = bodyRef.current
+    if (!el) return
+    const imgs = Array.from(el.querySelectorAll('img[data-blocked-src]')) as HTMLImageElement[]
+    for (const img of imgs) {
+      const src = img.getAttribute('data-blocked-src') || ''
+      try {
+        img.src = await api.proxyImage(src)
+        img.removeAttribute('data-blocked-src')
+      } catch {}
+    }
   }
 
   function reply(m: any, all: boolean) {
@@ -366,7 +383,18 @@ export default function MailApp() {
                       }}>{folder === 'deleted' ? t('mail.purge') : t('mail.delete')}</DropdownItem>
                     </Dropdown>
                   </div>
-                  <pre onClick={onBodyClick} className="whitespace-pre-wrap text-sm mt-4 font-sans break-words" dangerouslySetInnerHTML={{ __html: linkify(sel.body) }} />
+                  {sel.body_html ? (
+                    <div className="mt-4 text-sm break-words">
+                      {!showImages && String(sel.body_html).includes('data-blocked-src') && (
+                        <button className="text-xs text-primary underline mb-2" onClick={revealImages}>{t('mail.showImages')}</button>
+                      )}
+                      <div ref={bodyRef} onClick={onBodyClick}
+                        className="[&_img]:max-w-full [&_img]:h-auto [&_a]:text-primary [&_a]:underline [&_table]:max-w-full [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground"
+                        dangerouslySetInnerHTML={{ __html: sel.body_html }} />
+                    </div>
+                  ) : (
+                    <pre onClick={onBodyClick} className="whitespace-pre-wrap text-sm mt-4 font-sans break-words" dangerouslySetInnerHTML={{ __html: linkify(sel.body) }} />
+                  )}
                   {attList(sel.attachments).length > 0 && (
                     <div className="mt-4 border-t border-border pt-3">
                       <b className="text-sm">{t('mail.attachments')}</b>

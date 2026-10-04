@@ -22,22 +22,27 @@ import (
 
 // 配置键
 const (
-	KeyMailHost       = "mail_host"    // 邮件主机名（greeting / Message-ID / MX 目标）
-	KeyPublicIP       = "public_ip"    // 服务器公网 IPv4
-	KeyAdminEmails    = "admin_emails" // 管理员邮箱，逗号分隔
-	KeyRelayHost      = "relay_host"
-	KeyRelayPort      = "relay_port"
-	KeyRelayUser      = "relay_user"
-	KeyRelayPass      = "relay_pass"
-	KeyRelayFrom      = "relay_from"
-	KeyRelayInsecure  = "relay_insecure" // 跳过中继 TLS 证书校验（自签/域名不匹配）
-	KeyDirectSend     = "direct_send"    // 无中继时直连对方 MX:25 投递
-	KeyDKIMDomain     = "dkim_domain"
-	KeyDKIMSel        = "dkim_selector"
-	KeyDKIMKeyEnc     = "dkim_key_enc"         // AES-GCM 加密的 DKIM 私钥 PEM
-	KeyRegistration   = "registration_enabled" // 是否开放注册（默认关闭；首个用户始终可注册）
-	KeyAutoUpdate     = "auto_update"          // 是否自动安装更新（默认关闭，仅检查）
-	KeyUpdateInterval = "update_interval"      // 自动检查更新的间隔（分钟，默认 10）
+	KeyMailHost         = "mail_host"    // 邮件主机名（greeting / Message-ID / MX 目标）
+	KeyPublicIP         = "public_ip"    // 服务器公网 IPv4
+	KeyAdminEmails      = "admin_emails" // 管理员邮箱，逗号分隔
+	KeyRelayHost        = "relay_host"
+	KeyRelayPort        = "relay_port"
+	KeyRelayUser        = "relay_user"
+	KeyRelayPass        = "relay_pass"
+	KeyRelayFrom        = "relay_from"
+	KeyRelayInsecure    = "relay_insecure" // 跳过中继 TLS 证书校验（自签/域名不匹配）
+	KeyDirectSend       = "direct_send"    // 无中继时直连对方 MX:25 投递
+	KeyDKIMDomain       = "dkim_domain"
+	KeyDKIMSel          = "dkim_selector"
+	KeyDKIMKeyEnc       = "dkim_key_enc"         // AES-GCM 加密的 DKIM 私钥 PEM
+	KeyRegistration     = "registration_enabled" // 是否开放注册（默认关闭；首个用户始终可注册）
+	KeyAutoUpdate       = "auto_update"          // 是否自动安装更新（默认关闭，仅检查）
+	KeyUpdateInterval   = "update_interval"      // 自动检查更新的间隔（分钟，默认 10）
+	KeyOIDCEnabled      = "oidc_enabled"         // 是否启用 OIDC 单点登录
+	KeyOIDCIssuer       = "oidc_issuer"          // OIDC issuer（如 https://accounts.google.com）
+	KeyOIDCClientID     = "oidc_client_id"
+	KeyOIDCClientSecret = "oidc_client_secret"
+	KeyOIDCAutoCreate   = "oidc_auto_create" // 首次登录是否自动建账号
 )
 
 // Relay 外发中继配置。
@@ -151,6 +156,13 @@ func (s *Store) AdminEmails() string { return s.get(KeyAdminEmails) }
 // RegistrationEnabled 是否开放注册（默认关闭）。
 func (s *Store) RegistrationEnabled() bool { return parseBool(s.get(KeyRegistration)) }
 
+// OIDC 相关配置。
+func (s *Store) OIDCEnabled() bool        { return parseBool(s.get(KeyOIDCEnabled)) }
+func (s *Store) OIDCIssuer() string       { return s.get(KeyOIDCIssuer) }
+func (s *Store) OIDCClientID() string     { return s.get(KeyOIDCClientID) }
+func (s *Store) OIDCClientSecret() string { return s.get(KeyOIDCClientSecret) }
+func (s *Store) OIDCAutoCreate() bool     { return parseBool(s.get(KeyOIDCAutoCreate)) }
+
 // AutoUpdate 是否自动安装更新（默认关闭；关闭时仍会按间隔检查并记录日志）。
 func (s *Store) AutoUpdate() bool { return parseBool(s.get(KeyAutoUpdate)) }
 
@@ -252,22 +264,27 @@ func (s *Store) Snapshot() map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return map[string]any{
-		"mail_host":            s.vals[KeyMailHost],
-		"public_ip":            s.vals[KeyPublicIP],
-		"admin_emails":         s.vals[KeyAdminEmails],
-		"relay_host":           s.vals[KeyRelayHost],
-		"relay_port":           s.vals[KeyRelayPort],
-		"relay_user":           s.vals[KeyRelayUser],
-		"relay_from":           s.vals[KeyRelayFrom],
-		"relay_pass_set":       s.vals[KeyRelayPass] != "",
-		"relay_insecure":       parseBool(s.vals[KeyRelayInsecure]),
-		"direct_send":          parseBool(s.vals[KeyDirectSend]),
-		"dkim_domain":          s.vals[KeyDKIMDomain],
-		"dkim_selector":        s.vals[KeyDKIMSel],
-		"dkim_ready":           s.signer.Load() != nil,
-		"registration_enabled": parseBool(s.vals[KeyRegistration]),
-		"auto_update":          parseBool(s.vals[KeyAutoUpdate]),
-		"update_interval":      parseInterval(s.vals[KeyUpdateInterval]),
+		"mail_host":              s.vals[KeyMailHost],
+		"public_ip":              s.vals[KeyPublicIP],
+		"admin_emails":           s.vals[KeyAdminEmails],
+		"relay_host":             s.vals[KeyRelayHost],
+		"relay_port":             s.vals[KeyRelayPort],
+		"relay_user":             s.vals[KeyRelayUser],
+		"relay_from":             s.vals[KeyRelayFrom],
+		"relay_pass_set":         s.vals[KeyRelayPass] != "",
+		"relay_insecure":         parseBool(s.vals[KeyRelayInsecure]),
+		"direct_send":            parseBool(s.vals[KeyDirectSend]),
+		"dkim_domain":            s.vals[KeyDKIMDomain],
+		"dkim_selector":          s.vals[KeyDKIMSel],
+		"dkim_ready":             s.signer.Load() != nil,
+		"registration_enabled":   parseBool(s.vals[KeyRegistration]),
+		"auto_update":            parseBool(s.vals[KeyAutoUpdate]),
+		"update_interval":        parseInterval(s.vals[KeyUpdateInterval]),
+		"oidc_enabled":           parseBool(s.vals[KeyOIDCEnabled]),
+		"oidc_issuer":            s.vals[KeyOIDCIssuer],
+		"oidc_client_id":         s.vals[KeyOIDCClientID],
+		"oidc_client_secret_set": s.vals[KeyOIDCClientSecret] != "",
+		"oidc_auto_create":       parseBool(s.vals[KeyOIDCAutoCreate]),
 	}
 }
 
