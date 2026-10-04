@@ -12,6 +12,7 @@ export default function Setup() {
   const [dkim, setDkim] = useState(null)
   const [tokens, setTokens] = useState<any[]>([])
   const [tokName, setTokName] = useState('')
+  const [tokCidrs, setTokCidrs] = useState('')
   const [newToken, setNewToken] = useState('')
   const host = location.hostname
 
@@ -25,9 +26,10 @@ export default function Setup() {
   async function createToken(e: any) {
     e.preventDefault()
     try {
-      const r = await api.tokenCreate(tokName)
+      const r = await api.tokenCreate(tokName, tokCidrs)
       setNewToken(r.token)
       setTokName('')
+      setTokCidrs('')
       setTokens(await api.tokens())
     } catch (err: any) { toast(err.message) }
   }
@@ -56,9 +58,13 @@ export default function Setup() {
             <Badge>{t('token.required')}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">{t('token.intro')}</p>
-          <form onSubmit={createToken} className="flex gap-2">
-            <Input placeholder={t('token.namePlaceholder')} value={tokName} onChange={e => setTokName(e.target.value)} />
-            <Button size="sm" type="submit" className="shrink-0"><Plus />{t('token.generate')}</Button>
+          <form onSubmit={createToken} className="space-y-2">
+            <div className="flex gap-2">
+              <Input placeholder={t('token.namePlaceholder')} value={tokName} onChange={e => setTokName(e.target.value)} />
+              <Button size="sm" type="submit" className="shrink-0"><Plus />{t('token.generate')}</Button>
+            </div>
+            <Input className="font-mono text-xs" placeholder={t('token.cidrPlaceholder')} value={tokCidrs} onChange={e => setTokCidrs(e.target.value)} />
+            <p className="text-xs text-muted-foreground">{t('token.cidrHint')}</p>
           </form>
           {newToken && (
             <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-2">
@@ -77,6 +83,7 @@ export default function Setup() {
                   <code className="text-xs text-muted-foreground">{tk.prefix}…</code>
                   <span className="text-xs text-muted-foreground hidden sm:inline">
                     {tk.last_used ? t('token.lastUsed', { t: new Date(tk.last_used).toLocaleDateString() }) : t('token.neverUsed')}
+                    {tk.allowed_cidrs ? ` · ${tk.allowed_cidrs}` : ''}
                   </span>
                   <div className="flex-1" />
                   <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={() => revokeToken(tk.id)}><Trash2 /></Button>
@@ -84,6 +91,11 @@ export default function Setup() {
               ))}
             </div>
           )}
+        </Card>
+
+        <Card className="p-4 space-y-1">
+          <b className="text-sm">{t('token.mcpTitle')}</b>
+          <p className="text-sm text-muted-foreground break-all">{t('token.mcpHint', { url: location.origin + '/mcp' })}</p>
         </Card>
 
         <Card className="p-4 overflow-x-auto">

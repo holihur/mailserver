@@ -72,3 +72,16 @@ func TestTokenTypes(t *testing.T) {
 		t.Fatal("access 令牌不应通过 TOTPChallengeUserID")
 	}
 }
+
+func TestClaimUIDZero(t *testing.T) {
+	SetSecret("unit-test-secret")
+	tok, _ := Sign(0, "x@y.z")
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	if _, err := UserID(req); err == nil {
+		t.Fatal("uid=0 应报错")
+	}
+	if _, err := TOTPChallengeUserID("bad-token"); err == nil {
+		t.Fatal("坏挑战令牌应报错")
+	}
+}

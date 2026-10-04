@@ -7,6 +7,15 @@
 
 （暂无）
 
+## [v0.10.0] - 2026-10-04
+
+### 新增
+- **MCP（HTTP）**：新增 `/mcp`（Streamable HTTP / JSON-RPC 2.0），用「应用专用密码」(PAT) 授权，提供 `list_mails` / `search_mails` / `get_mail` / `send_mail` / `mark_read` / `move_mail` / `delete_mail` / `list_folders` / `list_contacts` 等工具，供 AI 客户端操作邮箱。
+- **PAT 来源 CIDR 限制**：生成/编辑应用专用密码时可限定允许的 IP 网段，IMAP/POP3/SMTP/MCP 通用。
+
+### 文档
+- README 精简：新增「特性」与「与竞品对比」列表，移除目录树与接口列表。
+
 ## [v0.9.0] - 2026-10-04
 
 ### 新增

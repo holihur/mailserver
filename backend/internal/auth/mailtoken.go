@@ -6,6 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -35,9 +37,54 @@ func HashMailToken(plain string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// AuthenticateMail 校验邮件客户端（IMAP/POP3/SMTP）凭据。
-// 出于安全考虑只接受 PAT，不接受网页登录密码；返回令牌归属且未禁用的用户。
-func AuthenticateMail(db *gorm.DB, email, secret string) (*model.User, error) {
+// ValidCIDRs 校验逗号分隔的 CIDR/IP 列表（保存前调用）。
+func ValidCIDRs(s string) error {
+	for _, c := range strings.Split(s, ",") {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if net.ParseIP(c) != nil {
+			continue
+		}
+		if _, _, err := net.ParseCIDR(c); err != nil {
+			return fmt.Errorf("非法的 CIDR/IP: %s", c)
+		}
+	}
+	return nil
+}
+
+// ipAllowed 判断来源 IP 是否在允许的 CIDR 列表内（空列表=不限）。
+func ipAllowed(cidrs, ip string) bool {
+	cidrs = strings.TrimSpace(cidrs)
+	if cidrs == "" {
+		return true
+	}
+	parsed := net.ParseIP(strings.TrimSpace(ip))
+	if parsed == nil {
+		return false
+	}
+	for _, c := range strings.Split(cidrs, ",") {
+		c = strings.TrimSpace(c)
+		if c == "" {
+			continue
+		}
+		if !strings.Contains(c, "/") {
+			if p := net.ParseIP(c); p != nil && p.Equal(parsed) {
+				return true
+			}
+			continue
+		}
+		if _, ipnet, err := net.ParseCIDR(c); err == nil && ipnet.Contains(parsed) {
+			return true
+		}
+	}
+	return false
+}
+
+// AuthenticateMail 校验邮件客户端 / MCP 的 PAT 凭据（不接受网页登录密码）。
+// ip 为来源地址（可为空，为空时跳过 CIDR 限制校验）。
+func AuthenticateMail(db *gorm.DB, email, secret, ip string) (*model.User, error) {
 	secret = strings.TrimSpace(secret)
 	if !strings.HasPrefix(secret, MailTokenPrefix) {
 		return nil, errors.New("请使用「应用专用密码」(PAT)，不要使用网页登录密码")
@@ -46,6 +93,9 @@ func AuthenticateMail(db *gorm.DB, email, secret string) (*model.User, error) {
 	if err := db.Where("hash = ?", HashMailToken(secret)).First(&tok).Error; err != nil {
 		return nil, errors.New("应用专用密码无效")
 	}
+	if strings.TrimSpace(ip) != "" && !ipAllowed(tok.AllowedCIDRs, ip) {
+		return nil, errors.New("来源 IP 不在该应用专用密码允许的范围内")
+	}
 	var u model.User
 	if err := db.First(&u, tok.UserID).Error; err != nil {
 		return nil, errors.New("应用专用密码无效")
@@ -53,11 +103,18 @@ func AuthenticateMail(db *gorm.DB, email, secret string) (*model.User, error) {
 	if u.Disabled {
 		return nil, errors.New("账号已禁用")
 	}
-	// 客户端填写的用户名必须与令牌归属一致，避免张冠李戴。
 	if e := strings.TrimSpace(email); e != "" && !strings.EqualFold(e, u.Email) {
 		return nil, errors.New("应用专用密码与账号不匹配")
 	}
 	now := time.Now()
 	db.Model(&model.MailToken{}).Where("id = ?", tok.ID).Update("last_used", now)
 	return &u, nil
+}
+
+// HostOf 从 "host:port" 取出 host。
+func HostOf(addr string) string {
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		return h
+	}
+	return addr
 }

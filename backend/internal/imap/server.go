@@ -449,7 +449,7 @@ func (s *session) needSelected(tag string) bool {
 }
 
 func (s *session) login(email, pass string) bool {
-	u, err := auth.AuthenticateMail(s.db, email, pass)
+	u, err := auth.AuthenticateMail(s.db, email, pass, auth.HostOf(s.conn.RemoteAddr().String()))
 	if err != nil {
 		return false
 	}

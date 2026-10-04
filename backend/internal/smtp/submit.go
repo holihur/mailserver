@@ -58,21 +58,22 @@ func ServeSubmitTLS(addr string, host func() string, db *gorm.DB, tlsConf *tls.C
 }
 
 type submitter struct {
-	r     *bufio.Reader
-	w     *bufio.Writer
-	db    *gorm.DB
-	host  func() string
-	tls   bool // 已加密
-	user  *model.User
-	from  string
-	rcpts []string
+	r      *bufio.Reader
+	w      *bufio.Writer
+	db     *gorm.DB
+	host   func() string
+	remote string
+	tls    bool // 已加密
+	user   *model.User
+	from   string
+	rcpts  []string
 }
 
 func (s *submitter) reply(msg string) { s.w.WriteString(msg + "\r\n"); s.w.Flush() }
 
 func handleSubmit(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config, encrypted bool) {
 	defer conn.Close()
-	s := &submitter{r: bufio.NewReader(conn), w: bufio.NewWriter(conn), db: db, host: host, tls: encrypted}
+	s := &submitter{r: bufio.NewReader(conn), w: bufio.NewWriter(conn), db: db, host: host, remote: conn.RemoteAddr().String(), tls: encrypted}
 	s.reply("220 " + host() + " ESMTP Sweetcorn")
 	var data strings.Builder
 	inData := false
@@ -240,7 +241,7 @@ func (s *submitter) doAuth(arg string) bool {
 }
 
 func (s *submitter) checkUser(email, pass string) bool {
-	u, err := auth.AuthenticateMail(s.db, email, pass)
+	u, err := auth.AuthenticateMail(s.db, email, pass, auth.HostOf(s.remote))
 	if err != nil {
 		return false
 	}

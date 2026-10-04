@@ -19,13 +19,14 @@ type User struct {
 // IMAP/POP3/SMTP 客户端用它代替网页登录密码；明文只在创建时返回一次，
 // 库中仅存 sha256（令牌为 256bit 随机值，无需慢哈希），Prefix 供界面展示。
 type MailToken struct {
-	ID        uint       `gorm:"primaryKey" json:"id"`
-	UserID    uint       `gorm:"index" json:"user_id"`
-	Name      string     `gorm:"size:120" json:"name"`
-	Prefix    string     `gorm:"size:20;index" json:"prefix"`
-	Hash      string     `gorm:"size:64;uniqueIndex" json:"-"`
-	LastUsed  *time.Time `json:"last_used"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	UserID       uint       `gorm:"index" json:"user_id"`
+	Name         string     `gorm:"size:120" json:"name"`
+	Prefix       string     `gorm:"size:20;index" json:"prefix"`
+	Hash         string     `gorm:"size:64;uniqueIndex" json:"-"`
+	AllowedCIDRs string     `gorm:"size:500" json:"allowed_cidrs"` // 允许使用的来源 CIDR，逗号分隔；空=不限
+	LastUsed     *time.Time `json:"last_used"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 // ---- 自托管域名/DNS ----

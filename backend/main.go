@@ -21,6 +21,7 @@ import (
 	"mailserver/internal/handler"
 	"mailserver/internal/imap"
 	"mailserver/internal/mailqueue"
+	"mailserver/internal/mcp"
 	"mailserver/internal/pop3"
 	"mailserver/internal/ratelimit"
 	"mailserver/internal/runtimecfg"
@@ -101,6 +102,7 @@ func main() {
 	}
 	mb.MQ = mq
 	defer mq.Close()
+	mcpSrv := &mcp.Server{DB: g, MQ: mq}
 	if err := mailqueue.Start(cfg.RedisURL, g, rt); err != nil {
 		log.Fatal("启动 asynq 失败：", err)
 	}
@@ -226,6 +228,7 @@ func main() {
 	mux.HandleFunc("/api/external/", cors(extBox.One))
 	mux.HandleFunc("/api/folders", cors(folderBox.List))
 	mux.HandleFunc("/api/folders/", cors(folderBox.One))
+	mux.HandleFunc("/mcp", cors(mcpSrv.Handler))
 	mux.HandleFunc("/api/outbox", cors(mb.Outbox))
 	mux.HandleFunc("/api/dkim", cors(dns.DKIM))
 	mux.HandleFunc("/api/domains", cors(dns.Domains))

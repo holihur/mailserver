@@ -33,7 +33,8 @@ func (h *TokenBox) List(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, ts)
 	case "POST":
 		var in struct {
-			Name string `json:"name"`
+			Name         string `json:"name"`
+			AllowedCIDRs string `json:"allowed_cidrs"`
 		}
 		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in)
 		name := strings.TrimSpace(in.Name)
@@ -43,12 +44,17 @@ func (h *TokenBox) List(w http.ResponseWriter, r *http.Request) {
 		if len([]rune(name)) > 60 {
 			name = string([]rune(name)[:60])
 		}
+		cidrs := strings.TrimSpace(in.AllowedCIDRs)
+		if err := auth.ValidCIDRs(cidrs); err != nil {
+			writeJSON(w, 400, map[string]string{"error": err.Error()})
+			return
+		}
 		plain, prefix, err := auth.NewMailToken()
 		if err != nil {
 			writeJSON(w, 500, map[string]string{"error": "生成失败"})
 			return
 		}
-		t := model.MailToken{UserID: uid, Name: name, Prefix: prefix, Hash: auth.HashMailToken(plain)}
+		t := model.MailToken{UserID: uid, Name: name, Prefix: prefix, Hash: auth.HashMailToken(plain), AllowedCIDRs: cidrs}
 		if err := h.DB.Create(&t).Error; err != nil {
 			writeJSON(w, 500, map[string]string{"error": "保存失败"})
 			return
@@ -56,33 +62,58 @@ func (h *TokenBox) List(w http.ResponseWriter, r *http.Request) {
 		// token 为一次性明文，前端需提示用户立即复制。
 		writeJSON(w, 201, map[string]any{
 			"id": t.ID, "name": t.Name, "prefix": t.Prefix,
-			"token": plain, "created_at": t.CreatedAt,
+			"allowed_cidrs": t.AllowedCIDRs,
+			"token":         plain, "created_at": t.CreatedAt,
 		})
 	default:
 		w.WriteHeader(405)
 	}
 }
 
-// DELETE /api/tokens/{id}
+// DELETE /api/tokens/{id}   PATCH /api/tokens/{id} {name, allowed_cidrs}
 func (h *TokenBox) One(w http.ResponseWriter, r *http.Request) {
 	uid, ok := uidOf(h.DB, w, r)
 	if !ok {
 		return
 	}
-	if r.Method != "DELETE" {
-		w.WriteHeader(405)
-		return
-	}
 	id := strings.TrimPrefix(r.URL.Path, "/api/tokens/")
 	id = strings.Split(id, "/")[0]
-	res := h.DB.Where("id = ? AND user_id = ?", id, uid).Delete(&model.MailToken{})
-	if res.Error != nil {
-		writeJSON(w, 500, map[string]string{"error": "删除失败"})
-		return
-	}
-	if res.RowsAffected == 0 {
+	var t model.MailToken
+	if err := h.DB.Where("id = ? AND user_id = ?", id, uid).First(&t).Error; err != nil {
 		writeJSON(w, 404, map[string]string{"error": "not found"})
 		return
 	}
-	writeJSON(w, 200, map[string]any{"ok": true})
+	switch r.Method {
+	case "DELETE":
+		h.DB.Delete(&t)
+		writeJSON(w, 200, map[string]any{"ok": true})
+	case "PATCH":
+		var in struct {
+			Name         *string `json:"name"`
+			AllowedCIDRs *string `json:"allowed_cidrs"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil {
+			writeJSON(w, 400, map[string]string{"error": "bad body"})
+			return
+		}
+		upd := map[string]any{}
+		if in.Name != nil {
+			upd["name"] = strings.TrimSpace(*in.Name)
+		}
+		if in.AllowedCIDRs != nil {
+			cidrs := strings.TrimSpace(*in.AllowedCIDRs)
+			if err := auth.ValidCIDRs(cidrs); err != nil {
+				writeJSON(w, 400, map[string]string{"error": err.Error()})
+				return
+			}
+			upd["allowed_cidrs"] = cidrs
+		}
+		if len(upd) > 0 {
+			h.DB.Model(&t).Updates(upd)
+		}
+		h.DB.First(&t, t.ID)
+		writeJSON(w, 200, t)
+	default:
+		w.WriteHeader(405)
+	}
 }

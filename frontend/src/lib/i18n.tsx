@@ -185,6 +185,10 @@ export const DICTS = {
     'token.lastUsed': '最近使用 {t}',
     'token.neverUsed': '尚未使用',
     'token.confirmRevoke': '吊销后该客户端将无法登录，确定？',
+    'token.cidrPlaceholder': '来源 CIDR 限制（可选），如 1.2.3.0/24, 10.0.0.1',
+    'token.cidrHint': '留空不限制；填写后仅这些 IP 段可用该密码（IMAP/POP3/SMTP/MCP 通用）。',
+    'token.mcpTitle': 'MCP（AI 客户端接入）',
+    'token.mcpHint': '在支持 MCP 的客户端里配置 HTTP 端点 {url}，Authorization 用上面的应用专用密码（PAT）。',
 
     'contacts.title': '联系人',
     'contacts.add': '新增联系人',
@@ -629,6 +633,10 @@ export const DICTS = {
     'token.lastUsed': 'Last used {t}',
     'token.neverUsed': 'Never used',
     'token.confirmRevoke': 'Revoking will sign this client out. Continue?',
+    'token.cidrPlaceholder': 'Source CIDR restriction (optional), e.g. 1.2.3.0/24, 10.0.0.1',
+    'token.cidrHint': 'Leave blank for no restriction; if set, only these IP ranges may use the password (IMAP/POP3/SMTP/MCP).',
+    'token.mcpTitle': 'MCP (AI client access)',
+    'token.mcpHint': 'Configure an HTTP MCP endpoint {url} in your MCP-capable client; use the app password (PAT) as the Authorization bearer.',
 
     'contacts.title': 'Contacts',
     'contacts.add': 'New contact',
