@@ -1,6 +1,12 @@
 package emailauth
 
 import (
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"strings"
@@ -123,5 +129,87 @@ func TestEvaluate(t *testing.T) {
 	res2 := Evaluate(noDmarc, net.ParseIP("1.2.3.4"), "x@example.org", []byte("From: x@example.org\r\n\r\nhi\r\n"))
 	if res2.DMARC != "none" {
 		t.Fatalf("无 DMARC 应 none，得 %q", res2.DMARC)
+	}
+}
+
+// RFC 6376 3.4.4：relaxed body 需把行内连续空白压成单个空格、删行尾空白、去末尾空行。
+func TestCanonBodyRelaxedRFC(t *testing.T) {
+	// 例子（3.4.5）："<SP>C<SP><CRLF>D<SP><HTAB><SP>E<CRLF><CRLF><CRLF>"
+	in := " C \r\nD \t E\r\n\r\n\r\n"
+	want := " C\r\nD E\r\n"
+	if got := canonBodyRelaxed(in); got != want {
+		t.Fatalf("canonBodyRelaxed=%q 期望 %q（Gmail 用 relaxed body，☝ 修复前会 DKIM fail）", got, want)
+	}
+	if got := canonBodyRelaxed(""); got != "" {
+		t.Fatalf("空体应为空，得到 %q", got)
+	}
+}
+
+// 独立实现的 relaxed body（用不同写法交叉校验）。
+func relaxedBodyIndependent(body string) string {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = strings.ReplaceAll(body, "\r", "\n")
+	lines := strings.Split(body, "\n")
+	for i, l := range lines {
+		for strings.Contains(l, "  ") || strings.Contains(l, "\t") {
+			l = strings.ReplaceAll(l, "  ", " ")
+			l = strings.ReplaceAll(l, "\t", " ")
+		}
+		lines[i] = strings.TrimRight(l, " ")
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\r\n") + "\r\n"
+}
+
+// 手写独立签名器：c=relaxed/relaxed，验证器必须能验过（含行内多空格与 Tab）。
+func TestVerifyDKIMRelaxedRelaxed(t *testing.T) {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txt := "v=DKIM1; k=rsa; p=" + base64.StdEncoding.EncodeToString(der)
+
+	headers := [][2]string{
+		{"From", "alice@gmail.com"},
+		{"To", "bob@example.com"},
+		{"Subject", "hi"},
+		{"Date", "Fri, 11 Jul 2003 21:00:37 -0700"},
+	}
+	body := "line1   with   spaces\r\n\tindented line\r\n\r\n"
+
+	bh := sha256.Sum256([]byte(relaxedBodyIndependent(body)))
+	names := []string{"from", "to", "subject", "date"}
+	dk := "v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com; s=20230601; h=" +
+		strings.Join(names, ":") + "; bh=" + base64.StdEncoding.EncodeToString(bh[:]) + "; b="
+
+	var input strings.Builder
+	for _, h := range headers {
+		input.WriteString(strings.ToLower(h[0]) + ":" + strings.Join(strings.Fields(h[1]), " ") + "\r\n")
+	}
+	input.WriteString("dkim-signature:" + strings.Join(strings.Fields(dk), " ") + "\r\n")
+	hh := sha256.Sum256([]byte(input.String()))
+	sig, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, hh[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var raw strings.Builder
+	for _, h := range headers {
+		raw.WriteString(h[0] + ": " + h[1] + "\r\n")
+	}
+	raw.WriteString("DKIM-Signature: " + dk + base64.StdEncoding.EncodeToString(sig) + "\r\n\r\n" + body)
+
+	l := fakeLookup(map[string]string{"20230601._domainkey.gmail.com": txt})
+	if got := VerifyDKIM(l, []byte(raw.String())); got != "pass" {
+		t.Fatalf("relaxed/relaxed 应 pass，得到 %s", got)
 	}
 }

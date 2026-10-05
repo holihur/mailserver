@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"net"
 	"net/mail"
+	"regexp"
 	"strings"
 )
 
@@ -315,7 +316,7 @@ func verifyOne(l Lookup, headers []hdr, body, sig string) bool {
 	if !strings.EqualFold(tags["bh"], base64.StdEncoding.EncodeToString(sum[:])) {
 		return false
 	}
-	// 已签名头
+	// 已签名头：simple 用原文（原大小写与折行），relaxed 用小写名 + 折叠空白
 	var b strings.Builder
 	used := map[string]int{}
 	for _, name := range strings.Split(tags["h"], ":") {
@@ -328,9 +329,17 @@ func verifyOne(l Lookup, headers []hdr, body, sig string) bool {
 			return false
 		}
 		used[name]++
-		b.WriteString(name + ":" + canonHeader(hc, headers[idx].value) + "\r\n")
+		if hc == "simple" {
+			b.WriteString(headers[idx].name + ":" + headers[idx].value + "\r\n")
+		} else {
+			b.WriteString(name + ":" + relax(headers[idx].value) + "\r\n")
+		}
 	}
-	b.WriteString("dkim-signature:" + canonHeader(hc, stripTag(sig, "b")) + "\r\n")
+	if hc == "simple" {
+		b.WriteString("DKIM-Signature:" + stripTagB(sig) + "\r\n")
+	} else {
+		b.WriteString("dkim-signature:" + relax(stripTagB(sig)) + "\r\n")
+	}
 	h := sha256.Sum256([]byte(b.String()))
 
 	txts, err := l.TXT(s + "._domainkey." + d)
@@ -517,29 +526,12 @@ func parseTags(s string) map[string]string {
 	return m
 }
 
-// stripTag 返回把 key 的值清空后的头（用于 b=）。
-func stripTag(sig, key string) string {
-	var parts []string
-	for _, p := range strings.Split(sig, ";") {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if strings.HasPrefix(strings.ToLower(p), key+"=") {
-			parts = append(parts, key+"=")
-		} else {
-			parts = append(parts, p)
-		}
-	}
-	return strings.Join(parts, "; ")
-}
+// stripTagB 将 DKIM-Signature 中 b= 的值置空，保留其余原文（供 canonicalization）。
+// 用正则而非解析重组，避免破坏原有折行/空白（simple 规范化依赖原文）。
+var bTagRe = regexp.MustCompile(`(?i)(b\s*=)[^;]*`)
 
-func canonHeader(canon, v string) string {
-	v = strings.TrimPrefix(v, " ")
-	if canon == "relaxed" {
-		return relax(v)
-	}
-	return strings.TrimRight(v, "\r\n")
+func stripTagB(sig string) string {
+	return bTagRe.ReplaceAllString(sig, "${1}")
 }
 
 func relax(v string) string {
@@ -567,7 +559,8 @@ func canonBodyRelaxed(body string) string {
 	body = strings.ReplaceAll(body, "\r", "\n")
 	lines := strings.Split(body, "\n")
 	for i := range lines {
-		lines[i] = strings.TrimRight(lines[i], " \t")
+		// RFC 6376 3.4.4：行内连续空白压成单个空格，行尾空白删除
+		lines[i] = collapseWSP(lines[i])
 	}
 	for len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
@@ -576,4 +569,24 @@ func canonBodyRelaxed(body string) string {
 		return ""
 	}
 	return strings.Join(lines, "\r\n") + "\r\n"
+}
+
+// collapseWSP 把一行内连续的空格/制表符压成单个空格，并去掉行首/行尾空白。
+func collapseWSP(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	pending := false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == ' ' || c == '\t' {
+			pending = true
+			continue
+		}
+		if pending {
+			b.WriteByte(' ')
+			pending = false
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
