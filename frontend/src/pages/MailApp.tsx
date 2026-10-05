@@ -485,6 +485,12 @@ export default function MailApp() {
                   {!m.read && !selectMode && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" aria-hidden="true" />}
                   <div className="flex items-center gap-2">
                     {selectMode && <input type="checkbox" readOnly checked={checked.includes(m.id)} className="pointer-events-none shrink-0" />}
+                    {!selectMode && (
+                      <span className={cn('grid place-items-center size-7 shrink-0 rounded-full text-[11px] font-semibold uppercase',
+                        m.read ? 'bg-muted text-muted-foreground' : 'bg-primary/15 text-primary')} aria-hidden="true">
+                        {((folder === 'sent' ? m.to : m.from) || '?').trim().slice(0, 1)}
+                      </span>
+                    )}
                     <span className={cn('truncate flex-1 text-sm', !m.read ? 'font-semibold' : 'text-foreground')}>
                       {m.subject || t('mail.noSubject')}
                     </span>
@@ -642,7 +648,7 @@ export default function MailApp() {
             <div className="flex items-center gap-2 text-white mb-2">
               <span className="truncate text-sm flex-1">{preview.name}</span>
               <a href={preview.dataUrl} download={preview.name} className="text-white/80 hover:text-white" aria-label={t('mail.download')}><Download size={16} /></a>
-              <button onClick={() => setPreview(null)} aria-label="close" className="text-white/80 hover:text-white"><X size={18} /></button>
+              <button onClick={() => setPreview(null)} autoFocus aria-label={t('common.close')} className="text-white/80 hover:text-white"><X size={18} /></button>
             </div>
             <div className="overflow-auto grid place-items-center">
               {preview.kind === 'image' && <img src={preview.dataUrl} alt={preview.name} className="max-h-[84vh] rounded" />}
