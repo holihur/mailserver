@@ -3,9 +3,10 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
-## [未发布] / Unreleased
+## [v0.18.0] - 2026-10-05
 
 ### 新增
+- **主题 / 语言下拉**：右上角统一「外观与语言」下拉（主题 浅色/深色/跟随系统 + 语言 中文/English），不再占底部页脚。
 - **规则回放**：收信规则可**回放到已有邮件**（`POST /api/rules/{id}/apply`、整站 `/api/admin/rules/{id}/apply`），可选源文件夹/数量，支持 **dry-run 预览**；影子规则仅预览。
 - **默认示例**：收信规则表单预填示例表达式并提供示例快捷项；Sieve 页新增示例脚本快捷项。
 - **JMAP Push**：`/jmap/eventsource` 改为真实 SSE 推送——建连发 `ping`，邮件变更（入站/发送/改删/批量/导入）时推送 `StateChange`（支持 `closeafter`/`ping` 与 keepalive）。
