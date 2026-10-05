@@ -29,6 +29,23 @@ const FOLDERS = [
 // 未读数超过 99 显示 99+（#38）。
 const fmtUnread = (n: number) => (n > 99 ? '99+' : String(n))
 
+// 写信浮动按钮：可拖动并记忆位置（#50）。
+const FAB_KEY = 'pref.fab'
+const FAB_SIZE = 56
+function loadFab(): { x: number; y: number } | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(FAB_KEY) || 'null')
+    return v && typeof v.x === 'number' && typeof v.y === 'number' ? v : null
+  } catch { return null }
+}
+function clampFab(x: number, y: number, w = FAB_SIZE, h = FAB_SIZE) {
+  const pad = 8
+  return {
+    x: Math.min(Math.max(pad, x), Math.max(pad, window.innerWidth - w - pad)),
+    y: Math.min(Math.max(pad, y), Math.max(pad, window.innerHeight - h - pad)),
+  }
+}
+
 export default function MailApp() {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -53,6 +70,8 @@ export default function MailApp() {
   const [installEvt, setInstallEvt] = useState<any>(null)
   const [installDismissed, setInstallDismissed] = useState(false)
   const [offline, setOffline] = useState(typeof navigator !== 'undefined' && !navigator.onLine)
+  const [fab, setFab] = useState(() => loadFab() || clampFab(window.innerWidth - FAB_SIZE - 16, window.innerHeight - FAB_SIZE - 88))
+  const fabDrag = useRef<{ x0: number; y0: number; dx: number; dy: number; moved: boolean; w: number; h: number } | null>(null)
   const prevUnread = useRef(0)
   const touch = useRef<{ x: number; moved: boolean }>({ x: 0, moved: false })
   const firstQ = useRef(true)
@@ -164,6 +183,13 @@ export default function MailApp() {
     window.addEventListener('online', on)
     window.addEventListener('offline', off)
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
+
+  // 视口变化时把浮动按钮拉回可见范围（#50）
+  useEffect(() => {
+    const onResize = () => setFab(f => clampFab(f.x, f.y))
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
   // Gmail 风格键盘流（#48）：列表输入框内不拦截；写信/预览打开时不生效。
@@ -332,8 +358,32 @@ export default function MailApp() {
     } catch (err: any) { toast(err.message, { type: 'error' }) } finally { input.value = '' }
   }
 
+  // 拖动浮动写信按钮：未移动则视为点击（打开写信），移动则吸附到最近一侧。
+  function fabDown(e: any) {
+    const el = e.currentTarget as HTMLElement
+    try { el.setPointerCapture(e.pointerId) } catch {}
+    fabDrag.current = { x0: e.clientX, y0: e.clientY, dx: e.clientX - fab.x, dy: e.clientY - fab.y, moved: false, w: el.offsetWidth, h: el.offsetHeight }
+  }
+  function fabMove(e: any) {
+    const d = fabDrag.current
+    if (!d) return
+    if (!d.moved && (Math.abs(e.clientX - d.x0) > 6 || Math.abs(e.clientY - d.y0) > 6)) d.moved = true
+    if (d.moved) setFab(clampFab(e.clientX - d.dx, e.clientY - d.dy, d.w, d.h))
+  }
+  function fabUp(e: any) {
+    const d = fabDrag.current
+    fabDrag.current = null
+    if (!d) return
+    if (!d.moved) { setShowCompose(true); return }
+    const x = e.clientX - d.dx
+    const y = e.clientY - d.dy
+    const snapped = clampFab(x + d.w / 2 < window.innerWidth / 2 ? 12 : window.innerWidth - d.w - 12, y, d.w, d.h)
+    setFab(snapped)
+    try { localStorage.setItem(FAB_KEY, JSON.stringify(snapped)) } catch {}
+  }
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-dvh bg-background flex flex-col overflow-hidden">
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
         <b className="shrink-0 truncate max-w-[45vw] flex items-center gap-1.5"><Mail size={16} />{BRAND}</b>
         <div className="flex-1" />
@@ -392,8 +442,9 @@ export default function MailApp() {
 
       {/* 移动端：底部悬浮写信按钮（拇指区，适配安全区） */}
       <input ref={importRef} type="file" accept=".mbox,.eml,message/rfc822" className="hidden" onChange={onImport} />
-      <button onClick={() => setShowCompose(true)} aria-label={t('mail.compose')}
-        className="sm:hidden fixed right-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-30 grid place-items-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform">
+      <button onPointerDown={fabDown} onPointerMove={fabMove} onPointerUp={fabUp} onPointerCancel={() => { fabDrag.current = null }}
+        style={{ left: fab.x, top: fab.y }} aria-label={t('mail.compose')}
+        className="sm:hidden fixed z-30 grid place-items-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform touch-none select-none cursor-grab">
         <PenLine size={22} />
       </button>
 
@@ -425,7 +476,7 @@ export default function MailApp() {
 
         <section className="flex-1 min-w-0 flex">
           {/* 列表 */}
-          <div className={cn('w-full md:w-80 md:shrink-0 border-r border-border flex-col',
+          <div className={cn('w-full md:w-80 md:shrink-0 border-r border-border flex-col min-h-0',
             view === 'read' ? 'hidden md:flex' : 'flex')}>
             <div className="p-3 border-b border-border flex flex-wrap gap-2">
               <div className="relative flex-1">
@@ -522,7 +573,7 @@ export default function MailApp() {
                 )}
               </div>
             )}
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 min-h-0 overflow-auto overscroll-contain">
               {loading && <SkeletonList rows={6} />}
               {!loading && items.map(m => (
                 <div key={m.id} role="button" tabIndex={0} aria-current={sel?.id === m.id ? 'true' : undefined}
@@ -601,7 +652,7 @@ export default function MailApp() {
           </div>
 
           {/* 详情 */}
-          <div className={cn('flex-1 min-w-0 p-4', view === 'list' && 'hidden md:block')}>
+          <div className={cn('flex-1 min-w-0 p-4 overflow-auto overscroll-contain', view === 'list' && 'hidden md:block')}>
             {!sel ? (
               <p className="text-muted-foreground text-sm mt-10 text-center">{t('mail.selectHint')}</p>
             ) : (

@@ -3,6 +3,14 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [未发布] / Unreleased
+
+### 新增
+- **写信浮动按钮可拖动**：移动端 FAB 支持拖动、松手吸附到最近侧、位置记忆（localStorage）、视口变化自动拉回；轻点仍打开写信。
+
+### 修复
+- **移动端页面高度/滚动条**：邮件主界面改用固定 `h-dvh` + `overflow-hidden`，仅列表/阅读区内部滚动（`overscroll-contain`），消除整页滚动条；次级页/后台/登录改用 `min-h-dvh`，适配 iOS 动态工具栏。
+
 ## [v0.18.0] - 2026-10-05
 
 ### 新增

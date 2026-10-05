@@ -53,7 +53,7 @@ export default function Login() {
   }
 
   return (
-    <div className="relative min-h-screen flex flex-col bg-muted/40">
+    <div className="relative min-h-dvh flex flex-col bg-muted/40">
       <div className="absolute top-3 right-3 z-10"><SettingsMenu /></div>
       <div className="flex-1 grid place-items-center p-4">
       <Card className="w-full max-w-sm p-6 space-y-4">

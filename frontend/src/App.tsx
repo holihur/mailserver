@@ -30,7 +30,7 @@ const authed = () => !!localStorage.getItem('token')
 
 function Loading() {
   return (
-    <div className="min-h-screen grid place-items-center bg-background text-muted-foreground">
+    <div className="min-h-dvh grid place-items-center bg-background text-muted-foreground">
       <Loader2 className="animate-spin" />
     </div>
   )
