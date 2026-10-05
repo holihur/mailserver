@@ -41,6 +41,36 @@ func (a Attachment) Bytes() []byte {
 	return nil
 }
 
+// RealSize 返回附件解码后的真实字节数：优先元数据 Size，其次 blob 文件大小，
+// 最后按 base64 解码长度估算。避免把 base64 长度或 blob 元数据当成占用。
+func (a Attachment) RealSize() int64 {
+	if a.Size > 0 {
+		return int64(a.Size)
+	}
+	if a.Blob != "" && blobStore != nil {
+		if b, err := blobStore.Get(a.Blob); err == nil {
+			return int64(len(b))
+		}
+	}
+	if a.Data != "" {
+		if b, err := base64.StdEncoding.DecodeString(a.Data); err == nil {
+			return int64(len(b))
+		}
+		// 解码失败时退化为 base64 长度估算，保证配额不会为 0。
+		return int64(len(a.Data)) * 3 / 4
+	}
+	return 0
+}
+
+// AttachmentsBytes 返回一段附件 JSON 中所有附件的真实字节数之和。
+func AttachmentsBytes(attsJSON string) int64 {
+	var sum int64
+	for _, a := range ParseAttachments(attsJSON) {
+		sum += a.RealSize()
+	}
+	return sum
+}
+
 // Blobify 把 base64 附件落盘为 blob，返回新 JSON；无 store 时原样返回。
 func Blobify(attsJSON string) string {
 	if blobStore == nil || strings.TrimSpace(attsJSON) == "" {
@@ -54,6 +84,7 @@ func Blobify(attsJSON string) string {
 				if id, err := blobStore.Put(b); err == nil {
 					atts[i].Blob = id
 					atts[i].Data = ""
+					atts[i].Size = len(b)
 					changed = true
 				}
 			}

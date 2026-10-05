@@ -20,11 +20,12 @@
 - **进阶加固**：#4 补 **JMAP/MCP 的 HTTP 层 IP 限流**（Redis，120/分）；#5 自更新增加 **cosign 运行时验签**（`SELFUPDATE_REQUIRE_SIGNATURE=1` 强制）；#7 入站 SMTP 增加 **STARTTLS**；#9 增加**登录历史 / 新 IP 邮件提醒 / 管理员重置后强制改密 / 逐会话 jti 踢出 / 一键退出所有设备**；#12 **新账号 24h 降限额**、`[ALERT]` 日志、后台「今日已发」。
 
 ### 新增
-- **附件 blob 落盘**（#6）：新增内容寻址 `internal/blob`（sha256 去重），入站附件改为落盘（DB 仅存元数据 + blob id），读写路径自动兼容旧 base64；提供 `mailserver migrate-blobs`（存量迁移）与每日 blob GC。
-- **一键 / 定时备份恢复**（#13）：`mailserver backup [文件]` / `restore <文件>` 导出 DB 全表 JSON + `DATA_DIR`（含证书/blob）为 tar.gz；`BACKUP_DIR` 启用定时备份 + 保留份数 + `BACKUP_HOOK` 异地（如 rclone）。
-- **正文全文检索**（#14）：搜索覆盖 **正文**；启用 `pg_trgm` + GIN 索引加速 `ILIKE` 子串搜索（扩展不可用时自动退化）。
-- **投递可达性**（#17）：MTA-STS（`MTA_STS_MODE` 提供 `/.well-known/mta-sts.txt`）；后台可查 MTA-STS/TLS-RPT/DANE(TLSA) 建议记录；`DNSSEC_ENABLE=1` 启用**内置 DNS 完整签名**：KSK/ZSK + 正向应答 RRSIG + DNSKEY（KSK 自签）+ **否定应答（NXDOMAIN/NODATA，支持 NSEC，`DNSSEC_NSEC3=1` 切换为 NSEC3）**，启动日志给出 DS；DS/TLSA 等建议记录支持**后台一键写入 DNS**。
-- **工程护栏**（#20）：Dependabot、golangci-lint（CI，仅新版问题）、GitHub **CodeQL**、前端 **vitest** 单测（CI 运行）。
+- **附件 blob 落盘**（#6）：新增内容寻址 `internal/blob`（sha256 去重），入站附件改为落盘（DB 仅存元数据 + blob id），读写路径自动兼容旧 base64；提供 `mailserver migrate-blobs`（存量迁移）与每日 blob GC。**配额改为按附件解码后真实字节统计**（正文 + HTML + 附件 `size` 求和，blob 化不再少计），并新增 `mailserver fix-attachment-sizes` 回填存量（`migrate-blobs` 会一并执行）。
+- **一键 / 定时备份恢复**（#13）：`mailserver backup [文件]` / `restore <文件>` 导出 DB 全表 JSON + `DATA_DIR`（含证书/blob）为 tar.gz；`BACKUP_DIR` 启用定时备份 + 保留份数 + `BACKUP_HOOK` 异地（如 rclone）。后台新增「备份」页：可调目录/间隔/保留份数、一键立即备份、列表（大小/时间/SHA256/加密状态）、下载/删除、二次确认恢复；备份整包用站内主密钥 **AES-256-GCM 流式加密**；`restore` 前**自动另存当前状态**（防恢复包损坏），并拒绝备份包内的路径穿越。
+- **正文全文检索**（#14）：搜索覆盖 **正文**；启用 `pg_trgm` + GIN 索引加速 `ILIKE` 子串搜索（扩展不可用时自动退化）。新增统一检索包 `internal/mailsearch`：网页 `q=` 支持 **`from:` / `to:` / `subject:` / `body:` / `after:` / `before:` / `has:attachment`**（含引号值）；IMAP `SEARCH TEXT/BODY/...` 改为**数据库粗筛 + 精确匹配**并还原邮箱序号（不再受 500 封快照与内存全扫限制）；JMAP `Email/query` 的 `text/subject/from/to` 共用同一实现（大小写不敏感）。
+- **投递可达性**（#17）：MTA-STS（`MTA_STS_MODE` 提供 `/.well-known/mta-sts.txt`）；后台可查 MTA-STS/TLS-RPT/DANE(TLSA) 建议记录；`DNSSEC_ENABLE=1` 启用**内置 DNS 完整签名**：KSK/ZSK + 正向应答 RRSIG + DNSKEY（KSK 自签）+ **否定应答（NXDOMAIN/NODATA，支持 NSEC，`DNSSEC_NSEC3=1` 切换为 NSEC3）**，启动日志给出 DS；DS/TLSA 等建议记录支持**后台一键写入 DNS**。新增**出站 DANE 验证**（`DANE_ENABLE=1`，`DANE_RESOLVER` 可指定会置 AD 的递归解析器）：直连对方 MX 时若其 `_25._tcp` TLSA 经 DNSSEC 验证通过，则**强制 STARTTLS 并校验证书（RFC 6698 / RFC 7672）**，不匹配或对端不支持 STARTTLS 则退回队列重试，**绝不降级明文**。
+- **工程护栏**（#20）：Dependabot、golangci-lint（CI，仅新版问题）、GitHub **CodeQL**、前端 **vitest** 单测（CI 运行）。补齐：CI 加 **`govulncheck`**（依赖 CVE 门禁）、**`docker build`**（不推送，仅验证 Dockerfile + 内嵌前端）与 **`shellcheck install.sh`**；发布前 **Trivy 镜像扫描**（HIGH/CRITICAL 阻断）；前端新增 **ESLint**（`pnpm lint`）与核心文件（`api/client`、`lib/utils`）**覆盖率门**；新增 **`.github/ISSUE_TEMPLATE/`**（bug / 功能 / 安全三模板）、**`SECURITY.md`**（私密报告渠道 + 响应 SLA）与 **`CONTRIBUTING.md`**。
+- **CI 修复与工具链升级**：后端测试加 Redis 服务，且 `mailqueue` 配额测试在 Redis 不可达时正确 **skip**（此前 LLM 环境下因 `NewClient` 不探活而误判失败）；Go 升级到 **1.27**，依赖全面升级到最新稳定版（`x/net`、`x/crypto`、`golang-jwt/jwt/v5`、`go-redis/v9`、`pgx`、`asynq`、`gorm` 等），**`govulncheck` 0 漏洞**；golangci-lint 迁移到 **v2**（action v8 + v2 配置）；修复 Go 1.27 `go vet` 新报的非常量格式串问题。
 
 ### 修复
 - **入站 SMTP 多收件人静默丢信**（#1）：`RCPT TO` 改为逐个收集并逐个投递，`MAIL FROM`/`RSET` 清空收件人，另补 DATA 段 `.` 透明传输；补单测。

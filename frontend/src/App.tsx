@@ -17,6 +17,7 @@ const AdminAudit = lazy(() => import('./pages/AdminAudit'))
 const AdminRules = lazy(() => import('./pages/AdminRules'))
 const AdminRoutes = lazy(() => import('./pages/AdminRoutes'))
 const AdminAliases = lazy(() => import('./pages/AdminAliases'))
+const AdminBackup = lazy(() => import('./pages/AdminBackup'))
 const Contacts = lazy(() => import('./pages/Contacts'))
 const Accounts = lazy(() => import('./pages/Accounts'))
 const Rules = lazy(() => import('./pages/Rules'))
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/admin/rules" element={authed() ? <AdminRules /> : <Navigate to="/login" />} />
           <Route path="/admin/routes" element={authed() ? <AdminRoutes /> : <Navigate to="/login" />} />
           <Route path="/admin/aliases" element={authed() ? <AdminAliases /> : <Navigate to="/login" />} />
+          <Route path="/admin/backup" element={authed() ? <AdminBackup /> : <Navigate to="/login" />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

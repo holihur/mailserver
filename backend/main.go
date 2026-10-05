@@ -22,6 +22,7 @@ import (
 	"mailserver/internal/blob"
 	"mailserver/internal/certstore"
 	"mailserver/internal/config"
+	"mailserver/internal/dane"
 	"mailserver/internal/db"
 	"mailserver/internal/deliver"
 	"mailserver/internal/dnsserver"
@@ -79,6 +80,7 @@ func main() {
 			fmt.Println("  backup [文件]   备份数据库与数据目录到 tar.gz（默认自动命名）")
 			fmt.Println("  restore <文件>  从备份恢复")
 			fmt.Println("  migrate-blobs   把存量 base64 附件迁移为 blob")
+			fmt.Println("  fix-attachment-sizes  回填存量附件的真实字节数（配额统计用）")
 			fmt.Println("  gc-blobs        清理未被引用的 blob 文件")
 			return
 		case "migrate-blobs":
@@ -98,6 +100,27 @@ func main() {
 				log.Fatal(err)
 			}
 			fmt.Printf("已迁移 %d 封邮件的附件到 blob\n", n)
+			if n2, err := message.BackfillAttachmentSizes(g); err == nil {
+				fmt.Printf("已回填 %d 封邮件的附件大小\n", n2)
+			}
+			return
+		case "fix-attachment-sizes":
+			_ = godotenv.Load()
+			c := config.Load()
+			g, err := db.Open(c.DatabaseURL)
+			if err != nil {
+				log.Fatal(err)
+			}
+			bs, err := blob.New(filepath.Join(c.DataDir, "blobs"))
+			if err != nil {
+				log.Fatal(err)
+			}
+			message.SetBlobStore(bs)
+			n, err := message.BackfillAttachmentSizes(g)
+			if err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("已回填 %d 封邮件的附件大小\n", n)
 			return
 		case "gc-blobs":
 			_ = godotenv.Load()
@@ -128,7 +151,7 @@ func main() {
 			if len(os.Args) > 2 {
 				out = os.Args[2]
 			}
-			if err := backup.Create(g, c.DataDir, out); err != nil {
+			if err := backup.Create(g, c.DataDir, out, []byte(c.JWTSecret)); err != nil {
 				log.Fatal("备份失败: ", err)
 			}
 			fmt.Println("备份完成:", out)
@@ -144,10 +167,11 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			if err := backup.Restore(g, c.DataDir, os.Args[2]); err != nil {
+			safety, err := backup.Restore(g, c.DataDir, os.Args[2], []byte(c.JWTSecret))
+			if err != nil {
 				log.Fatal("恢复失败: ", err)
 			}
-			fmt.Println("恢复完成")
+			fmt.Println("恢复完成（恢复前状态已备份到", safety, "）")
 			return
 		}
 	}
@@ -172,6 +196,9 @@ func main() {
 	}
 	auth.SetSecret(cfg.JWTSecret)
 	secret.SetKey(cfg.JWTSecret)
+	// 出站 DANE：对方 TLSA + DNSSEC 验证通过时强制证书匹配
+	dane.Enabled = cfg.DANEEnable
+	dane.Resolver = cfg.DANEResolver
 	// 附件内容寻址存储（DATA_DIR/blobs）；不可用则退化为 base64
 	if bs, err := blob.New(filepath.Join(cfg.DataDir, "blobs")); err != nil {
 		log.Println("blob 存储初始化失败，附件仍用 base64:", err)
@@ -285,6 +312,7 @@ func main() {
 	tlsConf := cert.TLSConfig()
 
 	ad := &handler.Admin{DB: g, AdminEmails: cfg.AdminEmails, DNS: dns, RT: rt, Cert: cert, CertDir: cfg.CertDir,
+		DataDir: cfg.DataDir, MasterKey: []byte(cfg.JWTSecret),
 		Version: version, Commit: commit, Date: date, Repo: os.Getenv("MAILSERVER_REPO")}
 	hc := health.New(cfg.DataDir)
 	hc.Start(20 * time.Second)
@@ -303,11 +331,15 @@ func main() {
 	go mailsmtp.Serve(":"+cfg.SMTPport, g, maxMsg, cfg.DMARCEnforce, tlsConf)
 	go external.Start(g)
 	handler.StartAuditRetention(g)
-	// 定时备份 + 异地 hook（rclone 等）
-	if cfg.BackupDir != "" {
-		go func() {
-			for {
-				if out, err := backup.Scheduled(g, cfg.DataDir, cfg.BackupDir, cfg.BackupKeep); err != nil {
+	// 定时备份 + 异地 hook（rclone 等）；目录/间隔/保留份数可在后台「备份」页调整
+	go func() {
+		for {
+			dir := rt.BackupDir()
+			if dir == "" {
+				dir = cfg.BackupDir
+			}
+			if dir != "" {
+				if out, err := backup.Scheduled(g, cfg.DataDir, dir, rt.BackupKeep(), []byte(cfg.JWTSecret)); err != nil {
 					log.Println("定时备份失败:", err)
 				} else {
 					log.Println("定时备份完成:", out)
@@ -319,10 +351,10 @@ func main() {
 						}
 					}
 				}
-				time.Sleep(time.Duration(cfg.BackupInterval) * time.Hour)
 			}
-		}()
-	}
+			time.Sleep(rt.BackupIntervalHours())
+		}
+	}()
 	go mailsmtp.ServeSubmit(":"+cfg.SubmitPort, host, g, tlsConf, maxMsg)
 	go pop3.Serve(":"+cfg.Pop3Port, host, g, tlsConf)
 	go imap.Serve(":"+cfg.ImapPort, host, g, tlsConf)
@@ -495,6 +527,8 @@ func main() {
 	mux.HandleFunc("/api/admin/providers", cors(ad.Providers))
 	mux.HandleFunc("/api/admin/providers/", cors(ad.ProviderOne))
 	mux.HandleFunc("/api/admin/settings", cors(ad.Settings))
+	mux.HandleFunc("/api/admin/backups", cors(ad.Backups))
+	mux.HandleFunc("/api/admin/backups/restore", cors(ad.RestoreBackup))
 	mux.HandleFunc("/api/admin/relay/test", cors(ad.RelayTest))
 	mux.HandleFunc("/api/admin/tls", cors(ad.TLS))
 	mux.HandleFunc("/api/admin/tls/manual", cors(ad.TLSManual))

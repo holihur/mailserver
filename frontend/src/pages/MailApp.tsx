@@ -322,7 +322,7 @@ export default function MailApp() {
             <div className="p-3 border-b border-border flex gap-2">
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-2 top-2.5 text-muted-foreground" />
-                <Input className="pl-7 pr-7" placeholder={t('mail.search')} value={q}
+                <Input className="pl-7 pr-7" placeholder={t('mail.search')} title={t('mail.searchHint')} value={q}
                   onChange={e => { setQ(e.target.value); setShowHistory(true) }}
                   onFocus={() => setShowHistory(true)}
                   onBlur={() => { setShowHistory(false); rememberSearch(q) }}

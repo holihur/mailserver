@@ -14,4 +14,18 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    environment: 'node',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: ['src/**/*.test.*', 'src/main.tsx', 'src/**/*.d.ts'],
+      // 核心文件覆盖率门（#20）：api/client 与 lib/utils 必须有单测兜底。
+      thresholds: {
+        'src/api/client.ts': { statements: 90, branches: 80, lines: 90 },
+        'src/lib/utils.ts': { statements: 80, branches: 70, functions: 80, lines: 80 },
+      },
+    },
+  },
 })

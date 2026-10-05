@@ -11,7 +11,7 @@ COPY frontend/ .
 RUN pnpm run build
 
 # --- 2) 构建后端（把前端嵌入二进制）---
-FROM golang:1.22-alpine AS build
+FROM golang:1.27-alpine AS build
 # 纯 Go 构建（PostgreSQL 驱动），无需 CGO/gcc
 ENV CGO_ENABLED=0 GOFLAGS=-p=1
 WORKDIR /app

@@ -11,6 +11,7 @@ import (
 	"mailserver/internal/auth"
 	"mailserver/internal/contacts"
 	"mailserver/internal/external"
+	"mailserver/internal/mailsearch"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/schedule"
@@ -77,8 +78,7 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 	}
 	tx := m.DB.Where("user_id = ? AND folder = ?", uid, folder).Order(order)
 	if q != "" {
-		like := "%" + q + "%"
-		tx = tx.Where("subject ILIKE ? OR \"from\" ILIKE ? OR \"to\" ILIKE ? OR body ILIKE ?", like, like, like, like)
+		tx = mailsearch.Parse(q).Apply(tx)
 	}
 	var total int64
 	tx.Model(&model.Mail{}).Count(&total)

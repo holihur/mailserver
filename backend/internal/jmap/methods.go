@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"mailserver/internal/contacts"
+	"mailserver/internal/mailsearch"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 )
@@ -260,17 +261,16 @@ func (s *Server) emailQuery(u *model.User, acct string, args json.RawMessage) (a
 		tx = tx.Where("folder = ?", mb)
 	}
 	if txt, ok := f["text"].(string); ok && txt != "" {
-		like := "%" + txt + "%"
-		tx = tx.Where("subject LIKE ? OR \"from\" LIKE ? OR \"to\" LIKE ? OR body LIKE ?", like, like, like, like)
+		tx = mailsearch.Query{Terms: []mailsearch.Term{{Value: txt}}}.Apply(tx)
 	}
 	if v, ok := f["subject"].(string); ok && v != "" {
-		tx = tx.Where("subject LIKE ?", "%"+v+"%")
+		tx = mailsearch.Query{Terms: []mailsearch.Term{{Field: "subject", Value: v}}}.Apply(tx)
 	}
 	if v, ok := f["from"].(string); ok && v != "" {
-		tx = tx.Where("\"from\" LIKE ?", "%"+v+"%")
+		tx = mailsearch.Query{Terms: []mailsearch.Term{{Field: "from", Value: v}}}.Apply(tx)
 	}
 	if v, ok := f["to"].(string); ok && v != "" {
-		tx = tx.Where("\"to\" LIKE ?", "%"+v+"%")
+		tx = mailsearch.Query{Terms: []mailsearch.Term{{Field: "to", Value: v}}}.Apply(tx)
 	}
 	if hk, ok := f["hasKeyword"].(string); ok {
 		switch hk {

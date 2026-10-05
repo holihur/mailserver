@@ -30,6 +30,8 @@ type Admin struct {
 	RT          *runtimecfg.Store
 	Cert        *certstore.Store // 动态 TLS 证书
 	CertDir     string           // 证书 / ACME 账号缓存目录
+	DataDir     string           // DATA_DIR（备份/恢复）
+	MasterKey   []byte           // 站内主密钥（备份整包加密）
 	Version     string           // 当前版本（注入自 main）
 	Commit      string
 	Date        string

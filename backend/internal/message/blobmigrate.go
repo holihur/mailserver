@@ -1,6 +1,7 @@
 package message
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"mailserver/internal/model"
@@ -28,6 +29,55 @@ func MigrateAttachments(db *gorm.DB) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// BackfillAttachmentSizes 回填历史邮件附件元数据中的真实字节数 Size（幂等），
+// 返回被更新的邮件数。blob 附件按文件大小、旧 base64 附件按解码长度计算。
+// 配额改为按 Size 求和后，必须对存量数据执行一次，避免历史附件被少计。
+func BackfillAttachmentSizes(db *gorm.DB) (int, error) {
+	var updated int
+	var lastID uint
+	const batch = 200
+	for {
+		var mails []model.Mail
+		if err := db.Select("id", "attachments").
+			Where("id > ? AND attachments <> '' AND attachments <> '[]'", lastID).
+			Order("id").Limit(batch).Find(&mails).Error; err != nil {
+			return updated, err
+		}
+		if len(mails) == 0 {
+			break
+		}
+		for _, m := range mails {
+			lastID = m.ID
+			atts := ParseAttachments(m.Attachments)
+			if len(atts) == 0 {
+				continue
+			}
+			changed := false
+			for i := range atts {
+				if atts[i].Size > 0 {
+					continue
+				}
+				if sz := atts[i].RealSize(); sz > 0 {
+					atts[i].Size = int(sz)
+					changed = true
+				}
+			}
+			if !changed {
+				continue
+			}
+			b, err := json.Marshal(atts)
+			if err != nil {
+				continue
+			}
+			if err := db.Model(&model.Mail{}).Where("id = ?", m.ID).Update("attachments", string(b)).Error; err != nil {
+				return updated, err
+			}
+			updated++
+		}
+	}
+	return updated, nil
 }
 
 // GCBlobs 删除未被任何邮件引用的 blob 文件，返回删除数。

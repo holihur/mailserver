@@ -43,6 +43,10 @@ const (
 	KeyOIDCClientID     = "oidc_client_id"
 	KeyOIDCClientSecret = "oidc_client_secret"
 	KeyOIDCAutoCreate   = "oidc_auto_create" // 首次登录是否自动建账号
+
+	KeyBackupDir      = "backup_dir"            // 定时备份目录（空=关闭定时备份）
+	KeyBackupInterval = "backup_interval_hours" // 备份间隔（小时，默认 24）
+	KeyBackupKeep     = "backup_keep"           // 保留份数（默认 7）
 )
 
 // Relay 外发中继配置。
@@ -82,15 +86,18 @@ func newStore(cfg config.Config, rows []model.Setting) *Store {
 		s.vals[r.Key] = r.Value
 	}
 	defaults := map[string]string{
-		KeyMailHost:    cfg.Host,
-		KeyAdminEmails: cfg.AdminEmails,
-		KeyRelayHost:   cfg.RelayHost,
-		KeyRelayPort:   cfg.RelayPort,
-		KeyRelayUser:   cfg.RelayUser,
-		KeyRelayPass:   cfg.RelayPass,
-		KeyRelayFrom:   cfg.RelayFrom,
-		KeyDKIMDomain:  cfg.DKIMDomain,
-		KeyDKIMSel:     cfg.DKIMSelector,
+		KeyMailHost:       cfg.Host,
+		KeyAdminEmails:    cfg.AdminEmails,
+		KeyRelayHost:      cfg.RelayHost,
+		KeyRelayPort:      cfg.RelayPort,
+		KeyRelayUser:      cfg.RelayUser,
+		KeyRelayPass:      cfg.RelayPass,
+		KeyRelayFrom:      cfg.RelayFrom,
+		KeyDKIMDomain:     cfg.DKIMDomain,
+		KeyDKIMSel:        cfg.DKIMSelector,
+		KeyBackupDir:      cfg.BackupDir,
+		KeyBackupInterval: backupDefault(cfg.BackupInterval, 24),
+		KeyBackupKeep:     backupDefault(cfg.BackupKeep, 7),
 	}
 	for k, v := range defaults {
 		if _, ok := s.vals[k]; !ok {
@@ -163,6 +170,29 @@ func (s *Store) OIDCClientID() string     { return s.get(KeyOIDCClientID) }
 func (s *Store) OIDCClientSecret() string { return s.get(KeyOIDCClientSecret) }
 func (s *Store) OIDCAutoCreate() bool     { return parseBool(s.get(KeyOIDCAutoCreate)) }
 
+// BackupDir 定时备份目录；为空表示关闭定时备份。
+func (s *Store) BackupDir() string { return strings.TrimSpace(s.get(KeyBackupDir)) }
+
+// BackupIntervalHours 定时备份间隔小时，默认 24，范围 1~8760。
+func (s *Store) BackupIntervalHours() time.Duration {
+	n := atoiClamp(s.get(KeyBackupInterval), 24, 1, 8760)
+	return time.Duration(n) * time.Hour
+}
+
+// BackupKeep 备份保留份数，默认 7，范围 1~3650。
+func (s *Store) BackupKeep() int { return atoiClamp(s.get(KeyBackupKeep), 7, 1, 3650) }
+
+func atoiClamp(v string, def, min, max int) int {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < min {
+		return def
+	}
+	if n > max {
+		return max
+	}
+	return n
+}
+
 // AutoUpdate 是否自动安装更新（默认关闭；关闭时仍会按间隔检查并记录日志）。
 func (s *Store) AutoUpdate() bool { return parseBool(s.get(KeyAutoUpdate)) }
 
@@ -189,6 +219,14 @@ func parseBool(v string) bool {
 		return true
 	}
 	return false
+}
+
+// backupDefault 把环境变量中的数字配置转为字符串，缺省/非法时用 def。
+func backupDefault(v, def int) string {
+	if v <= 0 {
+		v = def
+	}
+	return strconv.Itoa(v)
 }
 
 // Relay 返回当前外发中继配置。
@@ -285,6 +323,9 @@ func (s *Store) Snapshot() map[string]any {
 		"oidc_client_id":         s.vals[KeyOIDCClientID],
 		"oidc_client_secret_set": s.vals[KeyOIDCClientSecret] != "",
 		"oidc_auto_create":       parseBool(s.vals[KeyOIDCAutoCreate]),
+		"backup_dir":             s.vals[KeyBackupDir],
+		"backup_interval_hours":  atoiClamp(s.vals[KeyBackupInterval], 24, 1, 8760),
+		"backup_keep":            atoiClamp(s.vals[KeyBackupKeep], 7, 1, 3650),
 	}
 }
 

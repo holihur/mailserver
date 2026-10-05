@@ -42,6 +42,9 @@ var settingKeys = map[string]bool{
 	runtimecfg.KeyOIDCClientID:     true,
 	runtimecfg.KeyOIDCClientSecret: true,
 	runtimecfg.KeyOIDCAutoCreate:   true,
+	runtimecfg.KeyBackupDir:        true,
+	runtimecfg.KeyBackupInterval:   true,
+	runtimecfg.KeyBackupKeep:       true,
 }
 
 // GET /api/admin/settings   PATCH /api/admin/settings
@@ -88,6 +91,26 @@ func (a *Admin) Settings(w http.ResponseWriter, r *http.Request) {
 				}
 				if n > 1440 {
 					n = 1440
+				}
+				v = strconv.Itoa(n)
+			}
+			if k == runtimecfg.KeyBackupInterval {
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 {
+					n = 24
+				}
+				if n > 8760 {
+					n = 8760
+				}
+				v = strconv.Itoa(n)
+			}
+			if k == runtimecfg.KeyBackupKeep {
+				n, err := strconv.Atoi(v)
+				if err != nil || n < 1 {
+					n = 7
+				}
+				if n > 3650 {
+					n = 3650
 				}
 				v = strconv.Itoa(n)
 			}

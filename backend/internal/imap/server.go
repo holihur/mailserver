@@ -18,6 +18,7 @@ import (
 
 	"mailserver/internal/auth"
 	"mailserver/internal/authguard"
+	"mailserver/internal/mailsearch"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
 	"mailserver/internal/quota"
@@ -151,7 +152,7 @@ func handle(conn net.Conn, host func() string, db *gorm.DB, tlsConf *tls.Config,
 			if tlsConf != nil && !s.tls {
 				capa += " STARTTLS LOGINDISABLED"
 			}
-			s.untagged("CAPABILITY " + capa)
+			s.untagged("CAPABILITY %s", capa)
 			s.w.Flush()
 			ok("capability done")
 		case "STARTTLS":
@@ -1320,6 +1321,104 @@ func (s *session) search(args string, uidMode bool) []uint32 {
 		toks = append(toks, c.toks[i])
 	}
 	c.toks = toks
+	// 含 TEXT/BODY 等文本条件时，先由数据库粗筛候选集（避免 500 封快照 + 内存全扫），
+	// 再做精确布尔匹配；非 UID 模式的序号按当前文件夹全量顺序还原。
+	if terms := imapTextTerms(toks); len(terms) > 0 {
+		return s.searchDB(c, terms, uidMode)
+	}
+	m := s.matchOr(c)
+	var out []uint32
+	for i, it := range s.items {
+		if it.deleted {
+			continue
+		}
+		if m(&it) {
+			if uidMode {
+				out = append(out, it.id)
+			} else {
+				out = append(out, uint32(i+1))
+			}
+		}
+	}
+	return out
+}
+
+// imapTextTerms 从 IMAP SEARCH 记号中提取全部文本字面量（不消费游标），
+// 只用于「粗筛」，多提取无妨（OR 条件只扩大候选集，不会漏）。
+func imapTextTerms(toks []string) []mailsearch.Term {
+	var terms []mailsearch.Term
+	for i := 0; i < len(toks); i++ {
+		switch strings.ToUpper(toks[i]) {
+		case "SUBJECT", "FROM", "TO", "BODY", "TEXT", "CC", "BCC":
+			if i+1 >= len(toks) {
+				continue
+			}
+			field := ""
+			switch strings.ToUpper(toks[i]) {
+			case "SUBJECT":
+				field = "subject"
+			case "FROM":
+				field = "from"
+			case "TO":
+				field = "to"
+			case "BODY":
+				field = "body"
+			}
+			i++
+			terms = append(terms, mailsearch.Term{Field: field, Value: toks[i]})
+		case "HEADER":
+			if i+2 >= len(toks) {
+				continue
+			}
+			field := ""
+			switch strings.ToLower(toks[i+1]) {
+			case "subject":
+				field = "subject"
+			case "from":
+				field = "from"
+			case "to":
+				field = "to"
+			}
+			i += 2
+			terms = append(terms, mailsearch.Term{Field: field, Value: toks[i]})
+		}
+	}
+	return terms
+}
+
+// searchDB 用数据库粗筛出候选邮件，再逐封做精确匹配，序号按文件夹全量顺序还原。
+func (s *session) searchDB(c *cursor, terms []mailsearch.Term, uidMode bool) []uint32 {
+	var ids []uint32
+	s.db.Model(&model.Mail{}).Where("user_id = ? AND folder = ?", s.user.ID, s.folder).Order("id").Pluck("id", &ids)
+	seq := make(map[uint32]uint32, len(ids))
+	for i, id := range ids {
+		seq[id] = uint32(i + 1)
+	}
+	expr, args := mailsearch.CoarseFilter(terms)
+	if expr == "" {
+		return s.searchByItems(c, uidMode)
+	}
+	var mails []model.Mail
+	s.db.Where("user_id = ? AND folder = ?", s.user.ID, s.folder).Where(expr, args...).Order("id").Find(&mails)
+	m := s.matchOr(c)
+	var out []uint32
+	for _, mm := range mails {
+		it := item{id: uint32(mm.ID), date: mm.CreatedAt, from: mm.From, to: mm.To, cc: mm.Cc,
+			subject: mm.Subject, body: mm.Body, attachments: mm.Attachments, read: mm.Read, starred: mm.Starred}
+		if !m(&it) {
+			continue
+		}
+		if uidMode {
+			out = append(out, it.id)
+		} else if sq, ok := seq[it.id]; ok {
+			out = append(out, sq)
+		}
+	}
+	return out
+}
+
+// searchByItems 对当前快照逐封匹配（无文本条件时的回退路径）。
+func (s *session) searchByItems(c *cursor, uidMode bool) []uint32 {
 	m := s.matchOr(c)
 	var out []uint32
 	for i, it := range s.items {

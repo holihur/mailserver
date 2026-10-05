@@ -33,6 +33,15 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: backend
@@ -41,7 +50,7 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22"
+          go-version: "1.27"
           cache-dependency-path: backend/go.sum
 
       - name: Download modules
@@ -51,9 +60,9 @@ jobs:
         run: go vet ./...
 
       - name: Lint (only new issues)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.14.0
           working-directory: backend
           only-new-issues: true
 
@@ -62,10 +71,14 @@ jobs:
           CGO_ENABLED: "0"
         run: go build ./...
 
+      - name: govulncheck (dependency CVE gate)
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Unit tests + coverage gate (core packages >= 90%)
         env:
           CGO_ENABLED: "0"
           TEST_DATABASE_URL: postgres://mailserver:mailserver@localhost:5432/mailserver_test?sslmode=disable
+          TEST_REDIS_URL: redis://127.0.0.1:6379/0
         run: |
           python3 - <<'PY'
           import subprocess, sys
@@ -120,8 +133,11 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Unit tests
-        run: pnpm run test
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Unit tests + coverage gate
+        run: pnpm run test:coverage
 
       - name: Build
         run: pnpm run build
@@ -132,3 +148,15 @@ jobs:
           name: web-dist
           path: frontend/dist
           retention-days: 7
+
+  sanity:
+    name: Shell & Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck install.sh
+        run: shellcheck install.sh
+
+      - name: Docker build (no push)
+        run: docker build -f backend/Dockerfile -t mailserver:ci .

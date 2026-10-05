@@ -42,6 +42,8 @@ type Config struct {
 	SendDailyLimit  int    // 每用户每日发信上限（0=不限）
 	SendPerMinute   int    // 每用户每分钟发信上限（0=不限）
 	MtaStsMode      string // MTA-STS 模式：none（默认）| testing | enforce
+	DANEEnable      bool   // 出站 DANE 验证：对方 TLSA + DNSSEC 通过时强制证书匹配
+	DANEResolver    string // DANE 用的递归解析器 host:port（空=系统 resolv.conf）
 	DNSSECEnable    bool   // 启用 DNSSEC 签名（密钥存 DATA_DIR/dnssec）
 	DNSSECNSEC3     bool   // 使用 NSEC3（默认 NSEC）
 	BackupDir       string // 定时备份目录（空=不启用）
@@ -131,6 +133,8 @@ func Load() Config {
 		SendDailyLimit:  atoiDefault(os.Getenv("SEND_DAILY_LIMIT"), 500),
 		SendPerMinute:   atoiDefault(os.Getenv("SEND_PER_MINUTE"), 20),
 		MtaStsMode:      strings.ToLower(strings.TrimSpace(getenv("MTA_STS_MODE", "none"))),
+		DANEEnable:      getenv("DANE_ENABLE", "0") == "1",
+		DANEResolver:    os.Getenv("DANE_RESOLVER"),
 		DNSSECEnable:    getenv("DNSSEC_ENABLE", "0") == "1",
 		DNSSECNSEC3:     getenv("DNSSEC_NSEC3", "0") == "1",
 		BackupDir:       os.Getenv("BACKUP_DIR"),

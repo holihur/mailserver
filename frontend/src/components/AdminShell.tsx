@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
 import { FooterControls } from './HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign, History } from 'lucide-react'
+import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign, History, DatabaseBackup } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
 
@@ -26,6 +26,7 @@ const NAV = [
   { to: '/admin/routes', labelKey: 'routes.nav', icon: Route },
   { to: '/admin/aliases', labelKey: 'aliases.nav', icon: AtSign },
   { to: '/admin/audit', labelKey: 'admin.audit', icon: History },
+  { to: '/admin/backup', labelKey: 'admin.backup', icon: DatabaseBackup },
   { to: '/admin/about', labelKey: 'admin.about', icon: Info },
 ]
 

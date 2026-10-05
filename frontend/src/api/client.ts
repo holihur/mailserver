@@ -130,4 +130,17 @@ export const api = {
   adminUserCreate: (b) => req('/api/admin/users', { method: 'POST', body: JSON.stringify(b) }),
   adminUserPatch: (id, b) => req(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   adminUserDelete: (id) => req(`/api/admin/users/${id}`, { method: 'DELETE' }),
+  backups: () => req('/api/admin/backups'),
+  backupCreate: () => req('/api/admin/backups', { method: 'POST' }),
+  backupDelete: (name) => req('/api/admin/backups?name=' + encodeURIComponent(name), { method: 'DELETE' }),
+  backupRestore: (name) => req('/api/admin/backups/restore', { method: 'POST', body: JSON.stringify({ name, confirm: 'RESTORE' }) }),
+  backupDownload: async (name: string) => {
+    const r = await fetch(`${BASE}/api/admin/backups?action=download&name=${encodeURIComponent(name)}`, { headers: headers() })
+    if (!r.ok) throw new Error('failed')
+    const blob = await r.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = name; a.click()
+    URL.revokeObjectURL(url)
+  },
 }

@@ -191,3 +191,66 @@ func TestStoreOIDC(t *testing.T) {
 		t.Fatalf("snapshot: %+v", snap)
 	}
 }
+
+func TestStoreBackupAndRegistration(t *testing.T) {
+	s := &Store{vals: map[string]string{}}
+
+	// 默认：不开放注册，备份目录空、间隔 24h、保留 7 份
+	if s.RegistrationEnabled() {
+		t.Fatal("默认应关闭注册")
+	}
+	if s.BackupDir() != "" {
+		t.Fatalf("默认备份目录应为空，得到 %q", s.BackupDir())
+	}
+	if s.BackupIntervalHours() != 24*time.Hour {
+		t.Fatalf("默认间隔应 24h，得到 %v", s.BackupIntervalHours())
+	}
+	if s.BackupKeep() != 7 {
+		t.Fatalf("默认保留应 7，得到 %d", s.BackupKeep())
+	}
+
+	s.vals[KeyRegistration] = "on"
+	s.vals[KeyBackupDir] = "  /data/backups  "
+	s.vals[KeyBackupInterval] = "6"
+	s.vals[KeyBackupKeep] = "14"
+	if !s.RegistrationEnabled() || s.BackupDir() != "/data/backups" ||
+		s.BackupIntervalHours() != 6*time.Hour || s.BackupKeep() != 14 {
+		t.Fatalf("自定义读取异常: reg=%v dir=%q int=%v keep=%d",
+			s.RegistrationEnabled(), s.BackupDir(), s.BackupIntervalHours(), s.BackupKeep())
+	}
+	s.vals[KeyBackupDir] = "/data/backups"
+
+	// 非法/越界：间隔回退默认，keep 夹到上限
+	s.vals[KeyBackupInterval] = "abc"
+	if s.BackupIntervalHours() != 24*time.Hour {
+		t.Fatalf("非法间隔应回退 24h，得到 %v", s.BackupIntervalHours())
+	}
+	s.vals[KeyBackupInterval] = "99999"
+	if s.BackupIntervalHours() != 8760*time.Hour {
+		t.Fatalf("间隔上限应为 8760h，得到 %v", s.BackupIntervalHours())
+	}
+	s.vals[KeyBackupKeep] = "99999"
+	if s.BackupKeep() != 3650 {
+		t.Fatalf("keep 上限应为 3650，得到 %d", s.BackupKeep())
+	}
+
+	snap := s.Snapshot()
+	if snap["backup_dir"] != "/data/backups" || snap["backup_interval_hours"] != 8760 ||
+		snap["backup_keep"] != 3650 || snap["registration_enabled"] != true {
+		t.Fatalf("snapshot 备份字段异常: %+v", snap)
+	}
+}
+
+func TestNewStoreBackupDefaults(t *testing.T) {
+	cfg := config.Config{Host: "mail.example.com", BackupDir: "/srv/bk", BackupInterval: 12, BackupKeep: 3}
+	s := newStore(cfg, nil)
+	if s.BackupDir() != "/srv/bk" || s.BackupIntervalHours() != 12*time.Hour || s.BackupKeep() != 3 {
+		t.Fatalf("环境变量默认未生效: dir=%q int=%v keep=%d", s.BackupDir(), s.BackupIntervalHours(), s.BackupKeep())
+	}
+	// 非法环境默认值回退
+	cfg2 := config.Config{Host: "h", BackupInterval: 0, BackupKeep: -1}
+	s2 := newStore(cfg2, nil)
+	if s2.BackupIntervalHours() != 24*time.Hour || s2.BackupKeep() != 7 {
+		t.Fatalf("非法默认未回退: int=%v keep=%d", s2.BackupIntervalHours(), s2.BackupKeep())
+	}
+}

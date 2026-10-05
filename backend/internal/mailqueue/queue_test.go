@@ -37,6 +37,10 @@ func TestAllowSendDailyLimit(t *testing.T) {
 	}
 	defer c.Close()
 	ctx := context.Background()
+	// NewClient 不会真正连接，这里显式 Ping，避免无 Redis 环境下误判失败。
+	if err := c.rdb.Ping(ctx).Err(); err != nil {
+		t.Skipf("Redis 不可用，跳过: %v", err)
+	}
 	key := fmt.Sprintf("send:day:%d:%s", u.ID, time.Now().Format("20060102"))
 	c.rdb.Del(ctx, key)
 

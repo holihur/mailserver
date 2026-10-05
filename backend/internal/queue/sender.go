@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"mailserver/internal/dane"
 	localdeliver "mailserver/internal/deliver"
 	"mailserver/internal/dkim"
 	"mailserver/internal/external"
@@ -160,7 +161,7 @@ func smtpSession(host, port, user, pass string, insecure bool, from string, to [
 	if err != nil {
 		return err
 	}
-	defer cl.Close()
+	defer func() { _ = cl.Close() }()
 	if ok, _ := cl.Extension("STARTTLS"); ok {
 		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure}); err != nil {
 			return err
@@ -194,7 +195,58 @@ func smtpSession(host, port, user, pass string, insecure bool, from string, to [
 	return cl.Quit()
 }
 
-// sendDirect 无中继时直连对方 MX:25 投递（需 25 出站放行）。
+// directSession 直连对方 MX:25。开启 DANE 且对端 TLSA 经 DNSSEC 验证通过时，
+// 强制 STARTTLS + 证书匹配；验证失败或对端不支持 STARTTLS 则报错退回队列，绝不降级明文。
+func directSession(host string, from string, to []string, msg []byte) error {
+	var daneConf *tls.Config
+	secure := false
+	if dane.Enabled {
+		if recs, ok, err := dane.Lookup(host, 25); err == nil && ok && len(recs) > 0 {
+			secure = true
+			daneConf = dane.TLSConfig(host, recs)
+		}
+	}
+	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, "25"), 15*time.Second)
+	if err != nil {
+		return err
+	}
+	cl, err := smtp.NewClient(conn, host)
+	if err != nil {
+		_ = conn.Close()
+		return err
+	}
+	defer func() { _ = cl.Close() }()
+	if ok, _ := cl.Extension("STARTTLS"); ok {
+		tc := daneConf
+		if tc == nil {
+			tc = &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}
+		}
+		if err := cl.StartTLS(tc); err != nil {
+			return err
+		}
+	} else if secure {
+		return fmt.Errorf("DANE: %s 有安全 TLSA 记录但不支持 STARTTLS，拒绝明文投递", host)
+	}
+	if err := cl.Mail(from); err != nil {
+		return err
+	}
+	for _, rcpt := range to {
+		if err := cl.Rcpt(rcpt); err != nil {
+			return err
+		}
+	}
+	w, err := cl.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := w.Write(msg); err != nil {
+		return err
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	return cl.Quit()
+}
 func sendDirect(from string, to []string, msg []byte) error {
 	byDomain := map[string][]string{}
 	for _, rcpt := range to {
@@ -209,7 +261,7 @@ func sendDirect(from string, to []string, msg []byte) error {
 	for dom, rcpts := range byDomain {
 		delivered := false
 		for _, h := range mxHosts(dom) {
-			if err := smtpSession(h, "25", "", "", false, from, rcpts, msg); err == nil {
+			if err := directSession(h, from, rcpts, msg); err == nil {
 				delivered = true
 				break
 			} else if firstErr == nil {
