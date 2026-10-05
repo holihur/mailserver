@@ -3,6 +3,16 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [未发布] / Unreleased
+
+### 新增
+- **历史邮件导入**：头像菜单「导入邮件」支持 **mbox / EML**（上限 100MB），解析后写入当前文件夹。
+- **规则影子模式**：CEL 规则可设「只匹配不执行」，安全灰度验证后再启用。
+- **离线壳**：Service Worker 缓存应用壳与静态资源（导航 network-first、静态 stale-while-revalidate，API 不缓存），顶部显示离线提示。
+
+### 变更
+- 用户列表 / DNS 记录表在小屏（<sm）改为**卡片列表**，避免横向滚动。
+
 ## [v0.17.0] - 2026-10-05
 
 ### 新增
