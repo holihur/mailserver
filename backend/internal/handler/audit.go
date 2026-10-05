@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -63,10 +62,7 @@ func AuditAdmin(db *gorm.DB, next http.Handler) http.Handler {
 		uid, _, _, _ := auth.Access(r)
 		var u model.User
 		db.Select("email").First(&u, uid)
-		ip, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			ip = r.RemoteAddr
-		}
+		ip := ClientIP(r)
 		db.Create(&model.AuditLog{
 			ActorID: uid, ActorEmail: u.Email, Action: r.Method, Target: r.URL.Path,
 			Detail: redactJSON(body), IP: ip,
@@ -119,4 +115,22 @@ func StartAuditRetention(db *gorm.DB) {
 			time.Sleep(24 * time.Hour)
 		}
 	}()
+}
+
+// StartAuthRetention 每天清理：过期的登录会话 + 超过 90 天的登录历史。
+// 避免 sessions / login_events 无限增长。
+func StartAuthRetention(db *gorm.DB) {
+	go func() {
+		for {
+			PurgeAuth(db)
+			time.Sleep(24 * time.Hour)
+		}
+	}()
+}
+
+// PurgeAuth 执行一次清理，返回删除的（会话数, 登录历史数）。
+func PurgeAuth(db *gorm.DB) (int64, int64) {
+	s := db.Where("expires_at < ?", time.Now()).Delete(&model.Session{})
+	e := db.Where("created_at < ?", time.Now().AddDate(0, 0, -90)).Delete(&model.LoginEvent{})
+	return s.RowsAffected, e.RowsAffected
 }

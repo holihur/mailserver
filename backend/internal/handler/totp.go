@@ -147,7 +147,7 @@ func (a *Auth) LoginTOTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "bad body"})
 		return
 	}
-	if a.RL != nil && !a.RL.Allow("totp:"+clientIP(r), 20, loginWindow) {
+	if a.RL != nil && !a.RL.Allow("totp:"+ClientIP(r), 20, loginWindow) {
 		writeJSON(w, 429, map[string]string{"error": "尝试过于频繁，请稍后再试"})
 		return
 	}

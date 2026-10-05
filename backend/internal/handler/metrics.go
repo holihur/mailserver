@@ -34,11 +34,7 @@ func (h *MetricsBox) authorized(r *http.Request) bool {
 		tok := strings.TrimSpace(strings.TrimPrefix(hdr, "Bearer "))
 		return subtle.ConstantTimeCompare([]byte(tok), []byte(h.Token)) == 1
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(host)
+	ip := net.ParseIP(ClientIP(r))
 	return ip != nil && ip.IsLoopback()
 }
 

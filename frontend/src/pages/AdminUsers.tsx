@@ -4,12 +4,12 @@ import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, KeyRound, Loader2, AlertCircle, CheckCircle2, UserCog, HardDrive } from 'lucide-react'
+import { Plus, Trash2, KeyRound, Loader2, AlertCircle, CheckCircle2, UserCog, HardDrive, Send } from 'lucide-react'
 
 export default function AdminUsers() {
   const { t } = useI18n()
   const [users, setUsers] = useState([])
-  const [form, setForm] = useState({ email: '', name: '', password: '', quota_mb: 0 })
+  const [form, setForm] = useState({ email: '', name: '', password: '', quota_mb: 0, send_daily_limit: 0, send_per_minute: 0 })
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState('')
 
@@ -23,7 +23,7 @@ export default function AdminUsers() {
     setBusy('create'); setMsg('')
     try {
       await api.adminUserCreate(form)
-      setForm({ email: '', name: '', password: '', quota_mb: 0 })
+      setForm({ email: '', name: '', password: '', quota_mb: 0, send_daily_limit: 0, send_per_minute: 0 })
       setMsg(t('users.create'))
       load()
     } catch (e) { setMsg(e.message) } finally { setBusy('') }
@@ -43,6 +43,15 @@ export default function AdminUsers() {
     try { await api.adminUserPatch(u.id, { quota_mb: mb }); load() } catch (e) { setMsg(e.message) }
   }
 
+  // 每用户发信配额 / 速率（0 = 用全局默认）
+  async function setSendLimit(u) {
+    const d = await promptAsync(`${t('users.sendDaily')}: ${u.email} (0=${t('users.default')})`, { defaultValue: String(u.send_daily_limit || 0), inputType: 'number' })
+    if (d === null) return
+    const m = await promptAsync(`${t('users.sendMinute')}: ${u.email} (0=${t('users.default')})`, { defaultValue: String(u.send_per_minute || 0), inputType: 'number' })
+    if (m === null) return
+    try { await api.adminUserPatch(u.id, { send_daily_limit: parseInt(d, 10) || 0, send_per_minute: parseInt(m, 10) || 0 }); load() } catch (e) { setMsg(e.message) }
+  }
+
   async function toggle(u, key) {
     try { await api.adminUserPatch(u.id, { [key]: !u[key] }); load() } catch (e) { setMsg(e.message) }
   }
@@ -56,7 +65,7 @@ export default function AdminUsers() {
     <AdminShell title={t('users.title')} desc={t('users.desc')}>
       <Card className="p-4">
         <div className="flex items-center gap-2 mb-3"><UserCog size={16} /><b className="text-sm">{t('users.create')}</b></div>
-        <form onSubmit={create} className="grid sm:grid-cols-5 gap-3 items-end">
+        <form onSubmit={create} className="grid sm:grid-cols-3 lg:grid-cols-6 gap-3 items-end">
           <label className="text-sm space-y-1">
             <span className="font-medium">{t('users.email')}</span>
             <Input type="email" placeholder="user@example.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} required />
@@ -72,6 +81,14 @@ export default function AdminUsers() {
           <label className="text-sm space-y-1">
             <span className="font-medium">{t('users.quota')}</span>
             <Input type="number" placeholder="MB" value={form.quota_mb} onChange={e => setForm({ ...form, quota_mb: +e.target.value })} />
+          </label>
+          <label className="text-sm space-y-1">
+            <span className="font-medium">{t('users.sendDaily')}</span>
+            <Input type="number" placeholder={t('users.default')} value={form.send_daily_limit} onChange={e => setForm({ ...form, send_daily_limit: +e.target.value })} />
+          </label>
+          <label className="text-sm space-y-1">
+            <span className="font-medium">{t('users.sendMinute')}</span>
+            <Input type="number" placeholder={t('users.default')} value={form.send_per_minute} onChange={e => setForm({ ...form, send_per_minute: +e.target.value })} />
           </label>
           <Button disabled={busy === 'create'}>
             {busy === 'create' ? <Loader2 className="animate-spin" /> : <Plus />}{t('common.create')}
@@ -100,6 +117,7 @@ export default function AdminUsers() {
                 <td className="pr-2">{u.disabled ? <span className="text-destructive text-xs">{t('users.disabled')}</span> : <span className="text-success text-xs">{t('users.normal')}</span>}</td>
                 <td className="text-right whitespace-nowrap">
                   <Button variant="ghost" size="sm" onClick={() => setQuota(u)}><HardDrive />{t('users.setQuota')}</Button>
+                  <Button variant="ghost" size="sm" onClick={() => setSendLimit(u)}><Send />{t('users.sendLimit')}</Button>
                   <Button variant="ghost" size="sm" onClick={() => resetPass(u)}><KeyRound />{t('users.changePass')}</Button>
                   <Button variant="ghost" size="sm" onClick={() => toggle(u, 'admin')}>{u.admin ? t('users.unsetAdmin') : t('users.setAdmin')}</Button>
                   <Button variant="ghost" size="sm" onClick={() => toggle(u, 'disabled')}>{u.disabled ? t('users.enable') : t('users.disable')}</Button>
@@ -127,6 +145,7 @@ export default function AdminUsers() {
               </div>
               <div className="flex flex-wrap gap-1 pt-1">
                 <Button variant="ghost" size="sm" onClick={() => setQuota(u)}><HardDrive />{t('users.setQuota')}</Button>
+                <Button variant="ghost" size="sm" onClick={() => setSendLimit(u)}><Send />{t('users.sendLimit')}</Button>
                 <Button variant="ghost" size="sm" onClick={() => resetPass(u)}><KeyRound />{t('users.changePass')}</Button>
                 <Button variant="ghost" size="sm" onClick={() => toggle(u, 'admin')}>{u.admin ? t('users.unsetAdmin') : t('users.setAdmin')}</Button>
                 <Button variant="ghost" size="sm" onClick={() => toggle(u, 'disabled')}>{u.disabled ? t('users.enable') : t('users.disable')}</Button>

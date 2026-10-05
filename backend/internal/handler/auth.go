@@ -23,11 +23,37 @@ const (
 	loginMaxPerIP = 20
 )
 
-func clientIP(r *http.Request) string {
+// ClientIP 返回客户端真实 IP：若直连方是回环/私网（本机反向代理 / docker 网络），
+// 优先信任 X-Forwarded-For 的第一个地址（或 X-Real-IP），避免代理后只拿到 ::1。
+func ClientIP(r *http.Request) string {
+	if ip := forwardedIP(r); ip != "" {
+		return ip
+	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		return host
 	}
 	return r.RemoteAddr
+}
+
+// forwardedIP 仅在直连方为回环/私网时信任代理头（防止直连公网客户端伪造）。
+func forwardedIP(r *http.Request) string {
+	host := r.RemoteAddr
+	if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		host = h
+	}
+	peer := net.ParseIP(host)
+	if peer == nil || !(peer.IsLoopback() || peer.IsPrivate()) {
+		return ""
+	}
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		if first := strings.TrimSpace(strings.Split(xff, ",")[0]); net.ParseIP(first) != nil {
+			return first
+		}
+	}
+	if rip := strings.TrimSpace(r.Header.Get("X-Real-IP")); net.ParseIP(rip) != nil {
+		return rip
+	}
+	return ""
 }
 
 // isHostedEmailDomain 判断邮箱域名是否已在 domains 表托管（唯一依据）。
@@ -63,7 +89,7 @@ func (a *Auth) Register(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 400, map[string]string{"error": "bad body"})
 		return
 	}
-	if a.RL != nil && !a.RL.Allow("register:"+clientIP(r), 5, time.Hour) {
+	if a.RL != nil && !a.RL.Allow("register:"+ClientIP(r), 5, time.Hour) {
 		writeJSON(w, 429, map[string]string{"error": "注册过于频繁，请稍后再试"})
 		return
 	}
@@ -117,7 +143,7 @@ func (a *Auth) Login(w http.ResponseWriter, r *http.Request) {
 		Pass  string `json:"password"`
 	}
 	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
-	if a.RL != nil && !a.RL.Allow("login:"+clientIP(r), loginMaxPerIP, loginWindow) {
+	if a.RL != nil && !a.RL.Allow("login:"+ClientIP(r), loginMaxPerIP, loginWindow) {
 		writeJSON(w, 429, map[string]string{"error": "尝试过于频繁，请稍后再试"})
 		return
 	}
@@ -269,7 +295,7 @@ func createSession(db *gorm.DB, uid uint, r *http.Request) string {
 	if jti == "" {
 		return ""
 	}
-	ip := clientIP(r)
+	ip := ClientIP(r)
 	ua := r.Header.Get("User-Agent")
 	if len(ua) > 200 {
 		ua = ua[:200]
@@ -291,7 +317,7 @@ func sessionValid(db *gorm.DB, uid uint, jti string) bool {
 
 // recordLogin 记录登录事件；首次从某 IP 成功登录时触发告警钩子。
 func (a *Auth) recordLogin(uid uint, email string, r *http.Request, success bool) {
-	ip := clientIP(r)
+	ip := ClientIP(r)
 	ua := r.Header.Get("User-Agent")
 	if len(ua) > 200 {
 		ua = ua[:200]

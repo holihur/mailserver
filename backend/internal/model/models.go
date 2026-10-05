@@ -3,17 +3,19 @@ package model
 import "time"
 
 type User struct {
-	ID          uint   `gorm:"primaryKey" json:"id"`
-	Email       string `gorm:"uniqueIndex;size:255" json:"email"`
-	Name        string `gorm:"size:100" json:"name"`
-	Signature   string `gorm:"size:1000" json:"signature"` // 邮件签名
-	QuotaMB     int    `json:"quota_mb"`                   // 存储配额（MB），0=不限
-	QuotaUsed   int64  `gorm:"-" json:"quota_used"`        // 已用字节（仅展示）
-	PassHash    string `gorm:"size:255" json:"-"`
-	Admin       bool   `json:"admin"`             // 管理员：可进 /api/admin 管理后台
-	Disabled    bool   `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
-	TOTPSecret  string `gorm:"size:255" json:"-"` // AES-GCM 加密的 TOTP 密钥
-	TOTPEnabled bool   `json:"totp_enabled"`      // 登录是否要求动态验证码
+	ID             uint   `gorm:"primaryKey" json:"id"`
+	Email          string `gorm:"uniqueIndex;size:255" json:"email"`
+	Name           string `gorm:"size:100" json:"name"`
+	Signature      string `gorm:"size:1000" json:"signature"` // 邮件签名
+	QuotaMB        int    `json:"quota_mb"`                   // 存储配额（MB），0=不限
+	QuotaUsed      int64  `gorm:"-" json:"quota_used"`        // 已用字节（仅展示）
+	SendDailyLimit int    `json:"send_daily_limit"`           // 每日发信上限，0=用全局默认
+	SendPerMinute  int    `json:"send_per_minute"`            // 每分钟发信上限，0=用全局默认
+	PassHash       string `gorm:"size:255" json:"-"`
+	Admin          bool   `json:"admin"`             // 管理员：可进 /api/admin 管理后台
+	Disabled       bool   `json:"disabled"`          // 禁用：Web/API/收发信全部拒绝
+	TOTPSecret     string `gorm:"size:255" json:"-"` // AES-GCM 加密的 TOTP 密钥
+	TOTPEnabled    bool   `json:"totp_enabled"`      // 登录是否要求动态验证码
 	// MustChangePassword 管理员重置密码后置 true，强制下次登录改密
 	MustChangePassword bool `json:"must_change_password"`
 	// TokenVersion 令牌版本：改密/重置/关闭 TOTP 时自增，旧 access token 立即失效。

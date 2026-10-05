@@ -68,20 +68,30 @@ func (c *Client) Close() error {
 // allowSend 每用户每日/每分钟发信限流（Redis 计数）；超限则标记邮件失败并拒绝入队。
 // Redis 出错时放行（不阻断正常发信）。
 func (c *Client) allowSend(mailID uint) bool {
-	if (c.daily <= 0 && c.perMin <= 0) || c.db == nil || c.rdb == nil {
+	if c.db == nil || c.rdb == nil {
 		return true
 	}
 	var m model.Mail
 	if err := c.db.Select("user_id").First(&m, mailID).Error; err != nil || m.UserID == 0 {
 		return true
 	}
-	daily := c.daily
-	// graduated trust：新账号前 24h 更严（≤ 50 封/日）
-	if daily > 50 {
-		var u model.User
-		if err := c.db.Select("created_at").First(&u, m.UserID).Error; err == nil && time.Since(u.CreatedAt) < 24*time.Hour {
+	// 优先使用用户单独配置的上限，否则用全局默认
+	daily, perMin := c.daily, c.perMin
+	var u model.User
+	if err := c.db.Select("created_at", "send_daily_limit", "send_per_minute").First(&u, m.UserID).Error; err == nil {
+		if u.SendDailyLimit > 0 {
+			daily = u.SendDailyLimit
+		}
+		if u.SendPerMinute > 0 {
+			perMin = u.SendPerMinute
+		}
+		// graduated trust：未单独设置每日上限的新账号前 24h 更严（≤ 50 封/日）
+		if u.SendDailyLimit == 0 && daily > 50 && time.Since(u.CreatedAt) < 24*time.Hour {
 			daily = 50
 		}
+	}
+	if daily <= 0 && perMin <= 0 {
+		return true
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -101,14 +111,14 @@ func (c *Client) allowSend(mailID uint) bool {
 			}
 		}
 	}
-	if c.perMin > 0 {
+	if perMin > 0 {
 		k := fmt.Sprintf("send:min:%d:%d", m.UserID, time.Now().Unix()/60)
 		if n, err := c.rdb.Incr(ctx, k).Result(); err == nil {
 			if n == 1 {
 				_ = c.rdb.Expire(ctx, k, 2*time.Minute).Err()
 			}
-			if int(n) > c.perMin {
-				return block(fmt.Sprintf("超出每分钟发信上限（%d）", c.perMin))
+			if int(n) > perMin {
+				return block(fmt.Sprintf("超出每分钟发信上限（%d）", perMin))
 			}
 		}
 	}

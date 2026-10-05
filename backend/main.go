@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io/fs"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -331,6 +330,7 @@ func main() {
 	go mailsmtp.Serve(":"+cfg.SMTPport, g, maxMsg, cfg.DMARCEnforce, tlsConf)
 	go external.Start(g)
 	handler.StartAuditRetention(g)
+	handler.StartAuthRetention(g)
 	// 定时备份 + 异地 hook（rclone 等）；目录/间隔/保留份数可在后台「备份」页调整
 	go func() {
 		for {
@@ -474,10 +474,7 @@ func main() {
 	// JMAP / MCP：HTTP 层按 IP 限流（复用 Redis），防应用层 DDoS / 撞库
 	rlHTTP := func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			ip := r.RemoteAddr
-			if h, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-				ip = h
-			}
+			ip := handler.ClientIP(r)
 			if !rl.Allow("http:"+ip, 120, time.Minute) {
 				http.Error(w, "too many requests", http.StatusTooManyRequests)
 				return

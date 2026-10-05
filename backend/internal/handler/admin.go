@@ -158,10 +158,12 @@ func (a *Admin) Users(w http.ResponseWriter, r *http.Request) {
 // POST /api/admin/users {email, name, password} -> 在托管域名下新建邮箱账号
 func (a *Admin) createUser(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Pass    string `json:"password"`
-		QuotaMB int    `json:"quota_mb"`
+		Email          string `json:"email"`
+		Name           string `json:"name"`
+		Pass           string `json:"password"`
+		QuotaMB        int    `json:"quota_mb"`
+		SendDailyLimit int    `json:"send_daily_limit"`
+		SendPerMinute  int    `json:"send_per_minute"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 		writeJSON(w, 400, map[string]string{"error": "bad body"})
@@ -188,7 +190,7 @@ func (a *Admin) createUser(w http.ResponseWriter, r *http.Request) {
 		name = email[:at]
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(in.Pass), bcrypt.DefaultCost)
-	u := model.User{Email: email, Name: name, PassHash: string(hash), QuotaMB: in.QuotaMB}
+	u := model.User{Email: email, Name: name, PassHash: string(hash), QuotaMB: in.QuotaMB, SendDailyLimit: in.SendDailyLimit, SendPerMinute: in.SendPerMinute}
 	if isAdminEmail(effectiveAdminEmails(a.RT, a.AdminEmails), email) {
 		u.Admin = true
 	}
@@ -220,12 +222,14 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case "PATCH":
 		var in struct {
-			Name     *string `json:"name"`
-			Pass     *string `json:"password"`
-			Disabled *bool   `json:"disabled"`
-			Admin    *bool   `json:"admin"`
-			QuotaMB  *int    `json:"quota_mb"`
-			TOTPOff  *bool   `json:"totp_off"` // 重置（关闭并清除）两步验证
+			Name           *string `json:"name"`
+			Pass           *string `json:"password"`
+			Disabled       *bool   `json:"disabled"`
+			Admin          *bool   `json:"admin"`
+			QuotaMB        *int    `json:"quota_mb"`
+			SendDailyLimit *int    `json:"send_daily_limit"`
+			SendPerMinute  *int    `json:"send_per_minute"`
+			TOTPOff        *bool   `json:"totp_off"` // 重置（关闭并清除）两步验证
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
 			writeJSON(w, 400, map[string]string{"error": "bad body"})
@@ -273,6 +277,12 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 		if in.QuotaMB != nil {
 			upd["quota_mb"] = *in.QuotaMB
 		}
+		if in.SendDailyLimit != nil {
+			upd["send_daily_limit"] = *in.SendDailyLimit
+		}
+		if in.SendPerMinute != nil {
+			upd["send_per_minute"] = *in.SendPerMinute
+		}
 		if len(upd) > 0 {
 			a.DB.Model(&u).Updates(upd)
 		}
@@ -284,8 +294,14 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := a.DB.Transaction(func(tx *gorm.DB) error {
-			if err := tx.Where("user_id = ?", u.ID).Delete(&model.Mail{}).Error; err != nil {
-				return err
+			for _, t := range []any{
+				&model.Mail{}, &model.Session{}, &model.LoginEvent{}, &model.MailToken{},
+				&model.MailRule{}, &model.Contact{}, &model.ExternalAccount{}, &model.MailFolder{},
+				&model.SieveScript{}, &model.ScheduledMail{},
+			} {
+				if err := tx.Where("user_id = ?", u.ID).Delete(t).Error; err != nil {
+					return err
+				}
 			}
 			return tx.Delete(&u).Error
 		}); err != nil {
