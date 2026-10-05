@@ -42,7 +42,7 @@ func forwardedIP(r *http.Request) string {
 		host = h
 	}
 	peer := net.ParseIP(host)
-	if peer == nil || !(peer.IsLoopback() || peer.IsPrivate()) {
+	if peer == nil || (!peer.IsLoopback() && !peer.IsPrivate()) {
 		return ""
 	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
