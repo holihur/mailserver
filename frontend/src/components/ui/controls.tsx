@@ -12,7 +12,7 @@ export function Button({ className, variant = 'default', size = 'default', ...p 
     default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
     outline: 'border border-border bg-background hover:bg-muted',
     ghost: 'hover:bg-muted',
-    destructive: 'bg-red-500 text-white hover:bg-red-600',
+    destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
   }
   const sizes = { default: 'h-9 px-4 py-2', sm: 'h-8 px-3 text-xs', icon: 'h-9 w-9' }
   return <button className={cn(base, variants[variant], sizes[size], className)} {...p} />

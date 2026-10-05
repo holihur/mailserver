@@ -125,11 +125,11 @@ export default function Accounts() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium truncate">{a.name || a.email}</span>
                 {a.name && <span className="text-xs text-muted-foreground truncate">{a.email}</span>}
-                {a.enabled ? <Badge className="text-green-600">{t('common.enabled')}</Badge> : <Badge className="text-yellow-600">{t('common.disabled')}</Badge>}
+                {a.enabled ? <Badge className="text-success">{t('common.enabled')}</Badge> : <Badge className="text-warning">{t('common.disabled')}</Badge>}
               </div>
               <div className="text-xs text-muted-foreground truncate">
                 IMAP {a.imap_host}:{a.imap_port} · SMTP {a.smtp_host || '—'}
-                {a.last_error && <span className="text-red-500"> · {a.last_error}</span>}
+                {a.last_error && <span className="text-destructive"> · {a.last_error}</span>}
               </div>
             </div>
             <Button variant="ghost" size="icon" disabled={busy} onClick={() => test(a.id)} aria-label={t('accounts.test')}><Plug /></Button>

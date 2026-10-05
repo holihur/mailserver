@@ -46,7 +46,7 @@ export default function Scheduled() {
                 <span className="text-sm font-medium truncate">{s.subject || t('mail.noSubject')}</span>
                 {s.repeat ? <Badge><Repeat size={11} />{repeatLabel(s.repeat)}</Badge> : null}
                 {s.enabled
-                  ? <Badge className="text-green-600">{t('scheduled.active')}</Badge>
+                  ? <Badge className="text-success">{t('scheduled.active')}</Badge>
                   : <Badge className="text-muted-foreground">{s.last_sent ? t('scheduled.done') : t('scheduled.paused')}</Badge>}
               </div>
               <div className="text-xs text-muted-foreground truncate">→ {s.to}</div>
@@ -54,7 +54,7 @@ export default function Scheduled() {
                 {t('scheduled.next')}: {s.send_at ? new Date(s.send_at).toLocaleString() : '—'}
                 {s.last_sent ? ` · ${t('scheduled.lastSent')}: ${new Date(s.last_sent).toLocaleString()}` : ''}
               </div>
-              {s.last_error && <div className="text-xs text-red-500 break-words">{s.last_error}</div>}
+              {s.last_error && <div className="text-xs text-destructive break-words">{s.last_error}</div>}
             </div>
             <Button variant="ghost" size="icon" onClick={() => toggle(s)} aria-label={s.enabled ? t('scheduled.pause') : t('scheduled.resume')}>
               {s.enabled ? <Pause /> : <Play />}

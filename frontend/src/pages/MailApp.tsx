@@ -152,6 +152,14 @@ export default function MailApp() {
     return () => document.removeEventListener('keydown', onKey)
   }, [])
 
+  // 附件预览弹窗 Esc 关闭（#44）
+  useEffect(() => {
+    if (!preview) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreview(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [preview])
+
   const [selectMode, setSelectMode] = useState(false)
   const [checked, setChecked] = useState<number[]>([])
   function toggleCheck(id: number) { setChecked(c => c.includes(id) ? c.filter(x => x !== id) : [...c, id]) }
@@ -279,7 +287,7 @@ export default function MailApp() {
           {installEvt && <DropdownItem icon={Download} onClick={() => { installEvt.prompt(); setInstallEvt(null) }}>{t('nav.install')}</DropdownItem>}
           <DropdownSeparator />
           <DropdownItem icon={RefreshCw} onClick={() => load()}>{t('common.refresh')}</DropdownItem>
-          <DropdownItem icon={LogOut} onClick={logout} className="text-red-500 hover:bg-red-500/10">{t('nav.logout')}</DropdownItem>
+          <DropdownItem icon={LogOut} onClick={logout} className="text-destructive hover:bg-destructive/10">{t('nav.logout')}</DropdownItem>
         </Dropdown>
       </header>
 
@@ -287,7 +295,7 @@ export default function MailApp() {
       <div className="md:hidden flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
         {allFolders.map(f => (
           <div key={f.k} className="flex items-center gap-0.5 shrink-0">
-            <button onClick={() => setFolder(f.k)}
+            <button onClick={() => setFolder(f.k)} aria-current={folder === f.k ? 'true' : undefined}
               className={cn('flex items-center gap-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
                 folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
               <f.icon size={15} />{f.labelKey ? t(f.labelKey) : f.label}
@@ -298,7 +306,7 @@ export default function MailApp() {
                 <button className="px-1 text-muted-foreground" aria-label={t('common.edit')}><MoreVertical size={13} /></button>
               }>
                 <DropdownItem icon={PenLine} onClick={() => renameFolder(f)}>{t('folders.rename')}</DropdownItem>
-                <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
+                <DropdownItem icon={Trash2} className="text-destructive hover:bg-destructive/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
               </Dropdown>
             )}
           </div>
@@ -310,7 +318,7 @@ export default function MailApp() {
         <aside className="hidden md:block w-44 shrink-0 p-3 space-y-1 border-r border-border">
           {allFolders.map(f => (
             <div key={f.k} className="group flex items-center gap-0.5">
-              <button onClick={() => setFolder(f.k)}
+              <button onClick={() => setFolder(f.k)} aria-current={folder === f.k ? 'true' : undefined}
                 className={cn('flex-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm min-w-0', folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
                 <f.icon size={16} className="shrink-0" />
                 <span className="truncate">{f.labelKey ? t(f.labelKey) : f.label}</span>
@@ -321,7 +329,7 @@ export default function MailApp() {
                   <button className="px-1 py-2 text-muted-foreground" aria-label={t('common.edit')}><MoreVertical size={14} /></button>
                 }>
                   <DropdownItem icon={PenLine} onClick={() => renameFolder(f)}>{t('folders.rename')}</DropdownItem>
-                  <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
+                  <DropdownItem icon={Trash2} className="text-destructive hover:bg-destructive/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
                 </Dropdown>
               )}
             </div>
@@ -415,7 +423,9 @@ export default function MailApp() {
             <div className="flex-1 overflow-auto">
               {loading && <SkeletonList rows={6} />}
               {!loading && items.map(m => (
-                <button key={m.id} onClick={() => { if (touch.current.moved) { touch.current.moved = false; return } selectMode ? toggleCheck(m.id) : open(m.id) }}
+                <div key={m.id} role="button" tabIndex={0} aria-current={sel?.id === m.id ? 'true' : undefined}
+                  onClick={() => { if (touch.current.moved) { touch.current.moved = false; return } selectMode ? toggleCheck(m.id) : open(m.id) }}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMode ? toggleCheck(m.id) : open(m.id) } }}
                   onTouchStart={e => { touch.current = { x: e.touches[0].clientX, moved: false } }}
                   onTouchMove={e => { if (Math.abs(e.touches[0].clientX - touch.current.x) > 12) touch.current.moved = true }}
                   onTouchEnd={async e => {
@@ -424,18 +434,23 @@ export default function MailApp() {
                     if (dx < -60) { await api.trash(m.id); load() }
                     else if (dx > 60) { await api.patch(m.id, { read: !m.read }); load() }
                   }}
-                  className={cn('cv-auto w-full text-left px-3 py-2.5 border-b border-border hover:bg-muted/60 transition-colors',
+                  className={cn('cv-auto relative w-full text-left px-3 pl-4 py-2.5 border-b border-border hover:bg-muted/60 transition-colors cursor-pointer',
                     (selectMode ? checked.includes(m.id) : sel?.id === m.id) && 'bg-muted', !m.read && 'bg-primary/5')}>
+                  {!m.read && !selectMode && <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-primary" aria-hidden="true" />}
                   <div className="flex items-center gap-2">
                     {selectMode && <input type="checkbox" readOnly checked={checked.includes(m.id)} className="pointer-events-none shrink-0" />}
-                    {!m.read && !selectMode && <span className="size-2 rounded-full bg-primary shrink-0" />}
                     <span className={cn('truncate flex-1 text-sm', !m.read ? 'font-semibold' : 'text-foreground')}>
                       {m.subject || t('mail.noSubject')}
                     </span>
                     <SendStatus m={m} folder={folder} />
                     {attList(m.attachments).length > 0 && <Paperclip size={12} className="text-muted-foreground shrink-0" />}
-                    {!selectMode && <Star size={14} className={cn('shrink-0', m.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground')}
-                      onClick={async e => { e.stopPropagation(); await api.patch(m.id, { starred: !m.starred }); load() }} />}
+                    {!selectMode && (
+                      <button type="button" aria-label={m.starred ? t('mail.unstar') : t('mail.star')}
+                        className="-mr-1.5 rounded p-1.5 hover:bg-muted"
+                        onClick={async e => { e.stopPropagation(); await api.patch(m.id, { starred: !m.starred }); load() }}>
+                        <Star size={14} className={cn(m.starred ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground')} />
+                      </button>
+                    )}
                   </div>
                   <div className="mt-0.5">
                     <span className="text-xs text-muted-foreground line-clamp-1">{m.body?.slice(0, 80)}</span>
@@ -446,7 +461,7 @@ export default function MailApp() {
                     </span>
                     <span className="text-[10px] text-muted-foreground shrink-0">{fmtWhen(m.created_at)}</span>
                   </div>
-                </button>
+                </div>
               ))}
               {!loading && items.length === 0 && (
                 q ? (
@@ -506,14 +521,14 @@ export default function MailApp() {
                       <DropdownItem icon={ReplyAll} onClick={() => reply(sel, true)}>{t('mail.replyAll')}</DropdownItem>
                       <DropdownItem icon={Forward} onClick={() => forwardMail(sel)}>{t('mail.forward')}</DropdownItem>
                       <DropdownSeparator />
-                      <DropdownItem icon={Trash2} className="text-red-500 hover:bg-red-500/10" onClick={async () => {
+                      <DropdownItem icon={Trash2} className="text-destructive hover:bg-destructive/10" onClick={async () => {
                         if ((folder === 'trash' || folder === 'deleted') && !await confirmAsync(t('mail.confirmPurge'))) return
                         await api.trash(sel.id); setSel(null); setView('list'); load()
                       }}>{folder === 'deleted' ? t('mail.purge') : t('mail.delete')}</DropdownItem>
                     </Dropdown>
                   </div>
                   {folder === 'sent' && sel.status && sel.status !== 'sent' && (
-                    <div className={cn('mt-4 rounded-md border p-3 text-sm', sel.status === 'failed' ? 'border-red-500/40 bg-red-500/10 text-red-600' : 'border-border bg-muted/50 text-muted-foreground')}>
+                    <div className={cn('mt-4 rounded-md border p-3 text-sm', sel.status === 'failed' ? 'border-destructive/40 bg-destructive/10 text-destructive' : 'border-border bg-muted/50 text-muted-foreground')}>
                       <div className="flex items-center gap-1.5 font-medium">
                         {sel.status === 'failed' ? <XCircle size={14} /> : <Clock size={14} />}
                         {sel.status === 'failed' ? t('mail.stFailed') : sel.status === 'sending' ? t('mail.stSending') : t('mail.stQueued')}
@@ -571,7 +586,7 @@ export default function MailApp() {
       <FooterControls />
 
       {preview && (
-        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onClick={() => setPreview(null)}>
+        <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onClick={() => setPreview(null)} role="dialog" aria-modal="true" aria-label={preview.name}>
           <div className="w-full max-w-4xl max-h-[92vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-2 text-white mb-2">
               <span className="truncate text-sm flex-1">{preview.name}</span>
@@ -746,9 +761,9 @@ function Compose({ me, init, onClose }: any) {
 function SendStatus({ m, folder }: any) {
   const { t } = useI18n()
   if (folder !== 'sent' || !m.status || m.status === 'sent') return null
-  if (m.status === 'failed') return <span className="flex items-center gap-0.5 text-[10px] text-red-500 shrink-0"><XCircle size={11} />{t('mail.stFailed')}</span>
-  if (m.status === 'sending') return <span className="flex items-center gap-0.5 text-[10px] text-blue-500 shrink-0"><Loader2 size={11} className="animate-spin" />{t('mail.stSending')}</span>
-  return <span className="flex items-center gap-0.5 text-[10px] text-yellow-600 shrink-0"><Clock size={11} />{t('mail.stQueued')}</span>
+  if (m.status === 'failed') return <span className="flex items-center gap-0.5 text-[10px] text-destructive shrink-0"><XCircle size={11} />{t('mail.stFailed')}</span>
+  if (m.status === 'sending') return <span className="flex items-center gap-0.5 text-[10px] text-primary shrink-0"><Loader2 size={11} className="animate-spin" />{t('mail.stSending')}</span>
+  return <span className="flex items-center gap-0.5 text-[10px] text-warning shrink-0"><Clock size={11} />{t('mail.stQueued')}</span>
 }
 
 function attList(s: any): any[] {
@@ -764,8 +779,8 @@ function AuthBadges({ raw, t }: { raw?: string; t: (k: string) => string }) {
     if (k === 'spf' || k === 'dkim' || k === 'dmarc') parts.push({ k, v })
   }
   if (!parts.length) return null
-  const cls = (v: string) => v === 'pass' ? 'bg-green-500/10 text-green-700 dark:text-green-400'
-    : v === 'fail' ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+  const cls = (v: string) => v === 'pass' ? 'bg-success/10 text-success dark:text-success'
+    : v === 'fail' ? 'bg-destructive/10 text-destructive dark:text-destructive'
     : 'bg-muted text-muted-foreground'
   const label = (v: string) => v === 'pass' ? t('mail.authPass') : v === 'fail' ? t('mail.authFail') : t('mail.authUnknown')
   return (

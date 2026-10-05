@@ -18,7 +18,7 @@ export function UIHost() {
       <div className="fixed bottom-4 right-4 z-[100] space-y-2 w-[min(92vw,22rem)] pointer-events-none">
         {toasts.map(x => {
           const Icon = x.type === 'success' ? CheckCircle2 : x.type === 'error' ? AlertCircle : Info
-          const color = x.type === 'success' ? 'text-green-600' : x.type === 'error' ? 'text-red-500' : 'text-primary'
+          const color = x.type === 'success' ? 'text-success' : x.type === 'error' ? 'text-destructive' : 'text-primary'
           return (
             <div key={x.id} className="pointer-events-auto flex items-start gap-2 rounded-md border border-border bg-card shadow-lg p-3 text-sm">
               <Icon size={16} className={`shrink-0 mt-0.5 ${color}`} />

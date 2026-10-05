@@ -98,15 +98,15 @@ export default function Security() {
   return (
     <PageShell title={t('security.title')} icon={ShieldCheck} maxWidth="max-w-2xl">
         {mustChange && (
-          <p className="text-sm rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3">{t('security.mustChange')}</p>
+          <p className="text-sm rounded-md border border-warning/40 bg-warning/10 p-3">{t('security.mustChange')}</p>
         )}
         <Card className="p-4 space-y-3">
           <div className="flex items-center gap-2">
             <KeyRound size={16} />
             <b className="text-sm">{t('security.totp')}</b>
             {enabled === null ? null : enabled
-              ? <Badge className="text-green-600">{t('common.enabled')}</Badge>
-              : <Badge className="text-yellow-600">{t('common.disabled')}</Badge>}
+              ? <Badge className="text-success">{t('common.enabled')}</Badge>
+              : <Badge className="text-warning">{t('common.disabled')}</Badge>}
           </div>
           <p className="text-sm text-muted-foreground">{t('security.totpHint')}</p>
 
@@ -186,7 +186,7 @@ export default function Security() {
               <div className="text-sm divide-y divide-border">
                 {logins.map((l: any) => (
                   <div key={l.id} className="flex items-center gap-2 py-1.5">
-                    <span className={cn('size-2 rounded-full shrink-0', l.success ? 'bg-green-500' : 'bg-red-500')} />
+                    <span className={cn('size-2 rounded-full shrink-0', l.success ? 'bg-success' : 'bg-destructive')} />
                     <span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(l.created_at).toLocaleString()}</span>
                     <span className="text-xs font-mono">{l.ip}</span>
                     <span className="text-xs text-muted-foreground truncate ml-auto max-w-[40%]">{l.user_agent}</span>

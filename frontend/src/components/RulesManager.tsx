@@ -131,7 +131,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
             <Input value={sample.subject} onChange={e => setSample({ ...sample, subject: e.target.value })} placeholder="subject" />
           </div>
           {testResult && (
-            <p className={`text-xs mt-2 ${testResult.error ? 'text-red-500' : testResult.matched ? 'text-green-600' : 'text-muted-foreground'}`}>
+            <p className={`text-xs mt-2 ${testResult.error ? 'text-destructive' : testResult.matched ? 'text-success' : 'text-muted-foreground'}`}>
               {testResult.error ? testResult.error : testResult.matched ? t('rules.testHit') : t('rules.testMiss')}
             </p>
           )}

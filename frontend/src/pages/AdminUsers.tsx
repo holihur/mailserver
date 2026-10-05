@@ -96,7 +96,7 @@ export default function AdminUsers() {
                 <td className="pr-2">{u.mail_count}</td>
                 <td className="pr-2 text-xs">{u.sent_today ?? 0}</td>
                 <td className="pr-2 text-xs">{u.quota_mb > 0 ? `${u.quota_mb} MB` : t('users.unlimited')}</td>
-                <td className="pr-2">{u.disabled ? <span className="text-red-500 text-xs">{t('users.disabled')}</span> : <span className="text-green-600 text-xs">{t('users.normal')}</span>}</td>
+                <td className="pr-2">{u.disabled ? <span className="text-destructive text-xs">{t('users.disabled')}</span> : <span className="text-success text-xs">{t('users.normal')}</span>}</td>
                 <td className="text-right whitespace-nowrap">
                   <Button variant="ghost" size="sm" onClick={() => setQuota(u)}><HardDrive />{t('users.setQuota')}</Button>
                   <Button variant="ghost" size="sm" onClick={() => resetPass(u)}><KeyRound />{t('users.changePass')}</Button>

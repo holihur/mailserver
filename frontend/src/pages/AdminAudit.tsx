@@ -3,7 +3,9 @@ import { api } from '../api/client'
 import AdminShell from '../components/AdminShell'
 import { Card, Badge } from '../components/ui/controls'
 import { SkeletonRows } from '../components/Skeleton'
+import { EmptyState } from '../components/EmptyState'
 import { useI18n } from '../lib/i18n'
+import { History } from 'lucide-react'
 
 // 管理员操作审计日志。
 export default function AdminAudit() {
@@ -16,7 +18,7 @@ export default function AdminAudit() {
     <AdminShell title={t('admin.audit')} desc={t('admin.auditDesc')}>
       <Card className="p-4 overflow-x-auto">
         {loading && <SkeletonRows rows={4} />}
-        {!loading && list.length === 0 && <p className="text-sm text-muted-foreground">{t('admin.auditEmpty')}</p>}
+        {!loading && list.length === 0 && <EmptyState icon={History} title={t('admin.auditEmpty')} />}
         {!loading && list.length > 0 && (
           <table className="w-full text-sm min-w-[680px]">
             <thead><tr className="text-left text-xs text-muted-foreground">

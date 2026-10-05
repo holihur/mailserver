@@ -62,7 +62,7 @@ export default function Login() {
         </div>
         {(() => {
           const e = new URLSearchParams(location.search).get('oidc_error')
-          return e ? <p className="text-sm text-red-500" role="alert">{e === 'domain' ? t('login.oidcDomain') : t('login.oidcError')}</p> : null
+          return e ? <p className="text-sm text-destructive" role="alert">{e === 'domain' ? t('login.oidcDomain') : t('login.oidcError')}</p> : null
         })()}
         {oidc && (
           <a href="/api/oidc/login" className="block">
@@ -73,8 +73,8 @@ export default function Login() {
           <form onSubmit={submitCode} className="space-y-3">
             <p className="text-sm text-muted-foreground">{t('login.totpHint')}</p>
             <Input autoFocus inputMode="numeric" maxLength={6} className="tracking-widest text-center"
-              placeholder="000000" value={code} onChange={e => setCode(e.target.value)} required />
-            {err && <p className="text-sm text-red-500" role="alert">{err}</p>}
+              aria-label={t('login.code')} placeholder="000000" value={code} onChange={e => setCode(e.target.value)} required />
+            {err && <p className="text-sm text-destructive" role="alert">{err}</p>}
             <Button className="w-full" disabled={loading}>
               {loading ? <><Loader2 className="animate-spin" />{t('login.pleaseWait')}</> : t('login.verify')}
             </Button>
@@ -92,13 +92,13 @@ export default function Login() {
             </div>
             <form onSubmit={submit} className="space-y-3">
               <Input type="text" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username"
-                placeholder="you@example.com · admin" value={form.email}
+                aria-label={t('login.email')} placeholder="you@example.com · admin" value={form.email}
                 onChange={e => setForm({ ...form, email: e.target.value })} required />
-              {mode === 'register' && <Input autoComplete="nickname" placeholder={t('login.nickname')} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />}
+              {mode === 'register' && <Input autoComplete="nickname" aria-label={t('login.nickname')} placeholder={t('login.nickname')} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />}
               <Input type="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                placeholder={t('login.password')} value={form.password}
+                aria-label={t('login.password')} placeholder={t('login.password')} value={form.password}
                 onChange={e => setForm({ ...form, password: e.target.value })} required />
-              {err && <p className="text-sm text-red-500" role="alert">{err}</p>}
+              {err && <p className="text-sm text-destructive" role="alert">{err}</p>}
               <Button className="w-full" disabled={loading}>
                 {loading ? <><Loader2 className="animate-spin" />{t('login.pleaseWait')}</> : mode === 'login' ? t('login.loginBtn') : t('login.registerBtn')}
               </Button>

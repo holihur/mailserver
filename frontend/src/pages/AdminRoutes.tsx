@@ -3,8 +3,9 @@ import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label, Select } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
+import { EmptyState } from '../components/EmptyState'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X, FlaskConical } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, FlaskConical, Route } from 'lucide-react'
 
 const EMPTY = {
   domain: '', action: 'relay', relay_host: '', relay_port: '587', relay_user: '',
@@ -146,7 +147,7 @@ export default function AdminRoutes() {
       </Card>
 
       <Card className="divide-y divide-border">
-        {list.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('routes.empty')}</p>}
+        {list.length === 0 && <EmptyState icon={Route} title={t('routes.empty')} />}
         {list.map(r => (
           <div key={r.id} className="p-3 flex items-start gap-3">
             <input type="checkbox" className="mt-1" checked={r.enabled} onChange={() => toggle(r)} aria-label={t('routes.enabled')} />

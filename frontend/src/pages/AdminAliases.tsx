@@ -4,9 +4,10 @@ import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import { RecipientInput } from '../components/RecipientInput'
 import { SkeletonRows } from '../components/Skeleton'
+import { EmptyState } from '../components/EmptyState'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, AtSign } from 'lucide-react'
 
 const EMPTY = { source: '', targets: '', keep: false, enabled: true }
 
@@ -90,7 +91,7 @@ export default function AdminAliases() {
 
       <Card className="divide-y divide-border">
         {loading && <SkeletonRows rows={3} />}
-        {!loading && list.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('aliases.empty')}</p>}
+        {!loading && list.length === 0 && <EmptyState icon={AtSign} title={t('aliases.empty')} />}
         {!loading && list.map(a => (
           <div key={a.id} className="p-3 flex items-start gap-3">
             <input type="checkbox" className="mt-1" checked={a.enabled} onChange={() => toggle(a)} aria-label={t('aliases.enabled')} />

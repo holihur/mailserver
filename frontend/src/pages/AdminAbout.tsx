@@ -89,7 +89,7 @@ export default function AdminAbout() {
           <span className="text-2xl">🌽</span>
           <b className="text-lg">{BRAND}</b>
           <Badge className="font-mono">v{String(about?.version || '').replace(/^v/, '') || '—'}</Badge>
-          {available && <Badge className="text-green-600">{t('about.available', { v: check.latest })}</Badge>}
+          {available && <Badge className="text-success">{t('about.available', { v: check.latest })}</Badge>}
         </div>
         <div className="text-xs text-muted-foreground font-mono space-y-0.5">
           <div>commit: {about?.commit || '—'}</div>
@@ -105,11 +105,11 @@ export default function AdminAbout() {
             {updating ? <Loader2 className="animate-spin" /> : <DownloadCloud />}{t('about.update')}
           </Button>
           {check && !check.error && !available && (
-            <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 size={14} />{t('about.latest')}</span>
+            <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 size={14} />{t('about.latest')}</span>
           )}
         </div>
         {(msg || check?.error) && (
-          <p className={`text-xs flex items-start gap-1 ${check?.error ? 'text-red-500' : 'text-muted-foreground'}`}>
+          <p className={`text-xs flex items-start gap-1 ${check?.error ? 'text-destructive' : 'text-muted-foreground'}`}>
             {check?.error ? <AlertCircle size={14} className="mt-0.5 shrink-0" /> : null}
             <span className="break-all">{check?.error || msg}</span>
           </p>

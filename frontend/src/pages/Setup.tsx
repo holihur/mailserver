@@ -105,8 +105,8 @@ export default function Setup() {
             </div>
           </form>
           {newToken && (
-            <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 space-y-2">
-              <p className="text-xs text-yellow-700 dark:text-yellow-400">{t('token.onceWarning')}</p>
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-3 space-y-2">
+              <p className="text-xs text-warning dark:text-yellow-400">{t('token.onceWarning')}</p>
               <div className="flex items-center gap-2">
                 <code className="flex-1 break-all text-xs font-mono bg-background rounded px-2 py-1">{newToken}</code>
                 <Button size="sm" variant="outline" type="button" onClick={() => copyText(newToken)}><Copy />{t('common.copy')}</Button>
@@ -182,7 +182,7 @@ export default function Setup() {
             const st = m.status || (m.relayed ? 'sent' : m.attempts >= 8 ? 'failed' : 'queued')
             const label = st === 'sent' ? t('mail.stSent') : st === 'failed' ? t('mail.stFailed') : st === 'sending' ? t('mail.stSending') : t('mail.stQueued')
             const Icon = st === 'sent' ? CheckCircle2 : st === 'failed' ? XCircle : Clock
-            const color = st === 'sent' ? 'text-green-600' : st === 'failed' ? 'text-red-500' : st === 'sending' ? 'text-blue-500' : 'text-yellow-600'
+            const color = st === 'sent' ? 'text-success' : st === 'failed' ? 'text-destructive' : st === 'sending' ? 'text-primary' : 'text-warning'
             return (
               <div key={m.id} className="flex items-center gap-2 text-sm border-t border-border py-2">
                 <span className={`flex items-center gap-1 text-xs shrink-0 ${color}`}><Icon size={14} />{label}</span>
@@ -196,7 +196,7 @@ export default function Setup() {
         </Card>
 
         <Card className="p-4">
-          <b className="text-sm">{t('setup.dkim')} {dkim?.ready ? <Badge className="text-green-600">{t('common.enabled')}</Badge> : <Badge className="text-yellow-600">{t('common.disabled')}</Badge>}</b>
+          <b className="text-sm">{t('setup.dkim')} {dkim?.ready ? <Badge className="text-success">{t('common.enabled')}</Badge> : <Badge className="text-warning">{t('common.disabled')}</Badge>}</b>
           {!dkim?.ready ? (
             <p className="text-sm text-muted-foreground mt-1">{dkim?.hint || t('setup.dkimNotReady')}</p>
           ) : (

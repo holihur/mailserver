@@ -60,7 +60,19 @@ export function Dropdown({
 
   return (
     <div ref={ref} className="relative">
-      <div onClick={() => setOpen(o => !o)}>{trigger}</div>
+      <div
+        onClick={() => setOpen(o => !o)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
+            e.preventDefault()
+            setOpen(true)
+          }
+        }}
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        {trigger}
+      </div>
       {open && pos && createPortal(
         <div
           ref={menuRef}

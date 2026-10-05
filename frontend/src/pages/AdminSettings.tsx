@@ -140,7 +140,7 @@ export default function AdminSettings() {
 
           <Card className="p-4 space-y-3">
             <div className="flex items-center gap-2"><KeyRound size={16} /><b className="text-sm">{t('settings.dkim')}</b>
-              {s.dkim_ready ? <Badge className="text-green-600">{t('common.enabled')}</Badge> : <Badge className="text-yellow-600">{t('common.disabled')}</Badge>}
+              {s.dkim_ready ? <Badge className="text-success">{t('common.enabled')}</Badge> : <Badge className="text-warning">{t('common.disabled')}</Badge>}
             </div>
             <p className="text-xs text-muted-foreground">{t('settings.dkimHint')}</p>
             {s.dkim_ready && dkim?.ready && (

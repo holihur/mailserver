@@ -58,7 +58,7 @@ export default function AdminPage() {
         <div className="mt-3 space-y-1">
           {steps.map((s, i) => (
             <Link key={i} to={s.to} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted text-sm">
-              {s.ok ? <CheckCircle2 size={16} className="text-green-600" /> : <Circle size={16} className="text-muted-foreground" />}
+              {s.ok ? <CheckCircle2 size={16} className="text-success" /> : <Circle size={16} className="text-muted-foreground" />}
               <span className={s.ok ? 'text-muted-foreground line-through' : ''}>{s.label}</span>
             </Link>
           ))}

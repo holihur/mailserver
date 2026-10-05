@@ -28,7 +28,7 @@ export default function AdminSSL() {
         <div className="flex items-center gap-2">
           <ShieldCheck size={16} />
           <b className="text-sm">{t('ssl.current')}</b>
-          {cert?.exists ? <Badge className="text-green-600">{t('ssl.configured')}</Badge> : <Badge className="text-yellow-600">{t('ssl.notConfigured')}</Badge>}
+          {cert?.exists ? <Badge className="text-success">{t('ssl.configured')}</Badge> : <Badge className="text-warning">{t('ssl.notConfigured')}</Badge>}
         </div>
         {cert?.exists ? (
           <div className="mt-3 text-sm space-y-1">
@@ -86,7 +86,7 @@ function AcmeForm({ providers, defaultDomain, acme, onMsg, onDone, busy, setBusy
   }
 
   if (providers.length === 0) {
-    return <p className="text-sm text-yellow-600">{t('providers.none')}</p>
+    return <p className="text-sm text-warning">{t('providers.none')}</p>
   }
 
   return (

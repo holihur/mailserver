@@ -77,7 +77,7 @@ export default function Sieve() {
         {list.map(sc => (
           <div key={sc.id} className="p-3 flex items-center gap-2">
             <button className="text-sm font-medium hover:underline truncate" onClick={() => edit(sc)}>{sc.name}</button>
-            {sc.active && <Badge className="text-green-600">{t('sieve.active')}</Badge>}
+            {sc.active && <Badge className="text-success">{t('sieve.active')}</Badge>}
             <div className="flex-1" />
             {!sc.active && <Button variant="ghost" size="sm" onClick={() => activate(sc)}><Power />{t('sieve.activate')}</Button>}
             <Button variant="ghost" size="icon" onClick={() => del(sc)} aria-label={t('common.delete')}><Trash2 /></Button>

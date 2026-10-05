@@ -3,6 +3,7 @@ import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Select } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
+import { EmptyState } from '../components/EmptyState'
 import { useI18n } from '../lib/i18n'
 import {
   Plus, Trash2, RefreshCw, Cloud, KeyRound,
@@ -45,7 +46,7 @@ export default function AdminProviders() {
       <Card className="p-4 space-y-3">
         <b className="text-sm">{t('providers.connected')}</b>
         {providers.map(pr => <ProviderCard key={pr.id} provider={pr} onChanged={load} />)}
-        {providers.length === 0 && <p className="text-sm text-muted-foreground">{t('providers.none')}</p>}
+        {providers.length === 0 && <EmptyState icon={Cloud} title={t('providers.none')} />}
       </Card>
 
       <Card className="p-4">
@@ -81,7 +82,7 @@ export default function AdminProviders() {
             </div>
           )}
 
-          {err && <p className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12} />{err}</p>}
+          {err && <p className="text-xs text-destructive flex items-center gap-1"><AlertCircle size={12} />{err}</p>}
 
           <Button size="sm" disabled={busy}>
             {busy ? <Loader2 className="animate-spin" /> : <Plus />}
@@ -142,7 +143,7 @@ function ProviderCard({ provider, onChanged }) {
       </div>
 
       {msg && <p className="text-xs text-muted-foreground flex items-center gap-1">
-        {msg.endsWith('✓') ? <CheckCircle2 size={12} className="text-green-600" /> : <AlertCircle size={12} />}{msg}
+        {msg.endsWith('✓') ? <CheckCircle2 size={12} className="text-success" /> : <AlertCircle size={12} />}{msg}
       </p>}
 
       {domains && (
@@ -191,8 +192,8 @@ function ProviderCard({ provider, onChanged }) {
 
 function ActionBadge({ action, error }) {
   const map = {
-    created: ['+', 'text-green-600'], updated: ['↻', 'text-blue-600'],
-    unchanged: ['=', 'text-muted-foreground'], failed: ['✗', 'text-red-500'],
+    created: ['+', 'text-success'], updated: ['↻', 'text-primary'],
+    unchanged: ['=', 'text-muted-foreground'], failed: ['✗', 'text-destructive'],
   }
   const [label, cls] = map[action] || [action, '']
   return (

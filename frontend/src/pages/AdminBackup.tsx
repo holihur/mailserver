@@ -133,7 +133,7 @@ export default function AdminBackup() {
                       <RotateCcw size={14} />
                     </Button>
                     <Button variant="ghost" size="sm" title={t('backup.delete')} onClick={() => del(b.name)} disabled={busy}>
-                      <Trash2 size={14} className="text-red-600" />
+                      <Trash2 size={14} className="text-destructive" />
                     </Button>
                   </td>
                 </tr>

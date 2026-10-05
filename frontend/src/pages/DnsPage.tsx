@@ -143,7 +143,7 @@ export default function DnsPage() {
                 <div className="flex items-center gap-2 mb-2">
                   <b className="text-sm">{t('dns.zonePreview')}</b>
                   <Button variant="outline" size="sm" onClick={() => { navigator.clipboard.writeText(zone) }}><Copy />{t('common.copy')}</Button>
-                  <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 size={12} />{t('dns.synced')}</span>
+                  <span className="text-xs text-success flex items-center gap-1"><CheckCircle2 size={12} />{t('dns.synced')}</span>
                 </div>
                 <pre className="text-xs font-mono bg-muted/60 rounded-md p-3 overflow-x-auto whitespace-pre">{zone}</pre>
               </Card>
