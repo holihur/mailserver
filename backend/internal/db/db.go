@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"strings"
+	"time"
 
 	"mailserver/internal/model"
 
@@ -21,6 +22,13 @@ func Open(dsn string) (*gorm.DB, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	// 连接池上限：避免多包测试/多实例把 PG 连接打满（max_connections）。
+	if sqlDB, err := g.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(25)
+		sqlDB.SetMaxIdleConns(2)
+		sqlDB.SetConnMaxIdleTime(2 * time.Minute)
+		sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	}
 	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}, &model.DnsProvider{}, &model.AcmeConfig{}, &model.Setting{}, &model.MailToken{}, &model.MailRule{}, &model.Contact{}, &model.MailRoute{}, &model.MailAlias{}, &model.ExternalAccount{}, &model.MailFolder{}, &model.SieveScript{}, &model.ScheduledMail{}, &model.AuditLog{}, &model.LoginEvent{}, &model.Session{}); err != nil {
 		return nil, err
