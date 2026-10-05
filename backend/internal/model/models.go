@@ -166,6 +166,11 @@ type Mail struct {
 	ReceiptFor  uint       `json:"receipt_for"`                  // MDN 关联的原邮件 ID
 	AuthResults string     `gorm:"size:255" json:"auth_results"` // 入站认证结果，如 "spf=pass; dkim=fail; dmarc=fail"
 	CreatedAt   time.Time  `json:"created_at"`
+
+	// 会话聚合（仅接口返回，非持久化）
+	ThreadCount  int    `gorm:"-" json:"thread_count,omitempty"`
+	ThreadUnread int    `gorm:"-" json:"thread_unread,omitempty"`
+	ThreadIDs    []uint `gorm:"-" json:"thread_ids,omitempty"`
 }
 
 // MailRule 基于 CEL 的收信规则：表达式命中后把邮件投递到指定文件夹（默认 trash）。

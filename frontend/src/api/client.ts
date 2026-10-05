@@ -32,8 +32,9 @@ export const api = {
   logoutAll: () => req('/api/me/logout-all', { method: 'POST' }),
   sessions: () => req('/api/me/sessions'),
   revokeSession: (jti) => req('/api/me/sessions/' + jti, { method: 'DELETE' }),
-  list: (folder = 'inbox', q = '', page = 1, sort = 'newest') =>
-    req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}`),
+  list: (folder = 'inbox', q = '', page = 1, sort = 'newest', group = '') =>
+    req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}${group ? '&group=' + group : ''}`),
+  thread: (id) => req(`/api/mails/${id}/thread`),
   unread: () => req('/api/mails/unread'),
   proxyImage: async (u: string) => {
     const r = await fetch(`${BASE}/api/proxy/image?u=${encodeURIComponent(u)}`, { headers: headers() })

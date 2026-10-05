@@ -76,6 +76,10 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 	case "sender":
 		order = "\"from\" ASC, id DESC"
 	}
+	if r.URL.Query().Get("group") == "thread" {
+		m.listThreads(w, uid, folder, q, page, size)
+		return
+	}
 	tx := m.DB.Where("user_id = ? AND folder = ?", uid, folder).Order(order)
 	if q != "" {
 		tx = mailsearch.Parse(q).Apply(tx)
@@ -93,6 +97,73 @@ func (m *MailBox) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"total": total, "items": items, "page": page})
 }
 
+// threadNormSQL 规范化主题用于会话分组（去 Re/Fwd/回复/转发 前缀）。
+const threadNormSQL = `btrim(regexp_replace(COALESCE(subject, ''), '^((re|fwd|fw|回复|转发|答复)[[:space:]]*:[[:space:]]*)+', '', 'i'))`
+
+// listThreads 会话聚合：按规范化主题分组，返回每会话最新一封 + 数量/未读/成员 id。
+func (m *MailBox) listThreads(w http.ResponseWriter, uid uint, folder, q string, page, size int) {
+	base := func() *gorm.DB {
+		tx := m.DB.Table("mails").Select("id, read, "+threadNormSQL+" AS tnorm").
+			Where("user_id = ? AND folder = ?", uid, folder)
+		if q != "" {
+			tx = mailsearch.Parse(q).Apply(tx)
+		}
+		return tx
+	}
+	var total int64
+	m.DB.Table("(?) AS t", base()).Select("COUNT(DISTINCT tnorm)").Scan(&total)
+
+	type grp struct {
+		Tnorm  string
+		MaxID  uint
+		Cnt    int64
+		Unread int64
+	}
+	var gs []grp
+	m.DB.Table("(?) AS t", base()).
+		Select("tnorm, MAX(id) AS max_id, COUNT(*) AS cnt, COUNT(*) FILTER (WHERE NOT read) AS unread").
+		Group("tnorm").Order("max_id DESC").Offset((page - 1) * size).Limit(size).Scan(&gs)
+
+	ids := make([]uint, 0, len(gs))
+	norms := make([]string, 0, len(gs))
+	for _, g := range gs {
+		ids = append(ids, g.MaxID)
+		norms = append(norms, g.Tnorm)
+	}
+	byID := map[uint]model.Mail{}
+	if len(ids) > 0 {
+		var ms []model.Mail
+		m.DB.Where("user_id = ? AND id IN ?", uid, ids).Find(&ms)
+		for _, mm := range ms {
+			byID[mm.ID] = mm
+		}
+	}
+	threadIDs := map[string][]uint{}
+	if len(norms) > 0 {
+		var rows []struct {
+			ID    uint
+			Tnorm string
+		}
+		m.DB.Table("(?) AS t", base()).Select("id, tnorm").Where("tnorm IN ?", norms).Order("id DESC").Scan(&rows)
+		for _, row := range rows {
+			threadIDs[row.Tnorm] = append(threadIDs[row.Tnorm], row.ID)
+		}
+	}
+	items := make([]model.Mail, 0, len(gs))
+	for _, g := range gs {
+		mm, ok := byID[g.MaxID]
+		if !ok {
+			continue
+		}
+		mm.Attachments = message.HydrateAttachments(mm.Attachments)
+		mm.ThreadCount = int(g.Cnt)
+		mm.ThreadUnread = int(g.Unread)
+		mm.ThreadIDs = threadIDs[g.Tnorm]
+		items = append(items, mm)
+	}
+	writeJSON(w, 200, map[string]any{"total": total, "items": items, "page": page, "group": "thread"})
+}
+
 // GET /api/mails/:id  PATCH /api/mails/:id  DELETE /api/mails/:id
 func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 	uid, ok := uidOf(m.DB, w, r)
@@ -104,6 +175,26 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 	var mail model.Mail
 	if err := m.DB.Where("id = ? AND user_id = ?", id, uid).First(&mail).Error; err != nil {
 		writeJSON(w, 404, map[string]string{"error": "not found"})
+		return
+	}
+	// GET /api/mails/{id}/thread：同一会话（规范化主题）的全部邮件
+	if strings.HasSuffix(rest, "/thread") {
+		if r.Method != "GET" {
+			w.WriteHeader(405)
+			return
+		}
+		var tnorm string
+		m.DB.Raw("SELECT "+threadNormSQL+" FROM mails WHERE id = ? AND user_id = ?", mail.ID, uid).Scan(&tnorm)
+		var ms []model.Mail
+		m.DB.Where("user_id = ? AND folder = ?", uid, mail.Folder).
+			Where(threadNormSQL+" = ?", tnorm).Order("id ASC").Limit(100).Find(&ms)
+		for i := range ms {
+			ms[i].Attachments = message.HydrateAttachments(ms[i].Attachments)
+		}
+		if ms == nil {
+			ms = []model.Mail{}
+		}
+		writeJSON(w, 200, ms)
 		return
 	}
 	// POST /api/mails/{id}/undo：撤销发送（仅限尚未真正发出的邮件）

@@ -68,10 +68,10 @@ export default function MailApp() {
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  async function load(p = page, s = sort, silent = false) {
+  async function load(p = page, s = sort, silent = false, g = group) {
     if (!silent) setLoading(true)
     try {
-      const d = await api.list(folder, q, p, s)
+      const d = await api.list(folder, q, p, s, g ? 'thread' : '')
       setItems(d.items); setTotal(d.total); setPage(d.page || p)
     } catch {} finally { if (!silent) setLoading(false) }
     api.unread().then((u: any) => {
@@ -213,6 +213,8 @@ export default function MailApp() {
   }, [preview])
 
   const [selectMode, setSelectMode] = useState(false)
+  const [group, setGroup] = useState(false)
+  const [thread, setThread] = useState<any[]>([])
   const [checked, setChecked] = useState<number[]>([])
   const [allSelected, setAllSelected] = useState(false)
   const hasSel = allSelected || checked.length > 0
@@ -241,6 +243,7 @@ export default function MailApp() {
     setView('read')
     if (String(id) !== routeId) navigate('/m/' + id)
     setItems(items.map(i => i.id === id ? { ...i, read: true } : i))
+    api.thread(id).then((ms: any) => setThread(ms || [])).catch(() => setThread([]))
     // 已读后立即刷新未读角标与标签页标题，无需等待下一轮轮询
     api.unread().then((u: any) => { setUnread(u); prevUnread.current = sumUnread(u) }).catch(() => {})
   }
@@ -471,6 +474,10 @@ export default function MailApp() {
                 <option value="subject">{t('mail.sortSubject')}</option>
                 <option value="sender">{t('mail.sortSender')}</option>
               </select>
+              <Button variant={group ? 'default' : 'outline'} size="default" className="h-9 shrink-0"
+                onClick={() => { const g = !group; setGroup(g); setPage(1); load(1, sort, false, g) }}>
+                {t('mail.threads')}
+              </Button>
               <Button variant={selectMode ? 'default' : 'outline'} size="default" className="h-9 shrink-0"
                 onClick={() => { setSelectMode(v => !v); setChecked([]); setAllSelected(false) }}>
                 {selectMode ? t('mail.done') : t('mail.batch')}
@@ -549,6 +556,7 @@ export default function MailApp() {
                       {m.subject || t('mail.noSubject')}
                     </span>
                     <SendStatus m={m} folder={folder} />
+                    {m.thread_count > 1 && <span className="shrink-0 rounded-full bg-muted px-1.5 text-[10px] text-muted-foreground">{t('mail.threadN', { n: m.thread_count })}</span>}
                     {attList(m.attachments).length > 0 && <Paperclip size={12} className="text-muted-foreground shrink-0" />}
                     {!selectMode && (
                       <button type="button" aria-label={m.starred ? t('mail.unstar') : t('mail.star')}
@@ -600,6 +608,18 @@ export default function MailApp() {
                 <button onClick={() => navigate('/')} className="md:hidden mb-3 flex items-center gap-1 text-sm text-muted-foreground">
                   <ArrowLeft size={16} />{t('common.back')}
                 </button>
+                {thread.length > 1 && (
+                  <div className="mb-3 rounded-md border border-border divide-y divide-border text-sm overflow-hidden">
+                    {thread.map((tm: any) => (
+                      <button key={tm.id} onClick={() => open(tm.id)}
+                        className={cn('w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted', tm.id === sel.id && 'bg-muted')}>
+                        <span className="truncate flex-1">{tm.subject || t('mail.noSubject')}</span>
+                        <span className="text-xs text-muted-foreground shrink-0 max-w-[40%] truncate">{tm.from}</span>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{fmtWhen(tm.created_at)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <Card className="p-4 sm:p-5">
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
