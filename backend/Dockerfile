@@ -2,7 +2,7 @@
 # 构建上下文为仓库根目录：docker build -f backend/Dockerfile .
 #
 # --- 1) 构建前端 ---
-FROM node:22-alpine AS web
+FROM node:26-alpine AS web
 WORKDIR /web
 RUN npm i -g pnpm@11.25.0
 COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./

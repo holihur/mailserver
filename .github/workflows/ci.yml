@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.27"
           cache-dependency-path: backend/go.sum
@@ -60,7 +60,7 @@ jobs:
         run: go vet ./...
 
       - name: Lint (only new issues)
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.14.0
           working-directory: backend
@@ -143,7 +143,7 @@ jobs:
         run: pnpm run build
 
       - name: Upload dist
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: web-dist
           path: frontend/dist
