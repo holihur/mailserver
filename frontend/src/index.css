@@ -1,6 +1,19 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+/* Tailwind v4 兼容：默认边框色改回我们的 --border（v3 默认是 gray-200，v4 为 currentColor）。 */
+@layer base {
+  *,
+  ::before,
+  ::after,
+  ::backdrop {
+    border-color: hsl(var(--border));
+  }
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
+}
 
 :root {
   color-scheme: light;

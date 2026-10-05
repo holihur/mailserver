@@ -54,7 +54,7 @@ export function RecipientInput({
         ))}
         <input
           autoFocus={autoFocus}
-          className="flex-1 min-w-[8rem] bg-transparent outline-none py-1"
+          className="flex-1 min-w-[8rem] bg-transparent outline-hidden py-1"
           placeholder={emails.length ? '' : placeholder}
           value={q}
           onChange={e => {

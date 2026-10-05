@@ -7,9 +7,9 @@ type ButtonProps = ComponentProps<'button'> & {
 }
 
 export function Button({ className, variant = 'default', size = 'default', ...p }: ButtonProps) {
-  const base = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus:outline-none disabled:opacity-50 [&_svg]:size-4'
+  const base = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus:outline-hidden disabled:opacity-50 [&_svg]:size-4'
   const variants = {
-    default: 'bg-primary text-primary-foreground shadow hover:bg-primary/90',
+    default: 'bg-primary text-primary-foreground shadow-sm hover:bg-primary/90',
     outline: 'border border-border bg-background hover:bg-muted',
     ghost: 'hover:bg-muted',
     destructive: 'bg-red-500 text-white hover:bg-red-600',
@@ -19,11 +19,11 @@ export function Button({ className, variant = 'default', size = 'default', ...p 
 }
 
 export function Input({ className, ...p }: ComponentProps<'input'>) {
-  return <input className={cn('flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30', className)} {...p} />
+  return <input className={cn('flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm outline-hidden focus:ring-2 focus:ring-primary/30', className)} {...p} />
 }
 
 export function Select({ className, ...p }: ComponentProps<'select'>) {
-  return <select className={cn('flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30', className)} {...p} />
+  return <select className={cn('flex h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-hidden focus:ring-2 focus:ring-primary/30', className)} {...p} />
 }
 
 export function Label({ className, ...p }: ComponentProps<'label'>) {
@@ -31,11 +31,11 @@ export function Label({ className, ...p }: ComponentProps<'label'>) {
 }
 
 export function Textarea({ className, ...p }: ComponentProps<'textarea'>) {
-  return <textarea className={cn('flex min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30', className)} {...p} />
+  return <textarea className={cn('flex min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-hidden focus:ring-2 focus:ring-primary/30', className)} {...p} />
 }
 
 export function Card({ className, ...p }: ComponentProps<'div'>) {
-  return <div className={cn('rounded-lg border border-border bg-card text-card-foreground shadow-sm', className)} {...p} />
+  return <div className={cn('rounded-lg border border-border bg-card text-card-foreground shadow-xs', className)} {...p} />
 }
 
 export function Badge({ className, ...p }: ComponentProps<'span'>) {
