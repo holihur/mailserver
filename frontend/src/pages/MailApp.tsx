@@ -478,7 +478,7 @@ export default function MailApp() {
                 )
               )}
             </div>
-            <div className="border-t border-border p-2 flex items-center justify-between text-xs">
+            <div className="border-t border-border p-2 flex items-center justify-between text-xs safe-bottom">
               <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => load(page - 1, sort)}>‹ {t('mail.prev')}</Button>
               <span className="text-muted-foreground">{page} / {totalPages}</span>
               <Button variant="ghost" size="sm" disabled={page >= totalPages} onClick={() => load(page + 1, sort)}>{t('mail.next')} ›</Button>
@@ -620,6 +620,9 @@ function Compose({ me, init, onClose }: any) {
   const [schedOpen, setSchedOpen] = useState(false)
   const [sendAt, setSendAt] = useState('')
   const [repeat, setRepeat] = useState('')
+  const [savedAt, setSavedAt] = useState<Date | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const dirtyRef = useRef(false)
   useEffect(() => { api.external().then((xs: any[]) => setIds(xs.filter(x => x.enabled))).catch(() => {}) }, [])
   // 草稿自动保存（25s 一次，有内容才存）
   useEffect(() => {
@@ -629,6 +632,7 @@ function Compose({ me, init, onClose }: any) {
       try {
         if (draftId) await api.patch(draftId, { to: f.to, cc: f.cc, bcc: f.bcc, subject: f.subject, body: f.body })
         else { const r = await api.send({ ...f, folder: 'draft' }); setDraftId(r.id) }
+        setSavedAt(new Date())
       } catch {}
     }, 25000)
     return () => clearInterval(id)
@@ -642,12 +646,23 @@ function Compose({ me, init, onClose }: any) {
     })
   }, [])
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    const onKey = async (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (dirtyRef.current && !(await confirmAsync(t('mail.discardDraft')))) return
+      onClose()
+    }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose])
 
   const total = atts.reduce((s, a) => s + (a.size || 0), 0)
+  dirtyRef.current = !!(f.to || f.subject || f.body.trim() || atts.length)
+
+  // 关闭前确认：有未保存内容时二次确认（#39）。
+  async function requestClose() {
+    if (dirtyRef.current && !(await confirmAsync(t('mail.discardDraft')))) return
+    onClose()
+  }
 
   function onFiles(e: any) {
     const files: File[] = Array.from(e.target.files || [])
@@ -692,13 +707,27 @@ function Compose({ me, init, onClose }: any) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 grid place-items-center sm:p-4 z-50" onClick={onClose} role="dialog" aria-modal="true" aria-label={t('mail.compose')}>
-      <Card className="w-full h-full sm:h-auto sm:max-w-lg p-4 space-y-3 rounded-none sm:rounded-lg flex flex-col" onClick={(e: any) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end justify-center sm:items-center sm:p-4" onClick={requestClose} role="dialog" aria-modal="true" aria-label={t('mail.compose')}>
+      <Card ref={cardRef} className="w-full max-h-[92dvh] sm:max-h-[88vh] sm:max-w-lg p-4 rounded-t-2xl sm:rounded-lg flex flex-col"
+        onClick={(e: any) => e.stopPropagation()}
+        onKeyDown={(e: any) => {
+          if (e.key !== 'Tab') return
+          const nodes = cardRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])')
+          const list = nodes ? Array.from(nodes).filter(n => n.offsetParent !== null) : []
+          if (!list.length) return
+          const first = list[0], last = list[list.length - 1]
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+        }}>
         <div className="flex items-center gap-2">
           <b>{t('mail.compose')}</b>
+          <span className="text-[11px] text-muted-foreground" aria-live="polite">
+            {saving ? t('mail.draftSaving') : savedAt ? t('mail.draftSaved', { time: savedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }) : ''}
+          </span>
           <div className="flex-1" />
           <Button variant="ghost" size="sm" onClick={() => setShowCC(v => !v)}>{t('mail.ccBcc')}</Button>
         </div>
+        <div className="flex-1 min-h-0 overflow-auto space-y-3 pt-3">
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground shrink-0">{t('mail.from')}</span>
           <select className="h-9 flex-1 rounded-md border border-border bg-background text-sm px-2" value={f.from} onChange={e => setF({ ...f, from: e.target.value })}>
@@ -740,14 +769,15 @@ function Compose({ me, init, onClose }: any) {
             </div>
           </div>
         )}
-        <div className="flex items-center gap-2">
+        </div>
+        <div className="mt-auto flex flex-wrap items-center gap-2 pt-3 border-t border-border safe-bottom">
           <label className="inline-flex items-center gap-1 text-sm cursor-pointer text-muted-foreground hover:text-foreground">
             <Paperclip size={16} />{t('mail.attach')}
             <input type="file" multiple className="hidden" onChange={onFiles} />
           </label>
           <Button variant={schedOpen ? 'default' : 'outline'} size="sm" type="button" onClick={() => setSchedOpen(v => !v)}><Clock />{t('mail.schedule')}</Button>
           <div className="flex-1" />
-          <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button variant="outline" onClick={requestClose}>{t('common.cancel')}</Button>
           <Button variant="outline" disabled={saving} onClick={() => submit('draft')}>{t('mail.saveDraft')}</Button>
           <Button disabled={saving} onClick={() => submit('sent')}>
             {saving ? <Loader2 className="animate-spin" /> : null}{schedOpen && sendAt ? t('mail.scheduleSend') : t('mail.send')}

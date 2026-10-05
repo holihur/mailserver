@@ -1,7 +1,11 @@
 import { useRef, useState } from 'react'
 import { X } from 'lucide-react'
+import { cn } from '../lib/utils'
+import { useI18n } from '../lib/i18n'
 
 export type Suggestion = { email: string; name?: string; note?: string }
+
+const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 
 // 多收件人输入：已选为标签，支持下拉从联系人/站内用户中选择；逗号/分号/回车确认，退格删末尾。
 export function RecipientInput({
@@ -20,8 +24,10 @@ export function RecipientInput({
   const [q, setQ] = useState('')
   const [open, setOpen] = useState(false)
   const boxRef = useRef<HTMLDivElement>(null)
+  const { t } = useI18n()
 
   const emails = value ? value.split(',').map(s => s.trim()).filter(Boolean) : []
+  const invalid = emails.filter(e => !isEmail(e))
   const setEmails = (list: string[]) => onChange(list.join(', '))
 
   function add(email: string) {
@@ -43,11 +49,15 @@ export function RecipientInput({
 
   return (
     <div ref={boxRef} className="relative">
-      <div className="flex flex-wrap items-center gap-1 min-h-9 w-full rounded-md border border-border bg-background px-2 py-1 text-sm focus-within:ring-2 focus-within:ring-primary/30">
+      <div
+        aria-invalid={invalid.length > 0 || undefined}
+        className={cn('flex flex-wrap items-center gap-1 min-h-9 w-full rounded-md border bg-background px-2 py-1 text-sm focus-within:ring-2',
+          invalid.length ? 'border-destructive focus-within:ring-destructive/30' : 'border-border focus-within:ring-primary/30')}>
         {emails.map(e => (
-          <span key={e} className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-xs">
+          <span key={e} className={cn('inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs',
+            isEmail(e) ? 'bg-muted' : 'bg-destructive/10 text-destructive')}>
             {e}
-            <button type="button" onClick={() => remove(e)} aria-label="remove">
+            <button type="button" onClick={() => remove(e)} aria-label={t('common.delete')}>
               <X size={11} />
             </button>
           </span>
@@ -73,6 +83,7 @@ export function RecipientInput({
           }}
         />
       </div>
+      {invalid.length > 0 && <p className="mt-1 text-xs text-destructive" role="alert">{t('mail.invalidRecipient')}</p>}
       {open && filtered.length > 0 && (
         <div className="absolute z-50 mt-1 w-full max-h-56 overflow-auto rounded-md border border-border bg-card shadow-lg p-1">
           {filtered.map(s => (
