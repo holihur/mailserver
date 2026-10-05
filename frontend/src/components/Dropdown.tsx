@@ -18,18 +18,21 @@ export function Dropdown({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ top: number; left?: number; right?: number } | null>(null)
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left?: number; right?: number } | null>(null)
 
   useLayoutEffect(() => {
     if (!open) return
     const compute = () => {
       const r = ref.current?.getBoundingClientRect()
       if (!r) return
-      setPos(
-        align === 'right'
-          ? { top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) }
-          : { top: r.bottom + 8, left: Math.max(8, r.left) },
-      )
+      // 下方空间不足则向上弹出（如底部 Tab 的「更多」）
+      const up = window.innerHeight - r.bottom < 280 && r.top > 280
+      const p: { top?: number; bottom?: number; left?: number; right?: number } = up
+        ? { bottom: window.innerHeight - r.top + 8 }
+        : { top: r.bottom + 8 }
+      if (align === 'right') p.right = Math.max(8, window.innerWidth - r.right)
+      else p.left = Math.max(8, r.left)
+      setPos(p)
     }
     compute()
     window.addEventListener('resize', compute)
@@ -77,10 +80,10 @@ export function Dropdown({
         <div
           ref={menuRef}
           role="menu"
-          style={{ position: 'fixed', top: pos.top, left: pos.left, right: pos.right }}
+          style={{ position: 'fixed', ...pos }}
           onClick={() => setOpen(false)}
           className={cn(
-            'z-[100] min-w-[13rem] rounded-md border border-border bg-card text-card-foreground shadow-lg p-1',
+            'z-[100] min-w-[13rem] max-h-[70vh] overflow-auto rounded-md border border-border bg-card text-card-foreground shadow-lg p-1',
             className,
           )}
         >
