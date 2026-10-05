@@ -110,7 +110,7 @@ func (s *Server) eventSource(w http.ResponseWriter, r *http.Request) {
 	acct := acctID(u.ID)
 
 	sendPing := func() {
-		fmt.Fprint(w, "event: ping\ndata: {\"@type\":\"Ping\"}\n\n")
+		_, _ = fmt.Fprint(w, "event: ping\ndata: {\"@type\":\"Ping\"}\n\n")
 		fl.Flush()
 	}
 	sendState := func(state string) {
@@ -118,7 +118,7 @@ func (s *Server) eventSource(w http.ResponseWriter, r *http.Request) {
 			"@type":   "StateChange",
 			"changed": map[string]any{acct: map[string]any{"Email": state}},
 		})
-		fmt.Fprintf(w, "event: state\ndata: %s\n\n", data)
+		_, _ = fmt.Fprintf(w, "event: state\ndata: %s\n\n", data)
 		fl.Flush()
 	}
 	sendPing() // 建连即发一次，客户端可据此确认连接
@@ -142,7 +142,7 @@ func (s *Server) eventSource(w http.ResponseWriter, r *http.Request) {
 		case <-pingC:
 			sendPing()
 		case <-keepAlive.C:
-			fmt.Fprint(w, ": keepalive\n\n")
+			_, _ = fmt.Fprint(w, ": keepalive\n\n")
 			fl.Flush()
 		case state := <-ch:
 			sendState(state)

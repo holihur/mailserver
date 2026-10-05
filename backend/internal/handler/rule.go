@@ -132,7 +132,10 @@ func (h *RuleBox) apply(w http.ResponseWriter, r *http.Request, rule *model.Mail
 		Limit  int    `json:"limit"`
 		DryRun bool   `json:"dry_run"`
 	}
-	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in); err != nil {
+		writeJSON(w, 400, map[string]string{"error": "bad body"})
+		return
+	}
 	folder := strings.TrimSpace(in.Folder)
 	if folder == "" {
 		folder = "inbox"

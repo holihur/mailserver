@@ -50,7 +50,9 @@ func TestRuleApplyReplay(t *testing.T) {
 	if rr.Code != 200 {
 		t.Fatalf("预览应 200，得到 %d %s", rr.Code, rr.Body.String())
 	}
-	json.Unmarshal(rr.Body.Bytes(), &out)
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
 	if out.Matched != 3 || out.Applied != 0 {
 		t.Fatalf("预览应 matched=3 applied=0，得到 %+v", out)
 	}
@@ -65,7 +67,9 @@ func TestRuleApplyReplay(t *testing.T) {
 	if rr.Code != 200 {
 		t.Fatalf("应用应 200，得到 %d %s", rr.Code, rr.Body.String())
 	}
-	json.Unmarshal(rr.Body.Bytes(), &out)
+	if err := json.Unmarshal(rr.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
 	if out.Applied != 3 {
 		t.Fatalf("应处理 3 封，得到 %+v", out)
 	}
