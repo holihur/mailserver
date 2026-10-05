@@ -450,6 +450,7 @@ func main() {
 		w.WriteHeader(405)
 	}))
 	mux.HandleFunc("/api/mails/batch", cors(mb.Batch))
+	mux.HandleFunc("/api/mails/import", cors(mb.Import))
 	mux.HandleFunc("/api/mails/unread", cors(mb.Unread))
 	mux.HandleFunc("/api/mails/", cors(mb.One))
 	mux.HandleFunc("/api/tokens", cors(tb.List))

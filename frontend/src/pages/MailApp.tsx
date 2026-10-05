@@ -13,7 +13,7 @@ import {
   Inbox, Send, FileEdit, Trash2, Trash, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
   ChevronDown, MoreVertical, Reply, ReplyAll, Forward, MailOpen, RotateCcw,
-  Contact, Filter, KeyRound, AtSign, Download, Folder, Plus, FileCode, Clock, XCircle, Mail,
+  Contact, Filter, KeyRound, AtSign, Download, Folder, Plus, FileCode, Clock, XCircle, Mail, Upload,
 } from 'lucide-react'
 import { cn, linkify, setUnreadBadge, quoteMail } from '../lib/utils'
 import { BRAND } from '../lib/brand'
@@ -63,6 +63,7 @@ export default function MailApp() {
   const [showImages, setShowImages] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const importRef = useRef<HTMLInputElement>(null)
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -305,6 +306,19 @@ export default function MailApp() {
     try { await api.folderDelete(f.id); if (folder === f.k) setFolder('inbox'); await loadFolders() } catch (e: any) { toast(e.message) }
   }
 
+  // 导入 mbox / EML（#51）
+  async function onImport(e: any) {
+    const input = e.target as HTMLInputElement
+    const f = input.files?.[0]
+    if (!f) return
+    toast(t('mail.importing'))
+    try {
+      const r: any = await api.importMails(f, folder)
+      toast(t('mail.imported', { n: r.imported }), { type: 'success' })
+      load()
+    } catch (err: any) { toast(err.message, { type: 'error' }) } finally { input.value = '' }
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
@@ -328,6 +342,7 @@ export default function MailApp() {
           <DropdownItem icon={Filter} onClick={() => navigate('/rules')}>{t('nav.rules')}</DropdownItem>
           <DropdownItem icon={FileCode} onClick={() => navigate('/sieve')}>{t('nav.sieve')}</DropdownItem>
           <DropdownItem icon={Clock} onClick={() => navigate('/scheduled')}>{t('nav.scheduled')}</DropdownItem>
+          <DropdownItem icon={Upload} onClick={() => importRef.current?.click()}>{t('mail.importMails')}</DropdownItem>
           <DropdownSeparator />
           <DropdownLabel>{t('nav.groupAccount')}</DropdownLabel>
           <DropdownItem icon={KeyRound} onClick={() => navigate('/security')}>{t('nav.security')}</DropdownItem>
@@ -356,6 +371,7 @@ export default function MailApp() {
       )}
 
       {/* 移动端：底部悬浮写信按钮（拇指区，适配安全区） */}
+      <input ref={importRef} type="file" accept=".mbox,.eml,message/rfc822" className="hidden" onChange={onImport} />
       <button onClick={() => setShowCompose(true)} aria-label={t('mail.compose')}
         className="sm:hidden fixed right-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-30 grid place-items-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform">
         <PenLine size={22} />

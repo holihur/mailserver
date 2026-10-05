@@ -46,6 +46,17 @@ export const api = {
   trash: (id) => req(`/api/mails/${id}`, { method: 'DELETE' }),
   undoSend: (id) => req(`/api/mails/${id}/undo`, { method: 'POST' }),
   batch: (ids, action, folder = '', extra = {}) => req('/api/mails/batch', { method: 'POST', body: JSON.stringify({ ids, action, folder, ...extra }) }),
+  importMails: async (file: File, folder = 'inbox') => {
+    const t = localStorage.getItem('token')
+    const r = await fetch(`${BASE}/api/mails/import?folder=${encodeURIComponent(folder)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', ...(t ? { Authorization: 'Bearer ' + t } : {}) },
+      body: file,
+    })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(data.error || '导入失败')
+    return data
+  },
   emptyTrash: () => req('/api/mails/batch', { method: 'POST', body: JSON.stringify({ ids: [], action: 'empty' }) }),
   contacts: () => req('/api/contacts'),
   contactCreate: (b) => req('/api/contacts', { method: 'POST', body: JSON.stringify(b) }),
