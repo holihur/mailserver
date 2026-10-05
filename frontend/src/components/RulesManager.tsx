@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge, Label, Select } from './ui/controls'
 import { SkeletonRows } from './Skeleton'
@@ -48,7 +48,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
     setForm({ name: r.name, expression: r.expression, action: r.action || 'trash', folder: r.folder || 'trash', forward_to: r.forward_to || '', priority: r.priority || 0, enabled: r.enabled })
   }
   async function del(id: number) {
-    if (!await confirmAsync(t('rules.confirmDelete'))) return
+    if (!await confirmDestructive(t('rules.confirmDelete'))) return
     try { await apiDelete(id); load() } catch (err: any) { toast(err.message) }
   }
   async function toggle(r: any) {

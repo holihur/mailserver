@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -43,7 +43,7 @@ export default function Contacts() {
     } catch (err: any) { toast(err.message) }
   }
   async function del(id: number) {
-    if (!await confirmAsync(t('contacts.confirmDelete'))) return
+    if (!await confirmDestructive(t('contacts.confirmDelete'))) return
     try { await api.contactDelete(id); load() } catch (err: any) { toast(err.message) }
   }
 

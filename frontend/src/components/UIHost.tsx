@@ -37,13 +37,17 @@ export function UIHost() {
 
       {confirms.map(c => (
         <div key={c.id} className="fixed inset-0 z-[100] grid place-items-center bg-black/40 p-4"
+          role={c.destructive ? 'alertdialog' : 'dialog'} aria-modal="true"
           onClick={() => resolveConfirm(c.id, false)}>
           <div className="w-full max-w-sm rounded-lg border border-border bg-card p-4 space-y-4 shadow-xl"
             onClick={e => e.stopPropagation()}>
-            <p className="text-sm whitespace-pre-line break-words">{c.msg}</p>
+            <div className="flex items-start gap-2">
+              {c.destructive && <AlertCircle size={16} className="text-destructive shrink-0 mt-0.5" />}
+              <p className="text-sm whitespace-pre-line break-words">{c.msg}</p>
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" size="sm" onClick={() => resolveConfirm(c.id, false)}>{t('common.cancel')}</Button>
-              <Button variant="destructive" size="sm" onClick={() => resolveConfirm(c.id, true)}>{t('common.confirm')}</Button>
+              <Button variant={c.destructive ? 'destructive' : 'default'} size="sm" onClick={() => resolveConfirm(c.id, true)}>{t('common.confirm')}</Button>
             </div>
           </div>
         </div>

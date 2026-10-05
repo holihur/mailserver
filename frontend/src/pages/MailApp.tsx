@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { toast, confirmAsync, promptAsync } from '../lib/ui'
+import { toast, confirmAsync, confirmDestructive, promptAsync } from '../lib/ui'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card } from '../components/ui/controls'
@@ -13,7 +13,7 @@ import {
   Inbox, Send, FileEdit, Trash2, Trash, Star, Search, PenLine, LogOut,
   RefreshCw, Globe, Settings, ShieldCheck, ArrowLeft, Loader2, Paperclip, X,
   ChevronDown, MoreVertical, Reply, ReplyAll, Forward, MailOpen, RotateCcw,
-  Contact, Filter, KeyRound, AtSign, Download, Folder, Plus, FileCode, Clock, XCircle,
+  Contact, Filter, KeyRound, AtSign, Download, Folder, Plus, FileCode, Clock, XCircle, Mail,
 } from 'lucide-react'
 import { cn, linkify, setUnreadBadge, quoteMail } from '../lib/utils'
 import { BRAND } from '../lib/brand'
@@ -172,7 +172,7 @@ export default function MailApp() {
   }
 
   async function emptyTrash() {
-    if (!await confirmAsync(t('mail.confirmPurge'))) return
+    if (!await confirmDestructive(t('mail.confirmPurge'))) return
     try { await api.emptyTrash() } catch (e: any) { toast(e.message) }
     setChecked([]); setSelectMode(false); setSel(null); load(1, sort)
   }
@@ -254,14 +254,14 @@ export default function MailApp() {
     try { await api.folderPatch(f.id, name); await loadFolders() } catch (e: any) { toast(e.message) }
   }
   async function deleteFolder(f: any) {
-    if (!await confirmAsync(t('folders.confirmDelete', { name: f.label }))) return
+    if (!await confirmDestructive(t('folders.confirmDelete', { name: f.label }))) return
     try { await api.folderDelete(f.id); if (folder === f.k) setFolder('inbox'); await loadFolders() } catch (e: any) { toast(e.message) }
   }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <b className="shrink-0 truncate max-w-[45vw]">📮 {BRAND}</b>
+        <b className="shrink-0 truncate max-w-[45vw] flex items-center gap-1.5"><Mail size={16} />{BRAND}</b>
         <div className="flex-1" />
         <Button size="sm" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
         <Dropdown align="right" trigger={
@@ -344,7 +344,7 @@ export default function MailApp() {
           {/* 列表 */}
           <div className={cn('w-full md:w-80 md:shrink-0 border-r border-border flex-col',
             view === 'read' ? 'hidden md:flex' : 'flex')}>
-            <div className="p-3 border-b border-border flex gap-2">
+            <div className="p-3 border-b border-border flex flex-wrap gap-2">
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-2 top-2.5 text-muted-foreground" />
                 <Input ref={searchRef} className="pl-7 pr-7" placeholder={t('mail.searchPlaceholder')} title={t('mail.searchHint')} value={q}
@@ -355,6 +355,9 @@ export default function MailApp() {
                     if (e.key === 'Enter') { setPage(1); load(1, sort); rememberSearch(q); setShowHistory(false) }
                     else if (e.key === 'Escape') setShowHistory(false)
                   }} />
+                {loading && q && (
+                  <Loader2 size={14} className="absolute right-7 top-2.5 animate-spin text-muted-foreground" />
+                )}
                 {q && (
                   <button type="button" aria-label={t('common.clear')}
                     className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
@@ -410,11 +413,11 @@ export default function MailApp() {
                 {folder === 'deleted' ? (
                   <>
                     <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('move', 'inbox')}><RotateCcw />{t('mail.restore')}</Button>
-                    <Button variant="ghost" size="sm" disabled={!checked.length} onClick={async () => { if (!await confirmAsync(t('mail.confirmPurge'))) return; batch('purge') }}><Trash2 />{t('mail.purge')}</Button>
+                    <Button variant="ghost" size="sm" disabled={!checked.length} onClick={async () => { if (!await confirmDestructive(t('mail.confirmPurge'))) return; batch('purge') }}><Trash2 />{t('mail.purge')}</Button>
                   </>
                 ) : (
                   <Button variant="ghost" size="sm" disabled={!checked.length} onClick={async () => {
-                    if (folder === 'trash' && !await confirmAsync(t('mail.confirmPurge'))) return
+                    if (folder === 'trash' && !await confirmDestructive(t('mail.confirmPurge'))) return
                     batch(folder === 'trash' ? 'delete' : 'trash')
                   }}><Trash2 />{t('mail.batchDelete')}</Button>
                 )}
@@ -522,7 +525,7 @@ export default function MailApp() {
                       <DropdownItem icon={Forward} onClick={() => forwardMail(sel)}>{t('mail.forward')}</DropdownItem>
                       <DropdownSeparator />
                       <DropdownItem icon={Trash2} className="text-destructive hover:bg-destructive/10" onClick={async () => {
-                        if ((folder === 'trash' || folder === 'deleted') && !await confirmAsync(t('mail.confirmPurge'))) return
+                        if ((folder === 'trash' || folder === 'deleted') && !await confirmDestructive(t('mail.confirmPurge'))) return
                         await api.trash(sel.id); setSel(null); setView('list'); load()
                       }}>{folder === 'deleted' ? t('mail.purge') : t('mail.delete')}</DropdownItem>
                     </Dropdown>

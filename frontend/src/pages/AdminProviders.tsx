@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Select } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -138,7 +138,7 @@ function ProviderCard({ provider, onChanged }) {
           {busy === 'domains' ? <Loader2 className="animate-spin" /> : <RefreshCw />}{t('providers.getDomains')}
         </Button>
         <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={async () => {
-          if (await confirmAsync(`${t('common.delete')} ${provider.name}?`)) { await api.providerDelete(provider.id); onChanged() }
+          if (await confirmDestructive(`${t('common.delete')} ${provider.name}?`)) { await api.providerDelete(provider.id); onChanged() }
         }}><Trash2 /></Button>
       </div>
 
@@ -172,7 +172,7 @@ function ProviderCard({ provider, onChanged }) {
       {results && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead><tr className="text-left text-muted-foreground"><th className="py-1">{t('dns.host')}</th><th>{t('dns.type')}</th><th>{t('dns.value')}</th><th>{t('users.status')}</th></tr></thead>
+            <thead><tr className="text-left text-muted-foreground"><th scope="col" className="py-1">{t('dns.host')}</th><th scope="col">{t('dns.type')}</th><th scope="col">{t('dns.value')}</th><th scope="col">{t('users.status')}</th></tr></thead>
             <tbody>
               {results.map((r, i) => (
                 <tr key={i} className="border-t border-border">

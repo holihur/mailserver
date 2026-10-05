@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -48,7 +48,7 @@ export default function Accounts() {
     })
   }
   async function del(id: number) {
-    if (!await confirmAsync(t('accounts.confirmDelete'))) return
+    if (!await confirmDestructive(t('accounts.confirmDelete'))) return
     try { await api.externalDelete(id); load() } catch (err: any) { toast(err.message) }
   }
   async function test(id: number) {

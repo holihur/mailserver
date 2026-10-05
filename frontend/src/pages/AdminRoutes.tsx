@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label, Select } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -45,7 +45,7 @@ export default function AdminRoutes() {
     })
   }
   async function del(id: number) {
-    if (!await confirmAsync(t('routes.confirmDelete'))) return
+    if (!await confirmDestructive(t('routes.confirmDelete'))) return
     try { await api.adminRouteDelete(id); load() } catch (err: any) { toast(err.message) }
   }
   async function toggle(r: any) {

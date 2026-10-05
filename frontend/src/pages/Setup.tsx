@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Card, Badge, Input } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -51,7 +51,7 @@ export default function Setup() {
     } catch (err: any) { toast(err.message) }
   }
   async function revokeToken(id: number) {
-    if (!await confirmAsync(t('token.confirmRevoke'))) return
+    if (!await confirmDestructive(t('token.confirmRevoke'))) return
     try { await api.tokenDelete(id); setTokens(await api.tokens()) } catch (e: any) { toast(e.message) }
   }
   function copyText(s: string) { navigator.clipboard?.writeText(s) }
@@ -156,7 +156,7 @@ export default function Setup() {
           <b className="text-sm">{t('setup.clientParams')}</b>
           <table className="w-full text-sm mt-2 min-w-[520px]">
             <thead><tr className="text-left text-muted-foreground text-xs">
-              <th className="py-1">{t('setup.usage')}</th><th>{t('setup.server')}</th><th>{t('setup.encryption')}</th><th>{t('setup.account')}</th>
+              <th scope="col" className="py-1">{t('setup.usage')}</th><th scope="col">{t('setup.server')}</th><th scope="col">{t('setup.encryption')}</th><th scope="col">{t('setup.account')}</th>
             </tr></thead>
             <tbody>
               {rows.map(r => (

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Card, Badge } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -23,7 +23,7 @@ export default function Scheduled() {
     try { await api.scheduledPatch(s.id, { enabled: !s.enabled }); load() } catch (e: any) { toast(e.message) }
   }
   async function del(s: any) {
-    if (!await confirmAsync(t('scheduled.confirmDelete'))) return
+    if (!await confirmDestructive(t('scheduled.confirmDelete'))) return
     try { await api.scheduledDelete(s.id); load() } catch (e: any) { toast(e.message) }
   }
 

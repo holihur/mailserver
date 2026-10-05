@@ -11,7 +11,7 @@ export type ToastItem = {
   timeout: number
 }
 
-export type ConfirmItem = { id: number; msg: string; resolve: (v: boolean) => void }
+export type ConfirmItem = { id: number; msg: string; destructive?: boolean; resolve: (v: boolean) => void }
 
 export type PromptItem = {
   id: number
@@ -64,12 +64,18 @@ export function toast(msg: string, opts: { type?: ToastType; action?: ToastItem[
   return t.id
 }
 
-export function confirmAsync(msg: string): Promise<boolean> {
+// confirmAsync：应用内确认框；destructive=true 时红底按钮 + 警示图标（#42）。
+export function confirmAsync(msg: string, opts: { destructive?: boolean } = {}): Promise<boolean> {
   return new Promise(resolve => {
-    const c: ConfirmItem = { id: seq++, msg, resolve }
+    const c: ConfirmItem = { id: seq++, msg, destructive: !!opts.destructive, resolve }
     confirms = [...confirms, c]
     emit()
   })
+}
+
+// confirmDestructive 是 confirmAsync({destructive:true}) 的语法糖。
+export function confirmDestructive(msg: string): Promise<boolean> {
+  return confirmAsync(msg, { destructive: true })
 }
 
 export function resolveConfirm(id: number, v: boolean) {

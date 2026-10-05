@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync, promptAsync } from '../lib/ui'
+import { toast, confirmAsync, confirmDestructive, promptAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
@@ -85,7 +85,7 @@ export default function Security() {
     } catch (e: any) { toast(e.message) }
   }
   async function deleteAccount() {
-    if (!await confirmAsync(t('security.deleteConfirm'))) return
+    if (!await confirmDestructive(t('security.deleteConfirm'))) return
     const pw = await promptAsync(t('security.passwordPrompt'), { password: true })
     if (!pw) return
     try {

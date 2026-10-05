@@ -4,7 +4,7 @@ import AdminShell from '../components/AdminShell'
 import { Card, Badge, Button, Input, Label } from '../components/ui/controls'
 import { SkeletonRows } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { HardDriveDownload, Plus, RotateCcw, Trash2, RefreshCw } from 'lucide-react'
 
 function fmtSize(n: number) {
@@ -53,7 +53,7 @@ export default function AdminBackup() {
   }
 
   async function del(name: string) {
-    if (!(await confirmAsync(`${t('backup.delete')}: ${name}?`))) return
+    if (!(await confirmDestructive(`${t('backup.delete')}: ${name}?`))) return
     try {
       await api.backupDelete(name)
       toast(t('backup.deleted'), { type: 'success' })
@@ -62,7 +62,7 @@ export default function AdminBackup() {
   }
 
   async function restore(name: string) {
-    if (!(await confirmAsync(t('backup.confirmRestore')))) return
+    if (!(await confirmDestructive(t('backup.confirmRestore')))) return
     setBusy(true)
     try {
       await api.backupRestore(name)
@@ -112,11 +112,11 @@ export default function AdminBackup() {
         {!loading && list.length > 0 && (
           <table className="w-full text-sm min-w-[720px]">
             <thead><tr className="text-left text-xs text-muted-foreground">
-              <th className="py-1">{t('backup.name')}</th>
-              <th>{t('backup.size')}</th>
-              <th>{t('backup.time')}</th>
-              <th>{t('backup.sha')}</th>
-              <th className="text-right">{t('backup.restore')}</th>
+              <th scope="col" className="py-1">{t('backup.name')}</th>
+              <th scope="col">{t('backup.size')}</th>
+              <th scope="col">{t('backup.time')}</th>
+              <th scope="col">{t('backup.sha')}</th>
+              <th scope="col" className="text-right">{t('backup.restore')}</th>
             </tr></thead>
             <tbody>
               {list.map(b => (

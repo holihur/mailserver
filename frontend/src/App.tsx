@@ -41,7 +41,7 @@ export default function App() {
     <BrowserRouter>
       <Suspense fallback={<Loading />}>
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={authed() ? <Navigate to="/" /> : <Login />} />
           <Route path="/" element={authed() ? <MailApp /> : <Navigate to="/login" />} />
           <Route path="/dns" element={authed() ? <DnsPage /> : <Navigate to="/login" />} />
           <Route path="/setup" element={authed() ? <Setup /> : <Navigate to="/login" />} />

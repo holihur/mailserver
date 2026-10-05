@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
 import { EmptyState } from '../components/EmptyState'
-import { toast, confirmAsync } from '../lib/ui'
+import { toast, confirmDestructive } from '../lib/ui'
 import { useI18n } from '../lib/i18n'
 import { Filter, Plus, Trash2, Check, Save, Power } from 'lucide-react'
 
@@ -41,7 +41,7 @@ export default function Sieve() {
     try { await api.sieveActivate(sc.id); load() } catch (e: any) { toast(e.message, { type: 'error' }) }
   }
   async function del(sc: any) {
-    if (!await confirmAsync(t('sieve.confirmDelete', { name: sc.name }))) return
+    if (!await confirmDestructive(t('sieve.confirmDelete', { name: sc.name }))) return
     try { await api.sieveDelete(sc.id); load() } catch (e: any) { toast(e.message, { type: 'error' }) }
   }
 

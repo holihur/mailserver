@@ -22,12 +22,12 @@ export default function AdminAudit() {
         {!loading && list.length > 0 && (
           <table className="w-full text-sm min-w-[680px]">
             <thead><tr className="text-left text-xs text-muted-foreground">
-              <th className="py-1">{t('admin.auditTime')}</th>
-              <th>{t('admin.auditActor')}</th>
-              <th>{t('admin.auditAction')}</th>
-              <th>{t('admin.auditTarget')}</th>
-              <th>{t('admin.auditIP')}</th>
-              <th>{t('admin.auditDetail')}</th>
+              <th scope="col" className="py-1">{t('admin.auditTime')}</th>
+              <th scope="col">{t('admin.auditActor')}</th>
+              <th scope="col">{t('admin.auditAction')}</th>
+              <th scope="col">{t('admin.auditTarget')}</th>
+              <th scope="col">{t('admin.auditIP')}</th>
+              <th scope="col">{t('admin.auditDetail')}</th>
             </tr></thead>
             <tbody>
               {list.map(l => (

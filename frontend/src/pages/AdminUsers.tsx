@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmAsync, promptAsync } from '../lib/ui'
+import { toast, confirmDestructive, promptAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
@@ -48,7 +48,7 @@ export default function AdminUsers() {
   }
 
   async function del(u) {
-    if (!await confirmAsync(`${t('common.delete')} ${u.email}?`)) return
+    if (!await confirmDestructive(`${t('common.delete')} ${u.email}?`)) return
     try { await api.adminUserDelete(u.id); setMsg(t('common.delete')); load() } catch (e) { setMsg(e.message) }
   }
 
@@ -86,7 +86,7 @@ export default function AdminUsers() {
         <b className="text-sm">{t('users.all', { n: users.length })}</b>
         <table className="w-full text-sm mt-3 min-w-[560px]">
           <thead><tr className="text-left text-xs text-muted-foreground">
-            <th className="py-1">{t('users.email')}</th><th>{t('users.name')}</th><th>{t('users.mails')}</th><th>{t('users.sentToday')}</th><th>{t('users.quota')}</th><th>{t('users.status')}</th><th className="text-right">{t('users.actions')}</th>
+            <th scope="col" className="py-1">{t('users.email')}</th><th scope="col">{t('users.name')}</th><th scope="col">{t('users.mails')}</th><th scope="col">{t('users.sentToday')}</th><th scope="col">{t('users.quota')}</th><th scope="col">{t('users.status')}</th><th scope="col" className="text-right">{t('users.actions')}</th>
           </tr></thead>
           <tbody>
             {users.map(u => (
