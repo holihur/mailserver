@@ -27,6 +27,7 @@
 - **工程护栏**（#20）：Dependabot、golangci-lint（CI，仅新版问题）、GitHub **CodeQL**、前端 **vitest** 单测（CI 运行）。补齐：CI 加 **`govulncheck`**（依赖 CVE 门禁）、**`docker build`**（不推送，仅验证 Dockerfile + 内嵌前端）与 **`shellcheck install.sh`**；发布前 **Trivy 镜像扫描**（HIGH/CRITICAL 阻断）；前端新增 **ESLint**（`pnpm lint`）与核心文件（`api/client`、`lib/utils`）**覆盖率门**；新增 **`.github/ISSUE_TEMPLATE/`**（bug / 功能 / 安全三模板）、**`SECURITY.md`**（私密报告渠道 + 响应 SLA）与 **`CONTRIBUTING.md`**。
 - **UX 速赢**（#38/#42/#45/#49/#51）：阅读区新增**发件人认证徽章**（SPF/DKIM/DMARC → 通过/未通过/未知，取代难懂的 `auth_results` 原文）；搜索框提示可用语法、支持 **Ctrl/⌘+K** 聚焦、无结果提供「清除搜索」；未读徽标超过 99 显示 **99+**；新增统一 **`EmptyState`** 组件并用于邮箱空态/无结果、联系人、Sieve、定时发送。
 - **UX 第二批**（#38/#41/#42/#44）：新增 **success/warning/destructive 语义色 token**（浅/深色）并替换全站硬编码状态色；无障碍基础（Dropdown `aria-haspopup/expanded` + 键盘展开、导航 `aria-current`、Login `aria-label`、附件预览 `role=dialog`+Esc）；邮箱列表未读改**左侧主色条**、去 button 嵌套改 `role=button`+键盘可达、星标独立按钮加大点击区；`EmptyState` 推广到别名/路由/服务商/审计页。
+- **写信与移动端**（#39/#43）：写信弹窗移动端改 **bottom-sheet**（顶部圆角、`max-h-92dvh`），底部操作栏固定 + `safe-bottom`，字段区独立滚动；草稿自动保存显示**「保存中…/已保存 HH:MM」**，关闭（遮罩/Esc/取消）时若有未保存内容**二次确认**；收件人即时**邮箱格式校验**（非法 chip 标红 + `aria-invalid` + 行内提示）；写信弹窗 Tab **焦点陷阱**；分页栏 `safe-bottom`。
 - **CI 修复与工具链升级**：后端测试加 Redis 服务，且 `mailqueue` 配额测试在 Redis 不可达时正确 **skip**（此前 LLM 环境下因 `NewClient` 不探活而误判失败）；Go 升级到 **1.27**，依赖全面升级到最新稳定版（`x/net`、`x/crypto`、`golang-jwt/jwt/v5`、`go-redis/v9`、`pgx`、`asynq`、`gorm` 等），**`govulncheck` 0 漏洞**；golangci-lint 迁移到 **v2**（action v8 + v2 配置）；修复 Go 1.27 `go vet` 新报的非常量格式串问题。
 
 ### 修复
