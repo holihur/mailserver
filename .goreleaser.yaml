@@ -60,3 +60,5 @@ release:
   draft: false
   prerelease: auto
   make_latest: true
+  # 允许同一 tag 重跑（失败重发时删除并重建 Release）
+  mode: replace
