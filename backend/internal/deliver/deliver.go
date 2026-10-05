@@ -9,6 +9,7 @@ import (
 	"mailserver/internal/htmlsanitize"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/push"
 	"mailserver/internal/quota"
 	"mailserver/internal/rules"
 	"mailserver/internal/sieve"
@@ -45,6 +46,7 @@ func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, htmlBo
 	if len(opts) > 0 {
 		o = opts[0]
 	}
+	defer push.Notify(u.ID) // 通知 JMAP 长连接（邮件状态变化）
 	if quota.Exceeded(db, u) {
 		return
 	}

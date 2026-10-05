@@ -7,7 +7,8 @@
 // 鉴权：Authorization: Bearer <PAT>。
 // 支持方法：Core/echo、Mailbox/get|query|changes|set、Email/get|query|changes|set|copy|import、
 // Thread/get|changes、Identity/get|set、EmailSubmission/get|set、SearchSnippet/get。
-// 说明：Push（EventSource）仅提供保活流，不做真正的推送；Email/changes 返回 cannotCalculateChanges。
+// 说明：Push（EventSource）在邮件变更时推送 StateChange（进程内 push 中枢）；
+// Email/changes 仍返回 cannotCalculateChanges，客户端收到 state 后做全量同步。
 package jmap
 
 import (
@@ -16,9 +17,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"mailserver/internal/auth"
 	"mailserver/internal/model"
+	"mailserver/internal/push"
 
 	"gorm.io/gorm"
 )
@@ -83,15 +86,71 @@ func (s *Server) Handler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// eventSource 实现 JMAP Push（RFC 8620 §7）：客户端建立 SSE 长连接，
+// 邮件变更时推送 state 事件（active 类型支持 closeafter/ping）。
 func (s *Server) eventSource(w http.ResponseWriter, r *http.Request) {
-	// 仅保活，不做真实推送（客户端会退化为轮询）。
+	u, ok := s.authUser(w, r)
+	if !ok {
+		return
+	}
+	fl, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
-	w.WriteHeader(200)
-	if fl, ok := w.(http.Flusher); ok {
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(http.StatusOK)
+	fl.Flush()
+
+	ping, _ := strconv.Atoi(r.URL.Query().Get("ping"))
+	closeafter := strings.ToLower(r.URL.Query().Get("closeafter"))
+	acct := acctID(u.ID)
+
+	sendPing := func() {
+		fmt.Fprint(w, "event: ping\ndata: {\"@type\":\"Ping\"}\n\n")
 		fl.Flush()
 	}
-	<-r.Context().Done()
+	sendState := func(state string) {
+		data, _ := json.Marshal(map[string]any{
+			"@type":   "StateChange",
+			"changed": map[string]any{acct: map[string]any{"Email": state}},
+		})
+		fmt.Fprintf(w, "event: state\ndata: %s\n\n", data)
+		fl.Flush()
+	}
+	sendPing() // 建连即发一次，客户端可据此确认连接
+
+	ch := push.Subscribe(u.ID)
+	defer push.Unsubscribe(u.ID, ch)
+
+	var pingC <-chan time.Time
+	if ping > 0 {
+		t := time.NewTicker(time.Duration(ping) * time.Second)
+		defer t.Stop()
+		pingC = t.C
+	}
+	keepAlive := time.NewTicker(25 * time.Second)
+	defer keepAlive.Stop()
+
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case <-pingC:
+			sendPing()
+		case <-keepAlive.C:
+			fmt.Fprint(w, ": keepalive\n\n")
+			fl.Flush()
+		case state := <-ch:
+			sendState(state)
+			if closeafter == "state" {
+				return
+			}
+		}
+	}
 }
 
 func (s *Server) session(w http.ResponseWriter, u *model.User) {

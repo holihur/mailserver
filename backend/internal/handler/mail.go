@@ -14,6 +14,7 @@ import (
 	"mailserver/internal/mailsearch"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/push"
 	"mailserver/internal/schedule"
 
 	"gorm.io/gorm"
@@ -208,6 +209,7 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.DB.Delete(&mail) // 定时任务触发时找不到邮件会自动跳过
+		push.Notify(uid)
 		writeJSON(w, 200, map[string]any{"ok": true})
 		return
 	}
@@ -284,6 +286,7 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(upd) > 0 {
 			m.DB.Model(&mail).Updates(upd)
+			push.Notify(uid)
 		}
 		m.DB.Where("id = ? AND user_id = ?", id, uid).First(&mail)
 		writeJSON(w, 200, mail)
@@ -291,15 +294,18 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 		// 已在「已删除」：彻底删除；在垃圾箱：移入「已删除」；否则：移入垃圾箱。
 		if mail.Folder == "deleted" {
 			m.DB.Delete(&mail)
+			push.Notify(uid)
 			writeJSON(w, 200, map[string]any{"ok": true, "deleted": true})
 			return
 		}
 		if mail.Folder == "trash" {
 			m.DB.Model(&mail).Update("folder", "deleted")
+			push.Notify(uid)
 			writeJSON(w, 200, map[string]any{"ok": true, "deleted": false})
 			return
 		}
 		m.DB.Model(&mail).Update("folder", "trash")
+		push.Notify(uid)
 		writeJSON(w, 200, map[string]any{"ok": true, "deleted": false})
 	}
 }
@@ -420,6 +426,7 @@ func (m *MailBox) Batch(w http.ResponseWriter, r *http.Request) {
 	if in.All {
 		count = int(res.RowsAffected)
 	}
+	push.Notify(uid)
 	writeJSON(w, 200, map[string]any{"ok": true, "count": count})
 }
 
@@ -508,6 +515,7 @@ func (m *MailBox) Create(w http.ResponseWriter, r *http.Request) {
 		mail.Status = "queued"
 	}
 	m.DB.Create(&mail)
+	push.Notify(uid)
 	if folder == "sent" {
 		// 点发送即收录收件人到通讯录（投递时仍会兜底一次，幂等）
 		contacts.Collect(m.DB, uid, from, in.To, in.Cc, in.Bcc)

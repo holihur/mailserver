@@ -13,6 +13,7 @@ import (
 	"mailserver/internal/htmlsanitize"
 	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/push"
 )
 
 // mbox 分隔行：以 "From " 开头且含年份的 From_ 行。
@@ -54,6 +55,7 @@ func (m *MailBox) Import(w http.ResponseWriter, r *http.Request) {
 		}
 		imported++
 	}
+	push.Notify(uid)
 	writeJSON(w, 200, map[string]any{"ok": true, "imported": imported, "skipped": skipped})
 }
 
