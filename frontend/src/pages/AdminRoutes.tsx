@@ -147,7 +147,7 @@ export default function AdminRoutes() {
       </Card>
 
       <Card className="divide-y divide-border">
-        {list.length === 0 && <EmptyState icon={Route} title={t('routes.empty')} />}
+        {list.length === 0 && <EmptyState icon={Route} title={t('routes.empty')} desc={t('routes.emptyDesc')} />}
         {list.map(r => (
           <div key={r.id} className="p-3 flex items-start gap-3">
             <input type="checkbox" className="mt-1" checked={r.enabled} onChange={() => toggle(r)} aria-label={t('routes.enabled')} />

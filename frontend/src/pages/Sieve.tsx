@@ -73,7 +73,7 @@ export default function Sieve() {
       </Card>
 
       <Card className="divide-y divide-border">
-        {list.length === 0 && <EmptyState icon={Filter} title={t('sieve.empty')} />}
+        {list.length === 0 && <EmptyState icon={Filter} title={t('sieve.empty')} desc={t('sieve.emptyDesc')} />}
         {list.map(sc => (
           <div key={sc.id} className="p-3 flex items-center gap-2">
             <button className="text-sm font-medium hover:underline truncate" onClick={() => edit(sc)}>{sc.name}</button>

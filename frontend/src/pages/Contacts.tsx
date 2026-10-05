@@ -77,7 +77,7 @@ export default function Contacts() {
 
         <Card className="divide-y divide-border">
           {loading && <SkeletonList rows={4} />}
-          {!loading && filtered.length === 0 && <EmptyState icon={UserRound} title={t('contacts.empty')} />}
+          {!loading && filtered.length === 0 && <EmptyState icon={UserRound} title={t('contacts.empty')} desc={t('contacts.emptyDesc')} />}
           {!loading && filtered.map(c => (
             <div key={c.id} className="p-3">
               {editId === c.id ? (

@@ -38,7 +38,7 @@ export default function Scheduled() {
       </div>
       <Card className="divide-y divide-border">
         {loading && <SkeletonRows rows={3} />}
-        {!loading && list.length === 0 && <EmptyState icon={Clock} title={t('scheduled.empty')} />}
+        {!loading && list.length === 0 && <EmptyState icon={Clock} title={t('scheduled.empty')} desc={t('scheduled.emptyDesc')} />}
         {!loading && list.map(s => (
           <div key={s.id} className="p-3 flex items-start gap-3">
             <div className="min-w-0 flex-1">

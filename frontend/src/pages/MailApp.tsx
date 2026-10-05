@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { toast, confirmAsync, confirmDestructive, promptAsync } from '../lib/ui'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -57,6 +57,7 @@ export default function MailApp() {
   const notifiedFailed = useRef<Set<number>>(new Set())
   const failedSeeded = useRef(false)
   const [preview, setPreview] = useState<any>(null)
+  const [showHelp, setShowHelp] = useState(false)
   const [showImages, setShowImages] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -151,6 +152,35 @@ export default function MailApp() {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [])
+
+  // Gmail 风格键盘流（#48）：列表输入框内不拦截；写信/预览打开时不生效。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName?.toLowerCase()
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || el?.isContentEditable) return
+      if (showHelp) { if (e.key === 'Escape' || e.key === '?') setShowHelp(false); return }
+      if (showCompose || preview) return
+      const idx = sel ? items.findIndex((m: any) => m.id === sel.id) : -1
+      const focus = (i: number) => { if (i >= 0 && i < items.length) open(items[i].id) }
+      switch (e.key) {
+        case 'j': case 'ArrowDown': e.preventDefault(); focus(idx < 0 ? 0 : idx + 1); break
+        case 'k': case 'ArrowUp': e.preventDefault(); focus(idx < 0 ? items.length - 1 : idx - 1); break
+        case 'Enter': case 'o': if (idx >= 0) { e.preventDefault(); open(items[idx].id) } break
+        case 'u': case 'Escape': if (sel) { e.preventDefault(); setView('list') } break
+        case 's': if (sel) { e.preventDefault(); api.patch(sel.id, { starred: !sel.starred }).then(() => { setSel({ ...sel, starred: !sel.starred }); load() }) } break
+        case 'e': if (sel) { e.preventDefault(); setItems(items.map((i: any) => i.id === sel.id ? { ...i, read: true } : i)); api.patch(sel.id, { read: true }) } break
+        case '#': if (sel) { e.preventDefault(); api.trash(sel.id).then(() => { setSel(null); setView('list'); load() }) } break
+        case 'r': if (sel) { e.preventDefault(); reply(sel, false) } break
+        case 'c': e.preventDefault(); setShowCompose(true); break
+        case '/': e.preventDefault(); searchRef.current?.focus(); break
+        case '?': e.preventDefault(); setShowHelp(true); break
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [items, sel, showCompose, preview, showHelp])
 
   // 附件预览弹窗 Esc 关闭（#44）
   useEffect(() => {
@@ -263,7 +293,7 @@ export default function MailApp() {
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
         <b className="shrink-0 truncate max-w-[45vw] flex items-center gap-1.5"><Mail size={16} />{BRAND}</b>
         <div className="flex-1" />
-        <Button size="sm" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
+        <Button size="sm" className="hidden sm:inline-flex" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
         <Dropdown align="right" trigger={
           <Button variant="ghost" size="sm" className="gap-1.5 px-1.5" aria-label={t('nav.account')}>
             <span className="grid place-items-center size-7 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
@@ -297,6 +327,12 @@ export default function MailApp() {
           <DropdownItem icon={LogOut} onClick={logout} className="text-destructive hover:bg-destructive/10">{t('nav.logout')}</DropdownItem>
         </Dropdown>
       </header>
+
+      {/* 移动端：底部悬浮写信按钮（拇指区，适配安全区） */}
+      <button onClick={() => setShowCompose(true)} aria-label={t('mail.compose')}
+        className="sm:hidden fixed right-4 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-30 grid place-items-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform">
+        <PenLine size={22} />
+      </button>
 
       {/* 移动端：文件夹横向标签 */}
       <div className="md:hidden flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
@@ -513,6 +549,11 @@ export default function MailApp() {
                       </p>
                       {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
                       <AuthBadges raw={sel.auth_results} t={t} />
+                      {sel.status === 'failed' && sel.relay_err && (
+                        <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive" role="alert">
+                          <b>{t('mail.stFailed')}:</b> {sel.relay_err}
+                        </div>
+                      )}
                     </div>
                     <Dropdown align="right" trigger={
                       <Button variant="ghost" size="icon" aria-label={t('mail.actions')}><MoreVertical /></Button>
@@ -610,6 +651,25 @@ export default function MailApp() {
               {preview.kind === 'pdf' && <iframe src={preview.dataUrl} title={preview.name} className="w-full h-[84vh] rounded bg-white" />}
             </div>
           </div>
+        </div>
+      )}
+
+      {showHelp && (
+        <div className="fixed inset-0 z-[95] grid place-items-center bg-black/50 p-4" onClick={() => setShowHelp(false)} role="dialog" aria-modal="true" aria-label={t('mail.shortcuts')}>
+          <Card className="w-full max-w-md p-4 space-y-3" onClick={(e: any) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <b className="text-sm">{t('mail.shortcuts')}</b>
+              <button onClick={() => setShowHelp(false)} aria-label={t('common.close')}><X size={16} /></button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
+              {([['j / k', 'mail.scNext'], ['o / Enter', 'mail.scOpen'], ['u / Esc', 'mail.scBack'], ['s', 'mail.scStar'], ['e', 'mail.scRead'], ['#', 'mail.scDelete'], ['r', 'mail.scReply'], ['c', 'mail.scCompose'], ['/', 'mail.scSearch'], ['?', 'mail.scHelp']] as const).map(([k, label]) => (
+                <Fragment key={k}>
+                  <kbd className="justify-self-start rounded border border-border bg-muted px-1.5 py-0.5 text-xs font-mono">{k}</kbd>
+                  <span className="text-muted-foreground">{t(label)}</span>
+                </Fragment>
+              ))}
+            </div>
+          </Card>
         </div>
       )}
 
@@ -801,7 +861,7 @@ function Compose({ me, init, onClose }: any) {
 function SendStatus({ m, folder }: any) {
   const { t } = useI18n()
   if (folder !== 'sent' || !m.status || m.status === 'sent') return null
-  if (m.status === 'failed') return <span className="flex items-center gap-0.5 text-[10px] text-destructive shrink-0"><XCircle size={11} />{t('mail.stFailed')}</span>
+  if (m.status === 'failed') return <span title={m.relay_err || ''} className="flex items-center gap-0.5 text-[10px] text-destructive shrink-0"><XCircle size={11} />{t('mail.stFailed')}</span>
   if (m.status === 'sending') return <span className="flex items-center gap-0.5 text-[10px] text-primary shrink-0"><Loader2 size={11} className="animate-spin" />{t('mail.stSending')}</span>
   return <span className="flex items-center gap-0.5 text-[10px] text-warning shrink-0"><Clock size={11} />{t('mail.stQueued')}</span>
 }

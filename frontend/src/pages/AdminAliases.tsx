@@ -91,7 +91,7 @@ export default function AdminAliases() {
 
       <Card className="divide-y divide-border">
         {loading && <SkeletonRows rows={3} />}
-        {!loading && list.length === 0 && <EmptyState icon={AtSign} title={t('aliases.empty')} />}
+        {!loading && list.length === 0 && <EmptyState icon={AtSign} title={t('aliases.empty')} desc={t('aliases.emptyDesc')} />}
         {!loading && list.map(a => (
           <div key={a.id} className="p-3 flex items-start gap-3">
             <input type="checkbox" className="mt-1" checked={a.enabled} onChange={() => toggle(a)} aria-label={t('aliases.enabled')} />

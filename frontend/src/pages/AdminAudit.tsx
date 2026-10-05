@@ -18,7 +18,7 @@ export default function AdminAudit() {
     <AdminShell title={t('admin.audit')} desc={t('admin.auditDesc')}>
       <Card className="p-4 overflow-x-auto">
         {loading && <SkeletonRows rows={4} />}
-        {!loading && list.length === 0 && <EmptyState icon={History} title={t('admin.auditEmpty')} />}
+        {!loading && list.length === 0 && <EmptyState icon={History} title={t('admin.auditEmpty')} desc={t('admin.auditEmptyDesc')} />}
         {!loading && list.length > 0 && (
           <table className="w-full text-sm min-w-[680px]">
             <thead><tr className="text-left text-xs text-muted-foreground">
