@@ -7,6 +7,9 @@ export const DICTS = {
     'theme.light': '浅色',
     'theme.dark': '深色',
     'theme.system': '跟随系统',
+    'theme.label': '主题',
+    'lang.label': '语言',
+    'nav.settings': '外观与语言',
 
     'common.save': '保存',
     'common.cancel': '取消',
@@ -690,6 +693,9 @@ if header :contains "Subject" "促销" {
     'theme.light': 'Light',
     'theme.dark': 'Dark',
     'theme.system': 'System',
+    'theme.label': 'Theme',
+    'lang.label': 'Language',
+    'nav.settings': 'Appearance & language',
 
     'common.save': 'Save',
     'common.cancel': 'Cancel',

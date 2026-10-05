@@ -1,39 +1,26 @@
 import { Button } from './ui/controls'
+import { Dropdown, DropdownItem, DropdownLabel, DropdownSeparator } from './Dropdown'
 import { useI18n } from '../lib/i18n'
 import { useTheme } from '../lib/theme'
-import { Sun, Moon, Monitor, Languages } from 'lucide-react'
+import { Sun, Moon, Monitor, Languages, Settings2 } from 'lucide-react'
 
-export function ThemeToggle() {
-  const { theme, cycle } = useTheme()
-  const { t } = useI18n()
-  const Icon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
-  const label = t('theme.' + theme)
+// 右上角统一的下拉菜单：主题 + 语言。
+export function SettingsMenu() {
+  const { t, lang, setLang } = useI18n()
+  const { theme, setTheme } = useTheme()
+  const tick = (on: boolean) => (on ? ' ✓' : '')
   return (
-    <Button variant="ghost" size="icon" onClick={cycle} title={label} aria-label={label}>
-      <Icon />
-    </Button>
-  )
-}
-
-export function LangToggle() {
-  const { lang, setLang } = useI18n()
-  const next = lang === 'zh' ? 'English' : '中文'
-  return (
-    <Button variant="ghost" size="sm" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}
-      title={next} aria-label={next}>
-      <Languages />{lang === 'zh' ? 'EN' : '中文'}
-    </Button>
-  )
-}
-
-// 页面底部统一的语言 / 主题切换
-import { BRAND } from '../lib/brand'
-export function FooterControls() {
-  return (
-    <footer className="border-t border-border py-3 flex items-center justify-center gap-1 text-xs text-muted-foreground">
-      <span className="mr-2">© {BRAND}</span>
-      <LangToggle />
-      <ThemeToggle />
-    </footer>
+    <Dropdown align="right" trigger={
+      <Button variant="ghost" size="icon" aria-label={t('nav.settings')} title={t('nav.settings')}><Settings2 /></Button>
+    }>
+      <DropdownLabel>{t('theme.label')}</DropdownLabel>
+      <DropdownItem icon={Sun} onClick={() => setTheme('light')}>{t('theme.light')}{tick(theme === 'light')}</DropdownItem>
+      <DropdownItem icon={Moon} onClick={() => setTheme('dark')}>{t('theme.dark')}{tick(theme === 'dark')}</DropdownItem>
+      <DropdownItem icon={Monitor} onClick={() => setTheme('system')}>{t('theme.system')}{tick(theme === 'system')}</DropdownItem>
+      <DropdownSeparator />
+      <DropdownLabel>{t('lang.label')}</DropdownLabel>
+      <DropdownItem icon={Languages} onClick={() => setLang('zh')}>中文{tick(lang === 'zh')}</DropdownItem>
+      <DropdownItem icon={Languages} onClick={() => setLang('en')}>English{tick(lang === 'en')}</DropdownItem>
+    </Dropdown>
   )
 }

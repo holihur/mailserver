@@ -7,7 +7,7 @@ import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../com
 import { RecipientInput } from '../components/RecipientInput'
 import { SkeletonList } from '../components/Skeleton'
 import { EmptyState } from '../components/EmptyState'
-import { FooterControls } from '../components/HeaderControls'
+import { SettingsMenu } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import {
   Inbox, Send, FileEdit, Trash2, Trash, Star, Search, PenLine, LogOut,
@@ -338,6 +338,7 @@ export default function MailApp() {
         <b className="shrink-0 truncate max-w-[45vw] flex items-center gap-1.5"><Mail size={16} />{BRAND}</b>
         <div className="flex-1" />
         <Button size="sm" className="hidden sm:inline-flex" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
+        <SettingsMenu />
         <Dropdown align="right" trigger={
           <Button variant="ghost" size="sm" className="gap-1.5 px-1.5" aria-label={t('nav.account')}>
             <span className="grid place-items-center size-7 rounded-full bg-primary text-primary-foreground text-xs font-semibold">
@@ -746,8 +747,6 @@ export default function MailApp() {
           <DropdownItem icon={Plus} onClick={createFolder}>{t('folders.new')}</DropdownItem>
         </Dropdown>
       </nav>
-
-      <FooterControls />
 
       {preview && (
         <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onClick={() => setPreview(null)} role="dialog" aria-modal="true" aria-label={preview.name}>

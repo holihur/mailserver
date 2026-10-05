@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { FooterControls } from './HeaderControls'
+import { SettingsMenu } from './HeaderControls'
 import { BRAND } from '../lib/brand'
 import { Mail } from 'lucide-react'
 
@@ -25,9 +25,9 @@ export default function PageShell({
           <span className="truncate">{title}</span>
         </span>
         <div className="flex-1" />
+        <SettingsMenu />
       </header>
       <div className={`${maxWidth} w-full mx-auto p-3 sm:p-4 space-y-4 flex-1`}>{children}</div>
-      <FooterControls />
     </div>
   )
 }

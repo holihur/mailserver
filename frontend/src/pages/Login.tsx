@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card } from '../components/ui/controls'
-import { FooterControls } from '../components/HeaderControls'
+import { SettingsMenu } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import { Mail, Loader2, LogIn } from 'lucide-react'
 import { BRAND } from '../lib/brand'
@@ -53,7 +53,8 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-muted/40">
+    <div className="relative min-h-screen flex flex-col bg-muted/40">
+      <div className="absolute top-3 right-3 z-10"><SettingsMenu /></div>
       <div className="flex-1 grid place-items-center p-4">
       <Card className="w-full max-w-sm p-6 space-y-4">
         <div className="flex items-center gap-2">
@@ -109,7 +110,6 @@ export default function Login() {
         <p className="text-xs text-center"><Link to="/privacy" className="text-muted-foreground underline">{t('nav.privacy')}</Link></p>
       </Card>
       </div>
-      <FooterControls />
     </div>
   )
 }

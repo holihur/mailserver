@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
-import { FooterControls } from './HeaderControls'
+import { SettingsMenu } from './HeaderControls'
 import { useI18n } from '../lib/i18n'
 import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign, History, DatabaseBackup } from 'lucide-react'
 import { cn } from '../lib/utils'
@@ -48,6 +48,7 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
           </Badge>
         )}
         <div className="flex-1" />
+        <SettingsMenu />
         <Link to="/"><Button variant="ghost" size="sm">{t('admin.backToMail')}</Button></Link>
       </header>
 
@@ -83,7 +84,6 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
           </main>
         </div>
       )}
-      <FooterControls />
     </div>
   )
 }
