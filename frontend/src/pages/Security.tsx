@@ -6,6 +6,7 @@ import PageShell from '../components/PageShell'
 import { useI18n } from '../lib/i18n'
 import { ShieldCheck, Copy, KeyRound, Check, Download, Trash2, History, LogOut } from 'lucide-react'
 import { cn } from '../lib/utils'
+import { QRCodeSVG } from 'qrcode.react'
 
 export default function Security() {
   const { t } = useI18n()
@@ -117,6 +118,11 @@ export default function Security() {
           {!enabled && setup && (
             <div className="space-y-3">
               <p className="text-sm">{t('security.scanHint')}</p>
+              <div className="flex justify-center">
+                <div className="rounded-lg bg-white p-3 shadow-xs">
+                  <QRCodeSVG value={setup.url} size={168} level="M" marginSize={0} />
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <code className="flex-1 break-all text-xs font-mono bg-muted/60 rounded px-2 py-1">{setup.secret}</code>
                 <Button size="sm" variant="outline" type="button" onClick={() => copy(setup.secret)}><Copy />{t('common.copy')}</Button>

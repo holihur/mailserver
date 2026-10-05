@@ -817,7 +817,8 @@ function Compose({ me, init, onClose }: any) {
           <RecipientInput placeholder={t('mail.bcc')} value={f.bcc} onChange={v => setF({ ...f, bcc: v })} suggestions={sugg} />
         </>}
         <Input placeholder={t('mail.subject')} value={f.subject} onChange={e => setF({ ...f, subject: e.target.value })} />
-        <Textarea rows={8} placeholder={t('mail.body')} value={f.body} onChange={e => setF({ ...f, body: e.target.value })} />
+        <Textarea rows={8} placeholder={t('mail.body')} value={f.body} onChange={e => setF({ ...f, body: e.target.value })}
+          onKeyDown={(e: any) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (!saving) submit('sent') } }} />
         {atts.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {atts.map((a, i) => (
