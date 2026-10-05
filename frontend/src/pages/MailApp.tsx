@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { toast, confirmAsync, confirmDestructive, promptAsync } from '../lib/ui'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card } from '../components/ui/controls'
 import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../components/Dropdown'
@@ -32,6 +32,7 @@ const fmtUnread = (n: number) => (n > 99 ? '99+' : String(n))
 export default function MailApp() {
   const { t } = useI18n()
   const navigate = useNavigate()
+  const { id: routeId } = useParams()
   const [folder, setFolder] = useState(() => localStorage.getItem('pref.folder') || 'inbox')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -50,6 +51,7 @@ export default function MailApp() {
   const [page, setPage] = useState(1)
   const [sort, setSort] = useState(() => localStorage.getItem('pref.sort') || 'newest')
   const [installEvt, setInstallEvt] = useState<any>(null)
+  const [installDismissed, setInstallDismissed] = useState(false)
   const prevUnread = useRef(0)
   const touch = useRef<{ x: number; moved: boolean }>({ x: 0, moved: false })
   const firstQ = useRef(true)
@@ -168,10 +170,10 @@ export default function MailApp() {
         case 'j': case 'ArrowDown': e.preventDefault(); focus(idx < 0 ? 0 : idx + 1); break
         case 'k': case 'ArrowUp': e.preventDefault(); focus(idx < 0 ? items.length - 1 : idx - 1); break
         case 'Enter': case 'o': if (idx >= 0) { e.preventDefault(); open(items[idx].id) } break
-        case 'u': case 'Escape': if (sel) { e.preventDefault(); setView('list') } break
+        case 'u': case 'Escape': if (sel) { e.preventDefault(); navigate('/') } break
         case 's': if (sel) { e.preventDefault(); api.patch(sel.id, { starred: !sel.starred }).then(() => { setSel({ ...sel, starred: !sel.starred }); load() }) } break
         case 'e': if (sel) { e.preventDefault(); setItems(items.map((i: any) => i.id === sel.id ? { ...i, read: true } : i)); api.patch(sel.id, { read: true }) } break
-        case '#': if (sel) { e.preventDefault(); api.trash(sel.id).then(() => { setSel(null); setView('list'); load() }) } break
+        case '#': if (sel) { e.preventDefault(); api.trash(sel.id).then(() => { setSel(null); navigate('/'); load() }) } break
         case 'r': if (sel) { e.preventDefault(); reply(sel, false) } break
         case 'c': e.preventDefault(); setShowCompose(true); break
         case '/': e.preventDefault(); searchRef.current?.focus(); break
@@ -181,6 +183,15 @@ export default function MailApp() {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [items, sel, showCompose, preview, showHelp])
+
+  // 路由化阅读（#43）：/m/:id 可直接打开、刷新与分享。
+  useEffect(() => {
+    if (routeId) {
+      if (String(sel?.id) !== routeId) open(routeId)
+    } else {
+      setView('list')
+    }
+  }, [routeId])
 
   // 附件预览弹窗 Esc 关闭（#44）
   useEffect(() => {
@@ -217,6 +228,7 @@ export default function MailApp() {
     setSel(d)
     setShowImages(false)
     setView('read')
+    if (String(id) !== routeId) navigate('/m/' + id)
     setItems(items.map(i => i.id === id ? { ...i, read: true } : i))
     // 已读后立即刷新未读角标与标签页标题，无需等待下一轮轮询
     api.unread().then((u: any) => { setUnread(u); prevUnread.current = sumUnread(u) }).catch(() => {})
@@ -333,34 +345,21 @@ export default function MailApp() {
         </Dropdown>
       </header>
 
+      {/* PWA 安装引导（#50） */}
+      {installEvt && !installDismissed && (
+        <div className="sm:hidden flex items-center gap-2 border-b border-border bg-primary/5 px-3 py-2 text-xs">
+          <Download size={14} className="text-primary shrink-0" />
+          <span className="flex-1">{t('mail.installHint')}</span>
+          <Button size="sm" onClick={() => { installEvt.prompt(); setInstallEvt(null) }}>{t('nav.install')}</Button>
+          <button onClick={() => setInstallDismissed(true)} aria-label={t('common.close')} className="text-muted-foreground"><X size={14} /></button>
+        </div>
+      )}
+
       {/* 移动端：底部悬浮写信按钮（拇指区，适配安全区） */}
       <button onClick={() => setShowCompose(true)} aria-label={t('mail.compose')}
-        className="sm:hidden fixed right-4 bottom-[calc(1.5rem+env(safe-area-inset-bottom))] z-30 grid place-items-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform">
+        className="sm:hidden fixed right-4 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-30 grid place-items-center size-14 rounded-full bg-primary text-primary-foreground shadow-lg active:scale-95 transition-transform">
         <PenLine size={22} />
       </button>
-
-      {/* 移动端：文件夹横向标签 */}
-      <div className="md:hidden flex gap-1 overflow-x-auto border-b border-border px-2 py-2">
-        {allFolders.map(f => (
-          <div key={f.k} className="flex items-center gap-0.5 shrink-0">
-            <button onClick={() => setFolder(f.k)} aria-current={folder === f.k ? 'true' : undefined}
-              className={cn('flex items-center gap-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
-                folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
-              <f.icon size={15} />{f.labelKey ? t(f.labelKey) : f.label}
-              {unread[f.k] > 0 && <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{fmtUnread(unread[f.k])}</span>}
-            </button>
-            {f.custom && (
-              <Dropdown align="right" trigger={
-                <button className="px-1 text-muted-foreground" aria-label={t('common.edit')}><MoreVertical size={13} /></button>
-              }>
-                <DropdownItem icon={PenLine} onClick={() => renameFolder(f)}>{t('folders.rename')}</DropdownItem>
-                <DropdownItem icon={Trash2} className="text-destructive hover:bg-destructive/10" onClick={() => deleteFolder(f)}>{t('folders.delete')}</DropdownItem>
-              </Dropdown>
-            )}
-          </div>
-        ))}
-        <button onClick={createFolder} className="flex items-center rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted" aria-label={t('folders.new')}><Plus size={15} /></button>
-      </div>
 
       <div className="flex-1 flex max-w-6xl w-full mx-auto min-h-0">
         <aside className="hidden md:block w-44 shrink-0 p-3 space-y-1 border-r border-border">
@@ -489,9 +488,15 @@ export default function MailApp() {
                 <div key={m.id} role="button" tabIndex={0} aria-current={sel?.id === m.id ? 'true' : undefined}
                   onClick={() => { if (touch.current.moved) { touch.current.moved = false; return } selectMode ? toggleCheck(m.id) : open(m.id) }}
                   onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectMode ? toggleCheck(m.id) : open(m.id) } }}
-                  onTouchStart={e => { touch.current = { x: e.touches[0].clientX, moved: false } }}
-                  onTouchMove={e => { if (Math.abs(e.touches[0].clientX - touch.current.x) > 12) touch.current.moved = true }}
+                  onTouchStart={e => { touch.current = { x: e.touches[0].clientX, moved: false }; e.currentTarget.style.transition = 'none' }}
+                  onTouchMove={e => {
+                    const dx = e.touches[0].clientX - touch.current.x
+                    if (Math.abs(dx) > 12) touch.current.moved = true
+                    e.currentTarget.style.transform = `translateX(${Math.max(-80, Math.min(80, dx))}px)`
+                  }}
                   onTouchEnd={async e => {
+                    e.currentTarget.style.transition = 'transform .15s'
+                    e.currentTarget.style.transform = ''
                     if (!touch.current.moved) return
                     const dx = e.changedTouches[0].clientX - touch.current.x
                     if (dx < -60) { await api.trash(m.id); load() }
@@ -560,7 +565,7 @@ export default function MailApp() {
               <p className="text-muted-foreground text-sm mt-10 text-center">{t('mail.selectHint')}</p>
             ) : (
               <>
-                <button onClick={() => setView('list')} className="md:hidden mb-3 flex items-center gap-1 text-sm text-muted-foreground">
+                <button onClick={() => navigate('/')} className="md:hidden mb-3 flex items-center gap-1 text-sm text-muted-foreground">
                   <ArrowLeft size={16} />{t('common.back')}
                 </button>
                 <Card className="p-4 sm:p-5">
@@ -597,7 +602,7 @@ export default function MailApp() {
                       <DropdownSeparator />
                       <DropdownItem icon={Trash2} className="text-destructive hover:bg-destructive/10" onClick={async () => {
                         if ((folder === 'trash' || folder === 'deleted') && !await confirmDestructive(t('mail.confirmPurge'))) return
-                        await api.trash(sel.id); setSel(null); setView('list'); load()
+                        await api.trash(sel.id); setSel(null); navigate('/'); load()
                       }}>{folder === 'deleted' ? t('mail.purge') : t('mail.delete')}</DropdownItem>
                     </Dropdown>
                   </div>
@@ -656,6 +661,39 @@ export default function MailApp() {
           </div>
         </section>
       </div>
+
+      {/* 移动端：底部 Tab（拇指优先，#50） */}
+      <nav role="navigation" aria-label={t('mail.folders')}
+        className="md:hidden border-t border-border bg-background/95 backdrop-blur safe-bottom flex">
+        {FOLDERS.map(f => (
+          <button key={f.k} onClick={() => { setFolder(f.k); setView('list') }} aria-current={folder === f.k ? 'true' : undefined}
+            className={cn('flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] min-h-[52px]', folder === f.k ? 'text-primary' : 'text-muted-foreground')}>
+            <span className="relative">
+              <f.icon size={19} />
+              {unread[f.k] > 0 && <span className="absolute -top-1 -right-2 rounded-full bg-primary text-primary-foreground px-1 text-[9px] font-semibold">{fmtUnread(unread[f.k])}</span>}
+            </span>
+            {t(f.labelKey)}
+          </button>
+        ))}
+        <Dropdown align="right" trigger={
+          <button className="flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] min-h-[52px] text-muted-foreground" aria-label={t('mail.folders')}>
+            <MoreVertical size={19} />{t('common.more')}
+          </button>
+        }>
+          <DropdownLabel>{t('mail.folders')}</DropdownLabel>
+          {allFolders.filter(f => !FOLDERS.some(x => x.k === f.k)).map(f => (
+            <div key={f.k} className="flex items-center">
+              <DropdownItem icon={f.icon} onClick={() => { setFolder(f.k); setView('list') }}>{f.labelKey ? t(f.labelKey) : f.label}</DropdownItem>
+              {f.custom && <>
+                <button className="px-1.5 text-muted-foreground" aria-label={t('common.edit')} onClick={() => renameFolder(f)}><PenLine size={13} /></button>
+                <button className="px-1.5 text-destructive" aria-label={t('common.delete')} onClick={() => deleteFolder(f)}><Trash2 size={13} /></button>
+              </>}
+            </div>
+          ))}
+          <DropdownSeparator />
+          <DropdownItem icon={Plus} onClick={createFolder}>{t('folders.new')}</DropdownItem>
+        </Dropdown>
+      </nav>
 
       <FooterControls />
 
