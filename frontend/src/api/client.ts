@@ -45,7 +45,7 @@ export const api = {
   patch: (id, b) => req(`/api/mails/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   trash: (id) => req(`/api/mails/${id}`, { method: 'DELETE' }),
   undoSend: (id) => req(`/api/mails/${id}/undo`, { method: 'POST' }),
-  batch: (ids, action, folder = '') => req('/api/mails/batch', { method: 'POST', body: JSON.stringify({ ids, action, folder }) }),
+  batch: (ids, action, folder = '', extra = {}) => req('/api/mails/batch', { method: 'POST', body: JSON.stringify({ ids, action, folder, ...extra }) }),
   emptyTrash: () => req('/api/mails/batch', { method: 'POST', body: JSON.stringify({ ids: [], action: 'empty' }) }),
   contacts: () => req('/api/contacts'),
   contactCreate: (b) => req('/api/contacts', { method: 'POST', body: JSON.stringify(b) }),

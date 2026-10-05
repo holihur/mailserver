@@ -192,13 +192,18 @@ export default function MailApp() {
 
   const [selectMode, setSelectMode] = useState(false)
   const [checked, setChecked] = useState<number[]>([])
+  const [allSelected, setAllSelected] = useState(false)
+  const hasSel = allSelected || checked.length > 0
   function toggleCheck(id: number) { setChecked(c => c.includes(id) ? c.filter(x => x !== id) : [...c, id]) }
-  function toggleAll() { setChecked(c => c.length === items.length ? [] : items.map((m: any) => m.id)) }
+  function toggleAll() { setAllSelected(false); setChecked(c => c.length === items.length ? [] : items.map((m: any) => m.id)) }
   const allStarred = checked.length > 0 && checked.every(id => items.find((m: any) => m.id === id)?.starred)
   async function batch(action: string, folderArg = '') {
-    if (!checked.length) return
-    try { await api.batch(checked, action, folderArg) } catch (e: any) { toast(e.message) }
-    setChecked([]); setSelectMode(false); load(page, sort)
+    if (!hasSel) return
+    try {
+      if (allSelected) await api.batch([], action, folderArg, { all: true, q, src_folder: folder })
+      else await api.batch(checked, action, folderArg)
+    } catch (e: any) { toast(e.message) }
+    setChecked([]); setAllSelected(false); setSelectMode(false); load(page, sort)
   }
 
   async function emptyTrash() {
@@ -436,7 +441,7 @@ export default function MailApp() {
                 <option value="sender">{t('mail.sortSender')}</option>
               </select>
               <Button variant={selectMode ? 'default' : 'outline'} size="default" className="h-9 shrink-0"
-                onClick={() => { setSelectMode(v => !v); setChecked([]) }}>
+                onClick={() => { setSelectMode(v => !v); setChecked([]); setAllSelected(false) }}>
                 {selectMode ? t('mail.done') : t('mail.batch')}
               </Button>
               {folder === 'trash' && total > 0 && (
@@ -447,19 +452,31 @@ export default function MailApp() {
             </div>
             {selectMode && (
               <div className="p-2 border-b border-border flex items-center gap-1 flex-wrap text-xs">
-                <label className="flex items-center gap-1"><input type="checkbox" checked={checked.length > 0 && checked.length === items.length} onChange={toggleAll} />{t('mail.selectAll')}</label>
-                <span className="text-muted-foreground">{t('mail.selected', { n: checked.length })}</span>
+                <label className="flex items-center gap-1"><input type="checkbox" checked={!allSelected && checked.length > 0 && checked.length === items.length} onChange={toggleAll} />{t('mail.selectAll')}</label>
+                {total > items.length && (
+                  <button type="button" className="text-primary hover:underline"
+                    onClick={() => { setAllSelected(v => !v); setChecked([]) }}>
+                    {allSelected ? t('mail.clearSelection') : t('mail.selectAllResults', { n: total })}
+                  </button>
+                )}
+                <span className="text-muted-foreground">{allSelected ? t('mail.selectedAll', { n: total }) : t('mail.selected', { n: checked.length })}</span>
                 <div className="flex-1" />
-                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('read')}><MailOpen />{t('mail.markRead')}</Button>
-                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('unread')}><MailOpen />{t('mail.markUnread')}</Button>
-                <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch(allStarred ? 'unstar' : 'star')}><Star />{allStarred ? t('mail.unstar') : t('mail.batchStar')}</Button>
+                <Dropdown align="right" trigger={<Button variant="ghost" size="sm" disabled={!hasSel}><Folder />{t('mail.moveTo')}</Button>}>
+                  <DropdownLabel>{t('mail.moveTo')}</DropdownLabel>
+                  {allFolders.map(f => (
+                    <DropdownItem key={f.k} icon={f.icon} onClick={() => batch('move', f.k)}>{f.labelKey ? t(f.labelKey) : f.label}</DropdownItem>
+                  ))}
+                </Dropdown>
+                <Button variant="ghost" size="sm" disabled={!hasSel} onClick={() => batch('read')}><MailOpen />{t('mail.markRead')}</Button>
+                <Button variant="ghost" size="sm" disabled={!hasSel} onClick={() => batch('unread')}><MailOpen />{t('mail.markUnread')}</Button>
+                <Button variant="ghost" size="sm" disabled={!hasSel || allSelected} onClick={() => batch(allStarred ? 'unstar' : 'star')}><Star />{allStarred ? t('mail.unstar') : t('mail.batchStar')}</Button>
                 {folder === 'deleted' ? (
                   <>
-                    <Button variant="ghost" size="sm" disabled={!checked.length} onClick={() => batch('move', 'inbox')}><RotateCcw />{t('mail.restore')}</Button>
-                    <Button variant="ghost" size="sm" disabled={!checked.length} onClick={async () => { if (!await confirmDestructive(t('mail.confirmPurge'))) return; batch('purge') }}><Trash2 />{t('mail.purge')}</Button>
+                    <Button variant="ghost" size="sm" disabled={!hasSel} onClick={() => batch('move', 'inbox')}><RotateCcw />{t('mail.restore')}</Button>
+                    <Button variant="ghost" size="sm" disabled={!hasSel} onClick={async () => { if (!await confirmDestructive(t('mail.confirmPurge'))) return; batch('purge') }}><Trash2 />{t('mail.purge')}</Button>
                   </>
                 ) : (
-                  <Button variant="ghost" size="sm" disabled={!checked.length} onClick={async () => {
+                  <Button variant="ghost" size="sm" disabled={!hasSel} onClick={async () => {
                     if (folder === 'trash' && !await confirmDestructive(t('mail.confirmPurge'))) return
                     batch(folder === 'trash' ? 'delete' : 'trash')
                   }}><Trash2 />{t('mail.batchDelete')}</Button>
