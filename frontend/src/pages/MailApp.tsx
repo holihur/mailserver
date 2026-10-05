@@ -274,18 +274,25 @@ export default function MailApp() {
         }>
           {me?.email && <DropdownLabel>{me.email}</DropdownLabel>}
           <DropdownSeparator />
+          <DropdownLabel>{t('nav.groupMail')}</DropdownLabel>
           <DropdownItem icon={Settings} onClick={() => navigate('/setup')}>{t('nav.setup')}</DropdownItem>
           <DropdownItem icon={Contact} onClick={() => navigate('/contacts')}>{t('nav.contacts')}</DropdownItem>
           <DropdownItem icon={AtSign} onClick={() => navigate('/accounts')}>{t('nav.accounts')}</DropdownItem>
           <DropdownItem icon={Filter} onClick={() => navigate('/rules')}>{t('nav.rules')}</DropdownItem>
           <DropdownItem icon={FileCode} onClick={() => navigate('/sieve')}>{t('nav.sieve')}</DropdownItem>
           <DropdownItem icon={Clock} onClick={() => navigate('/scheduled')}>{t('nav.scheduled')}</DropdownItem>
+          <DropdownSeparator />
+          <DropdownLabel>{t('nav.groupAccount')}</DropdownLabel>
           <DropdownItem icon={KeyRound} onClick={() => navigate('/security')}>{t('nav.security')}</DropdownItem>
           <DropdownItem icon={ShieldCheck} onClick={() => navigate('/privacy')}>{t('nav.privacy')}</DropdownItem>
-          {me?.admin && <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>}
-          {me?.admin && <DropdownItem icon={ShieldCheck} onClick={() => navigate('/admin')}>{t('nav.admin')}</DropdownItem>}
-          {installEvt && <DropdownItem icon={Download} onClick={() => { installEvt.prompt(); setInstallEvt(null) }}>{t('nav.install')}</DropdownItem>}
+          {me?.admin && <>
+            <DropdownSeparator />
+            <DropdownLabel>{t('nav.groupAdmin')}</DropdownLabel>
+            <DropdownItem icon={Globe} onClick={() => navigate('/dns')}>{t('nav.dns')}</DropdownItem>
+            <DropdownItem icon={ShieldCheck} onClick={() => navigate('/admin')}>{t('nav.admin')}</DropdownItem>
+          </>}
           <DropdownSeparator />
+          {installEvt && <DropdownItem icon={Download} onClick={() => { installEvt.prompt(); setInstallEvt(null) }}>{t('nav.install')}</DropdownItem>}
           <DropdownItem icon={RefreshCw} onClick={() => load()}>{t('common.refresh')}</DropdownItem>
           <DropdownItem icon={LogOut} onClick={logout} className="text-destructive hover:bg-destructive/10">{t('nav.logout')}</DropdownItem>
         </Dropdown>

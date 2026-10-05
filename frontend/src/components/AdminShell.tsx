@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
@@ -17,17 +17,17 @@ export function useMe() {
 }
 
 const NAV = [
-  { to: '/admin', labelKey: 'admin.dashboard', icon: LayoutDashboard },
-  { to: '/admin/settings', labelKey: 'admin.host', icon: Server },
-  { to: '/admin/ssl', labelKey: 'admin.ssl', icon: ShieldCheck },
-  { to: '/admin/providers', labelKey: 'admin.providers', icon: Cloud },
-  { to: '/admin/users', labelKey: 'admin.users', icon: Users },
-  { to: '/admin/rules', labelKey: 'rules.siteNav', icon: Filter },
-  { to: '/admin/routes', labelKey: 'routes.nav', icon: Route },
-  { to: '/admin/aliases', labelKey: 'aliases.nav', icon: AtSign },
-  { to: '/admin/audit', labelKey: 'admin.audit', icon: History },
-  { to: '/admin/backup', labelKey: 'admin.backup', icon: DatabaseBackup },
-  { to: '/admin/about', labelKey: 'admin.about', icon: Info },
+  { to: '/admin', labelKey: 'admin.dashboard', icon: LayoutDashboard, group: 'nav.groupOverview' },
+  { to: '/admin/settings', labelKey: 'admin.host', icon: Server, group: 'nav.groupConfig' },
+  { to: '/admin/ssl', labelKey: 'admin.ssl', icon: ShieldCheck, group: 'nav.groupConfig' },
+  { to: '/admin/providers', labelKey: 'admin.providers', icon: Cloud, group: 'nav.groupConfig' },
+  { to: '/admin/users', labelKey: 'admin.users', icon: Users, group: 'nav.groupUsers' },
+  { to: '/admin/rules', labelKey: 'rules.siteNav', icon: Filter, group: 'nav.groupUsers' },
+  { to: '/admin/routes', labelKey: 'routes.nav', icon: Route, group: 'nav.groupUsers' },
+  { to: '/admin/aliases', labelKey: 'aliases.nav', icon: AtSign, group: 'nav.groupUsers' },
+  { to: '/admin/audit', labelKey: 'admin.audit', icon: History, group: 'nav.groupOps' },
+  { to: '/admin/backup', labelKey: 'admin.backup', icon: DatabaseBackup, group: 'nav.groupOps' },
+  { to: '/admin/about', labelKey: 'admin.about', icon: Info, group: 'nav.groupOps' },
 ]
 
 export default function AdminShell({ title, desc, children }: { title?: any; desc?: any; children?: any }) {
@@ -60,12 +60,17 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
         <div className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-4 md:grid md:grid-cols-[190px_1fr] md:gap-5">
           <aside className="mb-3 md:mb-0">
             <nav className="flex gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0 md:sticky md:top-16">
-              {NAV.map(n => (
-                <Link key={n.to} to={n.to} aria-current={pathname === n.to ? 'page' : undefined}
-                  className={cn('flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap shrink-0',
-                    pathname === n.to ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
-                  <n.icon size={16} />{t(n.labelKey)}
-                </Link>
+              {NAV.map((n, i) => (
+                <Fragment key={n.to}>
+                  {n.group && (i === 0 || NAV[i - 1].group !== n.group) && (
+                    <div className="hidden md:block px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{t(n.group)}</div>
+                  )}
+                  <Link to={n.to} aria-current={pathname === n.to ? 'page' : undefined}
+                    className={cn('flex items-center gap-2 rounded-md px-3 py-2 text-sm whitespace-nowrap shrink-0',
+                      pathname === n.to ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
+                    <n.icon size={16} />{t(n.labelKey)}
+                  </Link>
+                </Fragment>
               ))}
             </nav>
           </aside>

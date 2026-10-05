@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Card } from '../components/ui/controls'
+import { Card, Button } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { SkeletonCards } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
@@ -10,6 +10,7 @@ import { cn } from '../lib/utils'
 
 export default function AdminPage() {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const [ov, setOv] = useState(null)
   const [health, setHealth] = useState<any>(null)
   const [tls, setTls] = useState(null)
@@ -34,6 +35,8 @@ export default function AdminPage() {
     { ok: !!settings?.dkim_ready, label: t('settings.dkim'), to: '/admin/settings' },
     { ok: (ov?.users || 0) > 0, label: t('users.create'), to: '/admin/users' },
   ]
+  const done = steps.filter(s => s.ok).length
+  const next = steps.find(s => !s.ok)
 
   return (
     <AdminShell title={t('admin.dashboard')} desc={t('settings.desc')}>
@@ -54,8 +57,19 @@ export default function AdminPage() {
       )}
 
       <Card className="p-4">
-        <b className="text-sm">{t('admin.checklist')}</b>
-        <div className="mt-3 space-y-1">
+        <div className="flex items-center justify-between gap-2">
+          <b className="text-sm">{t('admin.checklist')}</b>
+          {next
+            ? <Button size="sm" onClick={() => navigate(next.to)}>{t('admin.nextStep')}: {next.label}</Button>
+            : <span className="text-xs text-success">{t('admin.allDone')}</span>}
+        </div>
+        <div className="flex items-center gap-2 mt-2 mb-3">
+          <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+            <div className="h-full bg-primary transition-all" style={{ width: `${Math.round((done / steps.length) * 100)}%` }} />
+          </div>
+          <span className="text-xs text-muted-foreground shrink-0">{t('admin.progress')} {done}/{steps.length}</span>
+        </div>
+        <div className="space-y-1">
           {steps.map((s, i) => (
             <Link key={i} to={s.to} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted text-sm">
               {s.ok ? <CheckCircle2 size={16} className="text-success" /> : <Circle size={16} className="text-muted-foreground" />}
