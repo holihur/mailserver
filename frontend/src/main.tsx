@@ -24,3 +24,10 @@ createRoot(document.getElementById('root')).render(
     </I18nProvider>
   </ThemeProvider>
 )
+
+// 注册 Service Worker（仅生产）：离线壳 + 静态资源缓存
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {})
+  })
+}

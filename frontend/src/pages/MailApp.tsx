@@ -52,6 +52,7 @@ export default function MailApp() {
   const [sort, setSort] = useState(() => localStorage.getItem('pref.sort') || 'newest')
   const [installEvt, setInstallEvt] = useState<any>(null)
   const [installDismissed, setInstallDismissed] = useState(false)
+  const [offline, setOffline] = useState(typeof navigator !== 'undefined' && !navigator.onLine)
   const prevUnread = useRef(0)
   const touch = useRef<{ x: number; moved: boolean }>({ x: 0, moved: false })
   const firstQ = useRef(true)
@@ -154,6 +155,15 @@ export default function MailApp() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
+  }, [])
+
+  // 离线状态提示（#50）
+  useEffect(() => {
+    const on = () => setOffline(false)
+    const off = () => setOffline(true)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
   }, [])
 
   // Gmail 风格键盘流（#48）：列表输入框内不拦截；写信/预览打开时不生效。
@@ -359,6 +369,12 @@ export default function MailApp() {
           <DropdownItem icon={LogOut} onClick={logout} className="text-destructive hover:bg-destructive/10">{t('nav.logout')}</DropdownItem>
         </Dropdown>
       </header>
+
+      {offline && (
+        <div className="flex items-center justify-center gap-1.5 border-b border-warning/40 bg-warning/10 px-3 py-1 text-xs text-warning">
+          <span className="size-2 rounded-full bg-warning" />{t('mail.offline')}
+        </div>
+      )}
 
       {/* PWA 安装引导（#50） */}
       {installEvt && !installDismissed && (
