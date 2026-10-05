@@ -3,7 +3,7 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
-## [未发布] / Unreleased
+## [v0.17.0] - 2026-10-05
 
 ### 新增
 - **TOTP 二维码**：启用两步验证时展示 `otpauth://` 二维码（白底，深色模式也可扫）。
