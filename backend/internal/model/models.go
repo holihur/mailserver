@@ -175,6 +175,7 @@ type MailRule struct {
 	UserID     uint      `gorm:"index" json:"user_id"`
 	Name       string    `gorm:"size:120" json:"name"`
 	Enabled    bool      `json:"enabled"`
+	Shadow     bool      `json:"shadow"` // 影子模式：只匹配不执行（不移动/转发/丢弃）
 	Priority   int       `json:"priority"`
 	Expression string    `gorm:"type:text" json:"expression"` // CEL，返回 bool
 	Action     string    `gorm:"size:20" json:"action"`       // trash | move | forward

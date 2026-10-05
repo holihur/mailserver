@@ -56,7 +56,8 @@ func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, htmlBo
 		From: from, To: to, Cc: cc, Bcc: bcc, Subject: subject, Body: body,
 		Size: len(body), Attachments: len(message.ParseAttachments(atts)),
 	}, "inbox")
-	if d.Action == "forward" && len(d.Forward) > 0 {
+	apply := !d.Shadow // 影子模式只匹配不执行
+	if apply && d.Action == "forward" && len(d.Forward) > 0 {
 		Forward(db, from, d.Forward, subject, body, atts)
 		folder := "inbox"
 		if o.Quarantine {
@@ -67,7 +68,10 @@ func ToUser(db *gorm.DB, u *model.User, from, to, cc, bcc, subject, body, htmlBo
 			ReceiptTo: o.ReceiptTo, IsMDN: o.IsMDN, ReceiptFor: o.ReceiptFor, AuthResults: o.AuthResults})
 		return
 	}
-	folder := d.Folder
+	folder := "inbox"
+	if apply {
+		folder = d.Folder
+	}
 	if o.Quarantine {
 		folder = "trash"
 	}

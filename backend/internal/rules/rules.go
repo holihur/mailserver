@@ -126,6 +126,7 @@ type Decision struct {
 	Rule    string   `json:"rule"`
 	RuleID  uint     `json:"rule_id"`
 	Scope   string   `json:"scope"` // site | user
+	Shadow  bool     `json:"shadow"`
 }
 
 // Evaluate 按「整站优先、用户其次；同级按优先级降序」评估规则，返回首个命中。
@@ -160,6 +161,7 @@ func Evaluate(list []model.MailRule, in Input) Decision {
 			Rule:    r.Name,
 			RuleID:  r.ID,
 			Scope:   scopeName(r),
+			Shadow:  r.Shadow,
 		}
 	}
 	return Decision{}

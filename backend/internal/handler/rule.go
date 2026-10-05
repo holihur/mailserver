@@ -36,6 +36,7 @@ func (h *RuleBox) owner(w http.ResponseWriter, r *http.Request) (uint, bool) {
 type ruleInput struct {
 	Name       string `json:"name"`
 	Enabled    *bool  `json:"enabled"`
+	Shadow     *bool  `json:"shadow"`
 	Priority   *int   `json:"priority"`
 	Expression string `json:"expression"`
 	Action     string `json:"action"`
@@ -67,6 +68,11 @@ func (in ruleInput) normalize(partial bool) (map[string]any, error) {
 		upd["enabled"] = *in.Enabled
 	} else if !partial {
 		upd["enabled"] = true
+	}
+	if in.Shadow != nil {
+		upd["shadow"] = *in.Shadow
+	} else if !partial {
+		upd["shadow"] = false
 	}
 	if in.Priority != nil {
 		upd["priority"] = *in.Priority

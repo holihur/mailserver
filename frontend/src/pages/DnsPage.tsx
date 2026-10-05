@@ -109,7 +109,7 @@ export default function DnsPage() {
                   <b>{sel.domain.name}</b>
                   <Badge>{t('dns.records', { n: sel.records.length })}</Badge>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-sm min-w-[480px]">
                     <thead><tr className="text-left text-muted-foreground text-xs">
                       <th scope="col" className="py-1">{t('dns.host')}</th><th scope="col">{t('dns.type')}</th><th scope="col">{t('dns.value')}</th><th scope="col">{t('dns.ttl')}</th><th scope="col"></th>
@@ -126,6 +126,19 @@ export default function DnsPage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+                <div className="sm:hidden space-y-2">
+                  {sel.records.map(r => (
+                    <div key={r.id} className="rounded-md border border-border p-2.5 space-y-1 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{r.name}</span>
+                        <Badge>{r.type}</Badge>
+                        <span className="ml-auto text-[11px] text-muted-foreground">TTL {r.ttl}</span>
+                        <Button variant="ghost" size="icon" aria-label={t('common.delete')} onClick={async () => { await api.dnsRecDelete(sel.domain.id, r.id); open(sel.domain.id) }}><Trash2 /></Button>
+                      </div>
+                      <div className="font-mono text-xs break-all">{r.prio && r.type === 'MX' ? r.prio + ' ' : ''}{r.value}</div>
+                    </div>
+                  ))}
                 </div>
                 <form onSubmit={createRec} className="grid grid-cols-2 sm:grid-cols-6 gap-2 mt-3">
                   <Input placeholder={t('dns.hostPlaceholder')} value={newRec.name} onChange={e => setNewRec({ ...newRec, name: e.target.value })} required />

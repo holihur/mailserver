@@ -82,8 +82,9 @@ export default function AdminUsers() {
 
       {msg && <p className="text-sm flex items-center gap-1 text-muted-foreground"><AlertCircle size={14} />{msg}</p>}
 
-      <Card className="p-4 overflow-x-auto">
+      <Card className="p-4">
         <b className="text-sm">{t('users.all', { n: users.length })}</b>
+        <div className="hidden sm:block overflow-x-auto">
         <table className="w-full text-sm mt-3 min-w-[560px]">
           <thead><tr className="text-left text-xs text-muted-foreground">
             <th scope="col" className="py-1">{t('users.email')}</th><th scope="col">{t('users.name')}</th><th scope="col">{t('users.mails')}</th><th scope="col">{t('users.sentToday')}</th><th scope="col">{t('users.quota')}</th><th scope="col">{t('users.status')}</th><th scope="col" className="text-right">{t('users.actions')}</th>
@@ -109,6 +110,32 @@ export default function AdminUsers() {
             {users.length === 0 && <tr><td colSpan={7} className="py-4 text-center text-muted-foreground">{t('users.none')}</td></tr>}
           </tbody>
         </table>
+        </div>
+        <div className="sm:hidden space-y-2 mt-3">
+          {users.map(u => (
+            <div key={u.id} className="rounded-md border border-border p-3 space-y-1 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="font-medium truncate">{u.email}</span>
+                {u.admin && <Badge>{t('users.adminBadge')}</Badge>}
+                {u.disabled ? <span className="ml-auto text-destructive text-xs">{t('users.disabled')}</span> : <span className="ml-auto text-success text-xs">{t('users.normal')}</span>}
+              </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                <span>{t('users.name')}: {u.name || '—'}</span>
+                <span>{t('users.mails')}: {u.mail_count}</span>
+                <span>{t('users.sentToday')}: {u.sent_today ?? 0}</span>
+                <span>{t('users.quota')}: {u.quota_mb > 0 ? `${u.quota_mb} MB` : t('users.unlimited')}</span>
+              </div>
+              <div className="flex flex-wrap gap-1 pt-1">
+                <Button variant="ghost" size="sm" onClick={() => setQuota(u)}><HardDrive />{t('users.setQuota')}</Button>
+                <Button variant="ghost" size="sm" onClick={() => resetPass(u)}><KeyRound />{t('users.changePass')}</Button>
+                <Button variant="ghost" size="sm" onClick={() => toggle(u, 'admin')}>{u.admin ? t('users.unsetAdmin') : t('users.setAdmin')}</Button>
+                <Button variant="ghost" size="sm" onClick={() => toggle(u, 'disabled')}>{u.disabled ? t('users.enable') : t('users.disable')}</Button>
+                <Button variant="ghost" size="icon" onClick={() => del(u)} aria-label={t('common.delete')}><Trash2 /></Button>
+              </div>
+            </div>
+          ))}
+          {users.length === 0 && <p className="py-4 text-center text-muted-foreground text-sm">{t('users.none')}</p>}
+        </div>
       </Card>
     </AdminShell>
   )
