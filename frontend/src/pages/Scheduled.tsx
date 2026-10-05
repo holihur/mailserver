@@ -3,6 +3,7 @@ import { toast, confirmAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Card, Badge } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
+import { EmptyState } from '../components/EmptyState'
 import { SkeletonRows } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
 import { Clock, Trash2, Pause, Play, RefreshCw, Repeat } from 'lucide-react'
@@ -37,7 +38,7 @@ export default function Scheduled() {
       </div>
       <Card className="divide-y divide-border">
         {loading && <SkeletonRows rows={3} />}
-        {!loading && list.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('scheduled.empty')}</p>}
+        {!loading && list.length === 0 && <EmptyState icon={Clock} title={t('scheduled.empty')} />}
         {!loading && list.map(s => (
           <div key={s.id} className="p-3 flex items-start gap-3">
             <div className="min-w-0 flex-1">

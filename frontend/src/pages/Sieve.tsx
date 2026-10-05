@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
+import { EmptyState } from '../components/EmptyState'
 import { toast, confirmAsync } from '../lib/ui'
 import { useI18n } from '../lib/i18n'
 import { Filter, Plus, Trash2, Check, Save, Power } from 'lucide-react'
@@ -72,7 +73,7 @@ export default function Sieve() {
       </Card>
 
       <Card className="divide-y divide-border">
-        {list.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('sieve.empty')}</p>}
+        {list.length === 0 && <EmptyState icon={Filter} title={t('sieve.empty')} />}
         {list.map(sc => (
           <div key={sc.id} className="p-3 flex items-center gap-2">
             <button className="text-sm font-medium hover:underline truncate" onClick={() => edit(sc)}>{sc.name}</button>

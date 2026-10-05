@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import { Button, Input, Card, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
 import { SkeletonList } from '../components/Skeleton'
+import { EmptyState } from '../components/EmptyState'
 import { useI18n } from '../lib/i18n'
 import { Plus, Trash2, Pencil, Check, X, Search, UserRound } from 'lucide-react'
 
@@ -76,7 +77,7 @@ export default function Contacts() {
 
         <Card className="divide-y divide-border">
           {loading && <SkeletonList rows={4} />}
-          {!loading && filtered.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('contacts.empty')}</p>}
+          {!loading && filtered.length === 0 && <EmptyState icon={UserRound} title={t('contacts.empty')} />}
           {!loading && filtered.map(c => (
             <div key={c.id} className="p-3">
               {editId === c.id ? (

@@ -6,6 +6,7 @@ import { Button, Input, Textarea, Card } from '../components/ui/controls'
 import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../components/Dropdown'
 import { RecipientInput } from '../components/RecipientInput'
 import { SkeletonList } from '../components/Skeleton'
+import { EmptyState } from '../components/EmptyState'
 import { FooterControls } from '../components/HeaderControls'
 import { useI18n } from '../lib/i18n'
 import {
@@ -24,6 +25,9 @@ const FOLDERS = [
   { k: 'trash', labelKey: 'mail.trash', icon: Trash2 },
   { k: 'deleted', labelKey: 'mail.deleted', icon: Trash },
 ]
+
+// 未读数超过 99 显示 99+（#38）。
+const fmtUnread = (n: number) => (n > 99 ? '99+' : String(n))
 
 export default function MailApp() {
   const { t } = useI18n()
@@ -55,6 +59,7 @@ export default function MailApp() {
   const [preview, setPreview] = useState<any>(null)
   const [showImages, setShowImages] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -134,6 +139,18 @@ export default function MailApp() {
     const id = setTimeout(() => { setPage(1); load(1, sort) }, 300)
     return () => clearTimeout(id)
   }, [q])
+
+  // 快捷键：Ctrl/Cmd+K 聚焦搜索（#45）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        searchRef.current?.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [])
 
   const [selectMode, setSelectMode] = useState(false)
   const [checked, setChecked] = useState<number[]>([])
@@ -274,7 +291,7 @@ export default function MailApp() {
               className={cn('flex items-center gap-1 rounded-md px-3 py-1.5 text-sm whitespace-nowrap',
                 folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
               <f.icon size={15} />{f.labelKey ? t(f.labelKey) : f.label}
-              {unread[f.k] > 0 && <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
+              {unread[f.k] > 0 && <span className={cn('ml-0.5 rounded-full px-1.5 text-[10px] font-semibold', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{fmtUnread(unread[f.k])}</span>}
             </button>
             {f.custom && (
               <Dropdown align="right" trigger={
@@ -297,7 +314,7 @@ export default function MailApp() {
                 className={cn('flex-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm min-w-0', folder === f.k ? 'bg-primary text-primary-foreground' : 'hover:bg-muted')}>
                 <f.icon size={16} className="shrink-0" />
                 <span className="truncate">{f.labelKey ? t(f.labelKey) : f.label}</span>
-                {unread[f.k] > 0 && <span className={cn('ml-auto rounded-full px-1.5 text-[10px] font-semibold shrink-0', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{unread[f.k]}</span>}
+                {unread[f.k] > 0 && <span className={cn('ml-auto rounded-full px-1.5 text-[10px] font-semibold shrink-0', folder === f.k ? 'bg-primary-foreground/20' : 'bg-primary/15 text-primary')}>{fmtUnread(unread[f.k])}</span>}
               </button>
               {f.custom && (
                 <Dropdown align="right" trigger={
@@ -322,7 +339,7 @@ export default function MailApp() {
             <div className="p-3 border-b border-border flex gap-2">
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-2 top-2.5 text-muted-foreground" />
-                <Input className="pl-7 pr-7" placeholder={t('mail.search')} title={t('mail.searchHint')} value={q}
+                <Input ref={searchRef} className="pl-7 pr-7" placeholder={t('mail.searchPlaceholder')} title={t('mail.searchHint')} value={q}
                   onChange={e => { setQ(e.target.value); setShowHistory(true) }}
                   onFocus={() => setShowHistory(true)}
                   onBlur={() => { setShowHistory(false); rememberSearch(q) }}
@@ -432,14 +449,18 @@ export default function MailApp() {
                 </button>
               ))}
               {!loading && items.length === 0 && (
-                <div className="p-8 text-center space-y-3">
-                  <p className="text-sm text-muted-foreground">
-                    {q ? t('mail.noResults') : folder === 'inbox' ? t('mail.emptyInbox') : t('mail.emptyFolder')}
-                  </p>
-                  {folder === 'inbox' && !q && (
-                    <Button size="sm" variant="outline" onClick={() => setShowCompose(true)}><PenLine />{t('mail.compose')}</Button>
-                  )}
-                </div>
+                q ? (
+                  <EmptyState icon={Search} title={t('mail.noResults')} action={
+                    <Button size="sm" variant="outline" onClick={() => { setQ(''); load(1, sort) }}>{t('mail.clearSearch')}</Button>
+                  } />
+                ) : (
+                  <EmptyState icon={folder === 'inbox' ? Inbox : Folder}
+                    title={folder === 'inbox' ? t('mail.emptyInbox') : t('mail.emptyFolder')}
+                    desc={folder === 'inbox' ? t('mail.emptyInboxDesc') : undefined}
+                    action={folder === 'inbox' ? (
+                      <Button size="sm" variant="outline" onClick={() => setShowCompose(true)}><PenLine />{t('mail.compose')}</Button>
+                    ) : undefined} />
+                )
               )}
             </div>
             <div className="border-t border-border p-2 flex items-center justify-between text-xs">
@@ -466,11 +487,7 @@ export default function MailApp() {
                         {t('mail.fromTo', { from: sel.from, to: sel.to })} · {new Date(sel.created_at).toLocaleString()}
                       </p>
                       {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
-                      {sel.auth_results && (
-                        <p className={cn('text-[11px] mt-0.5', sel.auth_results.includes('dmarc=fail') ? 'text-red-500' : sel.auth_results.includes('dmarc=pass') ? 'text-green-600' : 'text-muted-foreground')}>
-                          {sel.auth_results}
-                        </p>
-                      )}
+                      <AuthBadges raw={sel.auth_results} t={t} />
                     </div>
                     <Dropdown align="right" trigger={
                       <Button variant="ghost" size="icon" aria-label={t('mail.actions')}><MoreVertical /></Button>
@@ -736,6 +753,31 @@ function SendStatus({ m, folder }: any) {
 
 function attList(s: any): any[] {
   try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a : [] } catch { return [] }
+}
+
+// 发件人认证徽章：把 SPF/DKIM/DMARC 结果翻译成通过/未通过（#49）。
+function AuthBadges({ raw, t }: { raw?: string; t: (k: string) => string }) {
+  if (!raw) return null
+  const parts: { k: string; v: string }[] = []
+  for (const seg of raw.split(';')) {
+    const [k, v] = seg.trim().split('=').map(s => (s || '').trim().toLowerCase())
+    if (k === 'spf' || k === 'dkim' || k === 'dmarc') parts.push({ k, v })
+  }
+  if (!parts.length) return null
+  const cls = (v: string) => v === 'pass' ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+    : v === 'fail' ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+    : 'bg-muted text-muted-foreground'
+  const label = (v: string) => v === 'pass' ? t('mail.authPass') : v === 'fail' ? t('mail.authFail') : t('mail.authUnknown')
+  return (
+    <div className="flex flex-wrap items-center gap-1 mt-1" title={t('mail.trustTitle')}>
+      <ShieldCheck size={12} className="text-muted-foreground" />
+      {parts.map(p => (
+        <span key={p.k} className={cn('rounded px-1.5 py-0.5 text-[10px] font-medium uppercase', cls(p.v))}>
+          {p.k} {label(p.v)}
+        </span>
+      ))}
+    </div>
+  )
 }
 
 function sumUnread(u: any): number {
