@@ -28,7 +28,7 @@ func TestPurgeAuth(t *testing.T) {
 	g.Create(&model.LoginEvent{UserID: u.ID, Email: u.Email, CreatedAt: now.AddDate(0, 0, -100)})
 	g.Create(&model.LoginEvent{UserID: u.ID, Email: u.Email, CreatedAt: now.AddDate(0, 0, -1)})
 
-	s, e := PurgeAuth(g)
+	s, e := PurgeAuth(g, 90)
 	if s != 1 || e != 1 {
 		t.Fatalf("应清理 1 会话 / 1 登录历史，得到 %d/%d", s, e)
 	}

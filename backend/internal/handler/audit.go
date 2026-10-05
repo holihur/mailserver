@@ -107,30 +107,36 @@ func (a *Admin) AuditLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, logs)
 }
 
-// StartAuditRetention 每天清理超过 180 天的审计日志。
-func StartAuditRetention(db *gorm.DB) {
+// StartAuditRetention 每天清理超过 days 天的审计日志（days<=0 用 180）。
+func StartAuditRetention(db *gorm.DB, days int) {
+	if days <= 0 {
+		days = 180
+	}
 	go func() {
 		for {
-			db.Where("created_at < ?", time.Now().AddDate(0, 0, -180)).Delete(&model.AuditLog{})
+			db.Where("created_at < ?", time.Now().AddDate(0, 0, -days)).Delete(&model.AuditLog{})
 			time.Sleep(24 * time.Hour)
 		}
 	}()
 }
 
-// StartAuthRetention 每天清理：过期的登录会话 + 超过 90 天的登录历史。
-// 避免 sessions / login_events 无限增长。
-func StartAuthRetention(db *gorm.DB) {
+// StartAuthRetention 每天清理过期会话 + 超过 loginDays 天的登录历史。
+// days<=0 用 90。避免 sessions / login_events 无限增长。
+func StartAuthRetention(db *gorm.DB, loginDays int) {
 	go func() {
 		for {
-			PurgeAuth(db)
+			PurgeAuth(db, loginDays)
 			time.Sleep(24 * time.Hour)
 		}
 	}()
 }
 
-// PurgeAuth 执行一次清理，返回删除的（会话数, 登录历史数）。
-func PurgeAuth(db *gorm.DB) (int64, int64) {
+// PurgeAuth 执行一次清理，返回删除的（会话数, 登录历史数）。loginDays<=0 用 90。
+func PurgeAuth(db *gorm.DB, loginDays int) (int64, int64) {
+	if loginDays <= 0 {
+		loginDays = 90
+	}
 	s := db.Where("expires_at < ?", time.Now()).Delete(&model.Session{})
-	e := db.Where("created_at < ?", time.Now().AddDate(0, 0, -90)).Delete(&model.LoginEvent{})
+	e := db.Where("created_at < ?", time.Now().AddDate(0, 0, -loginDays)).Delete(&model.LoginEvent{})
 	return s.RowsAffected, e.RowsAffected
 }
