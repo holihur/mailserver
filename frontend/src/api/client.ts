@@ -106,6 +106,7 @@ export const api = {
   adminHealth: () => req('/api/admin/health'),
   auditLogs: () => req('/api/admin/audit'),
   deliverability: () => req('/api/admin/deliverability'),
+  adminDomainCheck: (domain) => req('/api/admin/domain-check?domain=' + encodeURIComponent(domain)),
   publishDeliverability: (domainId) => req('/api/admin/deliverability/publish', { method: 'POST', body: JSON.stringify({ domain_id: domainId }) }),
   dnssec: () => req('/api/admin/dnssec'),
   adminAbout: () => req('/api/admin/about'),

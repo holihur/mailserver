@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { Card, Button } from '../components/ui/controls'
+import { Card, Button, Input } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { SkeletonCards } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
-import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe, Activity } from 'lucide-react'
-import { cn } from '../lib/utils'
+import { toast } from '../lib/ui'
+import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe, Loader2 } from 'lucide-react'
 
 export default function AdminPage() {
   const { t } = useI18n()
@@ -16,17 +16,28 @@ export default function AdminPage() {
   const [tls, setTls] = useState(null)
   const [settings, setSettings] = useState(null)
   const [providers, setProviders] = useState([])
+  const [domains, setDomains] = useState<any[]>([])
+  const [checkDomain, setCheckDomain] = useState('')
+  const [checkResult, setCheckResult] = useState<any>(null)
+  const [checking, setChecking] = useState(false)
 
   useEffect(() => {
     api.adminOverview().then(setOv).catch(() => {})
     api.tlsGet().then(setTls).catch(() => {})
     api.settingsGet().then(setSettings).catch(() => {})
     api.providers().then(setProviders).catch(() => {})
+    api.dnsList().then((d: any) => { setDomains(d || []); if (d?.[0]?.name) setCheckDomain(d[0].name) }).catch(() => {})
     const loadHealth = () => api.adminHealth().then(setHealth).catch(() => {})
     loadHealth()
     const id = setInterval(loadHealth, 30000)
     return () => clearInterval(id)
   }, [])
+
+  async function runCheck() {
+    if (!checkDomain) return
+    setChecking(true)
+    try { setCheckResult(await api.adminDomainCheck(checkDomain)) } catch (e: any) { toast(e.message) } finally { setChecking(false) }
+  }
 
   const steps = [
     { ok: !!settings?.mail_host, label: t('settings.mailDomain'), to: '/admin/settings' },
@@ -37,6 +48,12 @@ export default function AdminPage() {
   ]
   const done = steps.filter(s => s.ok).length
   const next = steps.find(s => !s.ok)
+  const checkRows: [boolean, string, string][] = checkResult ? [
+    [checkResult.mx_ok, t('admin.mxOk', { host: checkResult.expected_mx || 'MX' }), t('admin.mxBad', { host: checkResult.expected_mx || 'MX' })],
+    [checkResult.spf, t('admin.recOk', { name: 'SPF' }), t('admin.recBad', { name: 'SPF' })],
+    [checkResult.dkim, t('admin.recOk', { name: 'DKIM' }), t('admin.recBad', { name: 'DKIM' })],
+    [checkResult.dmarc, t('admin.recOk', { name: 'DMARC' }), t('admin.recBad', { name: 'DMARC' })],
+  ] : []
 
   return (
     <AdminShell title={t('admin.dashboard')} desc={t('settings.desc')}>
@@ -77,6 +94,35 @@ export default function AdminPage() {
             </Link>
           ))}
         </div>
+      </Card>
+
+      <Card className="p-4 space-y-3">
+        <b className="text-sm flex items-center gap-1.5"><Globe size={15} />{t('admin.domainCheck')}</b>
+        <p className="text-xs text-muted-foreground">{t('admin.domainCheckHint')}</p>
+        <div className="flex items-center gap-2">
+          {domains.length > 0 ? (
+            <select value={checkDomain} onChange={e => setCheckDomain(e.target.value)}
+              className="h-9 flex-1 rounded-md border border-border bg-background text-sm px-2">
+              {domains.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
+            </select>
+          ) : (
+            <Input value={checkDomain} onChange={e => setCheckDomain(e.target.value)} placeholder="example.com" />
+          )}
+          <Button size="sm" className="h-9 shrink-0" disabled={checking || !checkDomain} onClick={runCheck}>
+            {checking ? <Loader2 size={14} className="animate-spin" /> : null}{t('admin.check')}
+          </Button>
+        </div>
+        {checkResult && (
+          <div className="space-y-1 text-sm">
+            {checkRows.map(([ok, good, bad], i) => (
+              <div key={i} className="flex items-center gap-2">
+                {ok ? <CheckCircle2 size={15} className="text-success shrink-0" /> : <Circle size={15} className="text-destructive shrink-0" />}
+                <span className={ok ? 'text-muted-foreground' : ''}>{ok ? good : bad}</span>
+              </div>
+            ))}
+            {checkResult.mx?.length > 0 && <p className="text-[11px] text-muted-foreground break-all">MX: {checkResult.mx.join(', ')}</p>}
+          </div>
+        )}
       </Card>
 
       <div className="grid sm:grid-cols-3 gap-3">

@@ -507,6 +507,7 @@ func main() {
 	mux.HandleFunc("/api/admin/overview", cors(ad.Overview))
 	mux.HandleFunc("/api/admin/audit", cors(ad.AuditLogs))
 	mux.HandleFunc("/api/admin/deliverability", cors(dns.Deliverability))
+	mux.HandleFunc("/api/admin/domain-check", cors(ad.DomainCheck))
 	mux.HandleFunc("/api/admin/deliverability/publish", cors(dns.PublishDeliverability))
 	mux.HandleFunc("/api/admin/dnssec", cors(dns.DNSSECInfo))
 	mux.HandleFunc("/api/admin/health", cors(ad.HealthStatus))
