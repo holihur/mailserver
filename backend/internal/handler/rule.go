@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"strings"
 
+	"mailserver/internal/deliver"
+	"mailserver/internal/message"
 	"mailserver/internal/model"
+	"mailserver/internal/push"
 	"mailserver/internal/rules"
 	"mailserver/internal/runtimecfg"
 
@@ -117,6 +120,79 @@ type errText string
 
 func (e errText) Error() string { return string(e) }
 
+// apply 把单条规则回放到已有邮件（对旧邮件生效）。dry_run=true 仅预览匹配；
+// 规则为影子模式时不执行动作。整站规则会回放所有用户的邮件。
+func (h *RuleBox) apply(w http.ResponseWriter, r *http.Request, rule *model.MailRule, owner uint) {
+	if r.Method != "POST" {
+		w.WriteHeader(405)
+		return
+	}
+	var in struct {
+		Folder string `json:"folder"`
+		Limit  int    `json:"limit"`
+		DryRun bool   `json:"dry_run"`
+	}
+	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
+	folder := strings.TrimSpace(in.Folder)
+	if folder == "" {
+		folder = "inbox"
+	}
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+
+	tx := h.DB.Where("folder = ?", folder)
+	if !h.Site {
+		tx = tx.Where("user_id = ?", owner)
+	}
+	var mails []model.Mail
+	tx.Order("id DESC").Limit(limit).Find(&mails)
+
+	matched, applied := 0, 0
+	samples := []map[string]any{}
+	notify := map[uint]bool{}
+	for i := range mails {
+		mail := &mails[i]
+		ok, err := rules.Match(rule.Expression, rules.Input{
+			From: mail.From, To: mail.To, Cc: mail.Cc, Bcc: mail.Bcc,
+			Subject: mail.Subject, Body: mail.Body,
+			Size: len(mail.Body), Attachments: len(message.ParseAttachments(mail.Attachments)),
+		})
+		if err != nil || !ok {
+			continue
+		}
+		matched++
+		if len(samples) < 20 {
+			samples = append(samples, map[string]any{"id": mail.ID, "subject": mail.Subject, "from": mail.From})
+		}
+		if in.DryRun || rule.Shadow {
+			continue
+		}
+		switch rule.Action {
+		case "move":
+			h.DB.Model(&model.Mail{}).Where("id = ?", mail.ID).Update("folder", rule.Folder)
+		case "trash":
+			h.DB.Model(&model.Mail{}).Where("id = ?", mail.ID).Update("folder", "trash")
+		case "forward":
+			if targets := rules.SplitTargets(rule.ForwardTo); len(targets) > 0 {
+				deliver.Forward(h.DB, mail.From, targets, mail.Subject, mail.Body, mail.Attachments)
+			}
+		}
+		applied++
+		notify[mail.UserID] = true
+	}
+	for uid := range notify {
+		push.Notify(uid)
+	}
+	writeJSON(w, 200, map[string]any{
+		"matched": matched, "applied": applied, "samples": samples, "shadow": rule.Shadow,
+	})
+}
+
 // GET/POST /api/rules  或  /api/admin/rules
 func (h *RuleBox) List(w http.ResponseWriter, r *http.Request) {
 	owner, ok := h.owner(w, r)
@@ -178,6 +254,11 @@ func (h *RuleBox) One(w http.ResponseWriter, r *http.Request) {
 	var rule model.MailRule
 	if err := h.DB.Where("id = ? AND user_id = ?", id, owner).First(&rule).Error; err != nil {
 		writeJSON(w, 404, map[string]string{"error": "not found"})
+		return
+	}
+	// POST /api/rules/{id}/apply：把规则回放到已有邮件（dry_run 仅预览）
+	if strings.HasSuffix(rest, "/apply") {
+		h.apply(w, r, &rule, owner)
 		return
 	}
 	switch r.Method {

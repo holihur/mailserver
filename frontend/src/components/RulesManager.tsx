@@ -4,9 +4,16 @@ import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge, Label, Select } from './ui/controls'
 import { SkeletonRows } from './Skeleton'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X, FlaskConical } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, FlaskConical, RotateCcw } from 'lucide-react'
 
-const EMPTY = { name: '', expression: '', action: 'trash', folder: 'trash', forward_to: '', priority: 0, enabled: true, shadow: false }
+const DEFAULT_EXPR = 'subject.contains("促销") || from.endsWith("@spam.com")'
+const EMPTY = { name: '', expression: DEFAULT_EXPR, action: 'trash', folder: 'trash', forward_to: '', priority: 0, enabled: true, shadow: false }
+const RULE_EXAMPLES = [
+  { labelKey: 'rules.exSpam', expr: 'subject.contains("促销") || subject.contains("优惠")' },
+  { labelKey: 'rules.exFrom', expr: 'from.endsWith("@example.com")' },
+  { labelKey: 'rules.exAttach', expr: 'attachments > 0' },
+  { labelKey: 'rules.exLarge', expr: 'size > 5 * 1024 * 1024' },
+]
 
 // site=true 管理整站规则（/api/admin/rules），否则管理个人规则（/api/rules）。
 export function RulesManager({ site = false }: { site?: boolean }) {
@@ -18,6 +25,9 @@ export function RulesManager({ site = false }: { site?: boolean }) {
   const [sample, setSample] = useState({ from: 'spam@example.com', subject: '你好', body: '' })
   const [testResult, setTestResult] = useState<any>(null)
   const [folders, setFolders] = useState<any[]>([])
+  const [replayId, setReplayId] = useState<number | null>(null)
+  const [replay, setReplay] = useState({ folder: 'inbox', limit: 100 })
+  const [replayResult, setReplayResult] = useState<any>(null)
   useEffect(() => { api.folders().then(setFolders).catch(() => {}) }, [])
 
   const apiList = site ? api.adminRules : api.rules
@@ -25,6 +35,7 @@ export function RulesManager({ site = false }: { site?: boolean }) {
   const apiPatch = site ? api.adminRulePatch : api.rulePatch
   const apiDelete = site ? api.adminRuleDelete : api.ruleDelete
   const apiTest = site ? api.adminRuleTest : api.ruleTest
+  const apiApply = site ? api.adminRuleApply : api.ruleApply
 
   async function load() {
     try { setRules(await apiList()) } finally { setLoading(false) }
@@ -61,6 +72,14 @@ export function RulesManager({ site = false }: { site?: boolean }) {
       setTestResult(r)
     } catch (err: any) { setTestResult({ error: err.message }) }
   }
+  // 回放：把规则应用到已有邮件（dry=true 仅预览）
+  async function doReplay(id: number, dry: boolean) {
+    try {
+      const res: any = await apiApply(id, { folder: replay.folder, limit: replay.limit, dry_run: dry })
+      setReplayResult(res)
+      if (!dry) { toast(t('rules.replayApplied', { n: res.applied }), { type: 'success' }); load() }
+    } catch (err: any) { toast(err.message) }
+  }
 
   return (
     <>
@@ -83,6 +102,13 @@ export function RulesManager({ site = false }: { site?: boolean }) {
               onChange={e => setForm({ ...form, expression: e.target.value })}
               placeholder='subject.contains("促销") || from.endsWith("@spam.com")' />
             <p className="text-xs text-muted-foreground mt-1">{t('rules.exprHint')}</p>
+            <div className="flex flex-wrap items-center gap-1 mt-2">
+              <span className="text-[11px] text-muted-foreground">{t('rules.examples')}:</span>
+              {RULE_EXAMPLES.map(ex => (
+                <button key={ex.expr} type="button" onClick={() => setForm({ ...form, expression: ex.expr })}
+                  className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted">{t(ex.labelKey)}</button>
+              ))}
+            </div>
           </div>
           <div className="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
             <div>
@@ -148,7 +174,8 @@ export function RulesManager({ site = false }: { site?: boolean }) {
         {loading && <SkeletonRows rows={3} />}
         {!loading && rules.length === 0 && <p className="p-4 text-sm text-muted-foreground">{t('rules.empty')}</p>}
         {!loading && rules.map(r => (
-          <div key={r.id} className="p-3 flex items-start gap-3">
+          <div key={r.id} className="p-3">
+            <div className="flex items-start gap-3">
             <input type="checkbox" className="mt-1" checked={r.enabled} onChange={() => toggle(r)} aria-label={t('rules.enabled')} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
@@ -159,9 +186,35 @@ export function RulesManager({ site = false }: { site?: boolean }) {
               </div>
               <code className="text-xs text-muted-foreground break-all">{r.expression}</code>
             </div>
+            <Button variant="ghost" size="icon" onClick={() => { setReplayId(replayId === r.id ? null : r.id); setReplayResult(null) }} aria-label={t('rules.replay')}><RotateCcw /></Button>
             <Button variant="ghost" size="icon" onClick={() => startEdit(r)} aria-label={t('common.edit')}><Pencil /></Button>
             <Button variant="ghost" size="icon" onClick={() => del(r.id)} aria-label={t('common.delete')}><Trash2 /></Button>
           </div>
+          {replayId === r.id && (
+            <div className="mt-3 rounded-md border border-border p-2 space-y-2 bg-muted/30">
+              <div className="text-xs text-muted-foreground">{t('rules.replayTitle')}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Select className="h-8 w-auto text-xs" value={replay.folder} onChange={e => setReplay({ ...replay, folder: e.target.value })}>
+                  <option value="inbox">{t('mail.inbox')}</option>
+                  <option value="sent">{t('mail.sent')}</option>
+                  <option value="draft">{t('mail.draft')}</option>
+                  <option value="trash">{t('mail.trash')}</option>
+                  {folders.map((f: any) => <option key={f.id} value={'c' + f.id}>{f.name}</option>)}
+                </Select>
+                <Input type="number" className="h-8 w-24 text-xs" value={replay.limit} onChange={e => setReplay({ ...replay, limit: +e.target.value })} aria-label={t('rules.replayLimit')} />
+                <Button size="sm" variant="outline" onClick={() => doReplay(r.id, true)}>{t('rules.replayPreview')}</Button>
+                <Button size="sm" disabled={r.shadow} onClick={() => doReplay(r.id, false)}>{t('rules.replayApply')}</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setReplayId(null); setReplayResult(null) }} aria-label={t('common.cancel')}><X /></Button>
+              </div>
+              {replayResult && (
+                <p className={`text-xs ${replayResult.applied ? 'text-success' : 'text-muted-foreground'}`}>
+                  {replayResult.applied ? t('rules.replayApplied', { n: replayResult.applied }) : t('rules.replayMatched', { n: replayResult.matched })}
+                  {r.shadow ? ' ' + t('rules.replayShadow') : ''}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
         ))}
       </Card>
     </>

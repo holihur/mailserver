@@ -10,6 +10,11 @@ import { Filter, Plus, Trash2, Check, Save, Power } from 'lucide-react'
 export default function Sieve() {
   const { t } = useI18n()
   const template = t('sieve.template')
+  const examples = [
+    { labelKey: 'sieve.exWork', script: 'require ["fileinto"];\n\nif address :is "From" "boss@example.com" {\n  fileinto "Work";\n}\n' },
+    { labelKey: 'sieve.exUrgent', script: 'require ["redirect"];\n\nif header :contains "Subject" "紧急" {\n  redirect "oncall@example.com";\n}\n' },
+    { labelKey: 'sieve.exBig', script: 'require [];\n\nif size :over 5242880 {\n  discard;\n}\n' },
+  ]
   const [list, setList] = useState<any[]>([])
   const [name, setName] = useState('main')
   const [script, setScript] = useState(template)
@@ -58,6 +63,13 @@ export default function Sieve() {
           <Button size="sm" variant="outline" onClick={reset}><Plus />{t('sieve.new')}</Button>
         </div>
         <Textarea rows={14} className="font-mono text-xs" value={script} onChange={e => setScript(e.target.value)} />
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[11px] text-muted-foreground">{t('sieve.examples')}:</span>
+          {examples.map(ex => (
+            <button key={ex.labelKey} type="button" onClick={() => setScript(ex.script)}
+              className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground hover:bg-muted">{t(ex.labelKey)}</button>
+          ))}
+        </div>
         <div className="flex items-center gap-2">
           <Input className="h-8 text-xs" placeholder={t('sieve.vacationPlaceholder')} value={vac} onChange={e => setVac(e.target.value)} />
           <Button size="sm" variant="outline" type="button" disabled={!vac.trim()}
