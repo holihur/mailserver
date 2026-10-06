@@ -3,6 +3,14 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.20.0] - 2026-10-06
+
+### 新增
+- **AI 服务商模型列表更新**：内置目录刷新为当前模型，并新增 **Google Gemini**（OpenAI 兼容端点）。OpenAI / Anthropic / Google / DeepSeek / Moonshot / 通义千问 / 智谱 GLM / OpenRouter / Ollama 的推荐模型均已更新。
+
+### 变更
+- **移动端列表工具栏**：搜索改为图标按钮，点击弹出输入框（含最近搜索）；「会话」「批量」改为图标按钮（小屏隐藏文字，保留无障碍标签）。
+
 ## [v0.19.0] - 2026-10-06
 
 ### 新增

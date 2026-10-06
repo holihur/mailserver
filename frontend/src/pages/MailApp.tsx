@@ -17,6 +17,7 @@ import {
   RefreshCw, Globe, Settings, ShieldCheck, Loader2, X,
   ChevronDown, MoreVertical, MailOpen, RotateCcw,
   Contact, Filter, KeyRound, AtSign, Download, Folder, Plus, FileCode, Clock, Mail, Upload, Sparkles,
+  MessagesSquare, ListChecks,
 } from 'lucide-react'
 import { cn, setUnreadBadge, quoteMail } from '../lib/utils'
 import { BRAND } from '../lib/brand'
@@ -63,6 +64,7 @@ export default function MailApp() {
     try { const v = JSON.parse(localStorage.getItem('pref.searches') || '[]'); return Array.isArray(v) ? v : [] } catch { return [] }
   })
   const [showHistory, setShowHistory] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [sel, setSel] = useState(null)
   const [showCompose, setShowCompose] = useState<any>(false)
   const [me, setMe] = useState(null)
@@ -499,7 +501,7 @@ export default function MailApp() {
           <div className={cn('w-full md:w-80 md:shrink-0 border-r border-border flex-col min-h-0',
             view === 'read' ? 'hidden md:flex' : 'flex')}>
             <div className="p-3 border-b border-border flex flex-wrap gap-2">
-              <div className="relative flex-1">
+              <div className="relative flex-1 hidden sm:block">
                 <Search size={14} className="absolute left-2 top-2.5 text-muted-foreground" />
                 <Input ref={searchRef} className="pl-7 pr-7" placeholder={t('mail.searchPlaceholder')} title={t('mail.searchHint')} value={q}
                   onChange={e => { setQ(e.target.value); setShowHistory(true) }}
@@ -539,6 +541,8 @@ export default function MailApp() {
                   </div>
                 )}
               </div>
+              <Button variant={q ? 'default' : 'outline'} size="icon" className="sm:hidden shrink-0 h-9 w-9" aria-label={t('mail.search')} title={t('mail.search')}
+                onClick={() => setSearchOpen(true)}><Search /></Button>
               <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); load(1, e.target.value) }}
                 className="h-9 rounded-md border border-border bg-background text-xs px-2" aria-label={t('mail.sort')}>
                 <option value="newest">{t('mail.sortNewest')}</option>
@@ -554,12 +558,14 @@ export default function MailApp() {
                 </Select>
               )}
               <Button variant={group ? 'default' : 'outline'} size="default" className="h-9 shrink-0"
+                aria-label={t('mail.threads')} title={t('mail.threads')}
                 onClick={() => { const g = !group; setGroup(g); setPage(1); load(1, sort, false, g) }}>
-                {t('mail.threads')}
+                <MessagesSquare /><span className="hidden sm:inline">{t('mail.threads')}</span>
               </Button>
               <Button variant={selectMode ? 'default' : 'outline'} size="default" className="h-9 shrink-0"
+                aria-label={selectMode ? t('mail.done') : t('mail.batch')} title={selectMode ? t('mail.done') : t('mail.batch')}
                 onClick={() => { setSelectMode(v => !v); setChecked([]); setAllSelected(false) }}>
-                {selectMode ? t('mail.done') : t('mail.batch')}
+                <ListChecks /><span className="hidden sm:inline">{selectMode ? t('mail.done') : t('mail.batch')}</span>
               </Button>
               {folder === 'trash' && total > 0 && (
                 <Button variant="outline" size="default" className="h-9 shrink-0" onClick={emptyTrash}>
@@ -709,6 +715,49 @@ export default function MailApp() {
                   <span className="text-muted-foreground">{t(label)}</span>
                 </Fragment>
               ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {searchOpen && (
+        <div className="fixed inset-0 z-[95] bg-black/40 flex items-start justify-center p-3 sm:hidden"
+          onClick={() => setSearchOpen(false)} role="dialog" aria-modal="true" aria-label={t('mail.search')}>
+          <Card className="w-full max-w-lg mt-16 p-3" onClick={(e: any) => e.stopPropagation()}>
+            <div className="relative">
+              <Search size={14} className="absolute left-2 top-2.5 text-muted-foreground" />
+              <Input autoFocus className="pl-7 pr-7" placeholder={t('mail.searchPlaceholder')} value={q}
+                onChange={e => setQ(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { setPage(1); load(1, sort); rememberSearch(q); setSearchOpen(false) }
+                  else if (e.key === 'Escape') setSearchOpen(false)
+                }} />
+              {q && (
+                <button type="button" aria-label={t('common.clear')}
+                  className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground"
+                  onClick={() => setQ('')}><X size={14} /></button>
+              )}
+            </div>
+            {recent.length > 0 && (
+              <div className="mt-2">
+                <div className="flex items-center justify-between px-2 py-1">
+                  <span className="text-xs text-muted-foreground">{t('mail.recentSearches')}</span>
+                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground"
+                    onClick={clearHistory}>{t('mail.clearHistory')}</button>
+                </div>
+                {recent.slice(0, 8).map(s => (
+                  <button key={s} type="button"
+                    className="w-full flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-left hover:bg-muted"
+                    onClick={() => { setQ(s); rememberSearch(s); setSearchOpen(false) }}>
+                    <Clock size={13} className="text-muted-foreground shrink-0" />
+                    <span className="truncate">{s}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-3">
+              <Button variant="outline" size="sm" onClick={() => setSearchOpen(false)}>{t('common.cancel')}</Button>
+              <Button size="sm" onClick={() => { setPage(1); load(1, sort); rememberSearch(q); setSearchOpen(false) }}>{t('mail.search')}</Button>
             </div>
           </Card>
         </div>
