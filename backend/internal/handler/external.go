@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"mailserver/internal/external"
 	"mailserver/internal/model"
@@ -15,7 +16,12 @@ import (
 	"gorm.io/gorm"
 )
 
-type ExternalBox struct{ DB *gorm.DB }
+type ExternalBox struct {
+	DB *gorm.DB
+	MQ interface {
+		EnqueueExtSync(accountID uint, history bool, limit int) error
+	}
+}
 
 type externalView struct {
 	model.ExternalAccount
@@ -28,19 +34,21 @@ func viewOf(a model.ExternalAccount) externalView {
 }
 
 type externalInput struct {
-	Email    string `json:"email"`
-	Name     string `json:"name"`
-	IMAPHost string `json:"imap_host"`
-	IMAPPort string `json:"imap_port"`
-	IMAPSSL  *bool  `json:"imap_ssl"`
-	IMAPUser string `json:"imap_user"`
-	IMAPPass string `json:"imap_pass"`
-	SMTPHost string `json:"smtp_host"`
-	SMTPPort string `json:"smtp_port"`
-	SMTPSSL  *bool  `json:"smtp_ssl"`
-	SMTPUser string `json:"smtp_user"`
-	SMTPPass string `json:"smtp_pass"`
-	Enabled  *bool  `json:"enabled"`
+	Email       string `json:"email"`
+	Name        string `json:"name"`
+	IMAPHost    string `json:"imap_host"`
+	IMAPPort    string `json:"imap_port"`
+	IMAPSSL     *bool  `json:"imap_ssl"`
+	IMAPUser    string `json:"imap_user"`
+	IMAPPass    string `json:"imap_pass"`
+	SMTPHost    string `json:"smtp_host"`
+	SMTPPort    string `json:"smtp_port"`
+	SMTPSSL     *bool  `json:"smtp_ssl"`
+	SMTPUser    string `json:"smtp_user"`
+	SMTPPass    string `json:"smtp_pass"`
+	Enabled     *bool  `json:"enabled"`
+	SyncHistory *bool  `json:"sync_history"`
+	SyncLimit   *int   `json:"sync_limit"`
 }
 
 func (in externalInput) apply(a *model.ExternalAccount, partial bool) error {
@@ -79,6 +87,12 @@ func (in externalInput) apply(a *model.ExternalAccount, partial bool) error {
 		a.Enabled = *in.Enabled
 	} else if !partial {
 		a.Enabled = true
+	}
+	if in.SyncHistory != nil {
+		a.SyncHistory = *in.SyncHistory
+	}
+	if in.SyncLimit != nil {
+		a.SyncLimit = *in.SyncLimit
 	}
 	if in.IMAPPass != "" {
 		enc, err := secret.Encrypt([]byte(in.IMAPPass))
@@ -147,13 +161,44 @@ func (h *ExternalBox) One(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(parts) == 2 && parts[1] == "test" && r.Method == "POST" {
-		if err := external.Sync(h.DB, &a); err != nil {
+		n, err := external.Sync(h.DB, &a)
+		if err != nil {
 			h.DB.Model(&a).Updates(map[string]any{"last_error": err.Error()})
 			writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
 			return
 		}
 		h.DB.Model(&a).Update("last_error", "")
-		writeJSON(w, 200, map[string]any{"ok": true})
+		writeJSON(w, 200, map[string]any{"ok": true, "imported": n})
+		return
+	}
+	// POST /api/external/{id}/sync {history?:bool, limit?:int}
+	if len(parts) == 2 && parts[1] == "sync" && r.Method == "POST" {
+		var in struct {
+			History bool `json:"history"`
+			Limit   int  `json:"limit"`
+		}
+		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&in)
+		// 优先入 asynq 异步队列（不阻塞请求）；无 Redis 时同步执行
+		if h.MQ != nil {
+			if err := h.MQ.EnqueueExtSync(a.ID, in.History, in.Limit); err == nil {
+				writeJSON(w, 202, map[string]any{"ok": true, "queued": true})
+				return
+			}
+		}
+		var n int
+		var err error
+		if in.History {
+			n, err = external.SyncHistory(h.DB, &a, in.Limit)
+		} else {
+			n, err = external.Sync(h.DB, &a)
+		}
+		if err != nil {
+			h.DB.Model(&a).Updates(map[string]any{"last_error": err.Error()})
+			writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		h.DB.Model(&a).Updates(map[string]any{"last_error": "", "last_sync": time.Now()})
+		writeJSON(w, 200, map[string]any{"ok": true, "imported": n})
 		return
 	}
 	switch r.Method {

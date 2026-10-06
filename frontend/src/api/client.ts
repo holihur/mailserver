@@ -69,6 +69,7 @@ export const api = {
   externalPatch: (id, b) => req(`/api/external/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   externalDelete: (id) => req(`/api/external/${id}`, { method: 'DELETE' }),
   externalTest: (id) => req(`/api/external/${id}/test`, { method: 'POST' }),
+  externalSync: (id, b) => req(`/api/external/${id}/sync`, { method: 'POST', body: JSON.stringify(b || {}) }),
   folders: () => req('/api/folders'),
   folderCreate: (name) => req('/api/folders', { method: 'POST', body: JSON.stringify({ name }) }),
   folderPatch: (id, name) => req(`/api/folders/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),

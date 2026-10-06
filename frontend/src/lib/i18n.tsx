@@ -446,6 +446,11 @@ export const DICTS = {
     'accounts.confirmDelete': '确定删除该账号？',
     'accounts.test': '测试收信',
     'accounts.testOk': '连接成功，已拉取新邮件。',
+    'accounts.syncHistory': '同步历史邮件',
+    'accounts.syncHistoryHint': '回填历史（含已读）邮件，自动去重；每次最多同步设定封数。',
+    'accounts.syncLimit': '每次上限',
+    'accounts.synced': '已同步 {n} 封',
+    'accounts.syncQueued': '已加入后台同步队列',
 
     'folders.new': '新建文件夹',
     'folders.newPrompt': '文件夹名称',
@@ -1140,6 +1145,11 @@ if header :contains "Subject" "促销" {
     'accounts.confirmDelete': 'Delete this account?',
     'accounts.test': 'Test receive',
     'accounts.testOk': 'Connected; new mail fetched.',
+    'accounts.syncHistory': 'Sync history',
+    'accounts.syncHistoryHint': 'Backfill historical (incl. read) mail, de-duplicated; up to the set count per run.',
+    'accounts.syncLimit': 'Per-run limit',
+    'accounts.synced': 'Synced {n} messages',
+    'accounts.syncQueued': 'Queued for background sync',
 
     'folders.new': 'New folder',
     'folders.newPrompt': 'Folder name',

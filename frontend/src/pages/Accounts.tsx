@@ -5,13 +5,13 @@ import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
 import { SkeletonRows } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X, Plug, AtSign } from 'lucide-react'
+import { Plus, Trash2, Pencil, Check, X, Plug, AtSign, History } from 'lucide-react'
 
 const EMPTY = {
   email: '', name: '',
   imap_host: '', imap_port: '993', imap_ssl: true, imap_user: '', imap_pass: '',
   smtp_host: '', smtp_port: '465', smtp_ssl: true, smtp_user: '', smtp_pass: '',
-  enabled: true,
+  enabled: true, sync_history: false, sync_limit: 200,
 }
 
 export default function Accounts() {
@@ -44,7 +44,7 @@ export default function Accounts() {
       email: a.email, name: a.name || '',
       imap_host: a.imap_host, imap_port: a.imap_port || '993', imap_ssl: !!a.imap_ssl, imap_user: a.imap_user || '', imap_pass: '',
       smtp_host: a.smtp_host || '', smtp_port: a.smtp_port || '465', smtp_ssl: !!a.smtp_ssl, smtp_user: a.smtp_user || '', smtp_pass: '',
-      enabled: a.enabled,
+      enabled: a.enabled, sync_history: !!a.sync_history, sync_limit: a.sync_limit || 200,
     })
   }
   async function del(id: number) {
@@ -56,6 +56,15 @@ export default function Accounts() {
     try {
       const r = await api.externalTest(id)
       toast(r.ok ? t('accounts.testOk') : r.error)
+      load()
+    } catch (err: any) { toast(err.message) } finally { setBusy(false) }
+  }
+  async function syncHistory(id: number) {
+    setBusy(true)
+    try {
+      const r: any = await api.externalSync(id, { history: true, limit: 500 })
+      if (r.queued) { toast(t('accounts.syncQueued'), { type: 'success' }); setTimeout(load, 4000) }
+      else toast(r.ok ? t('accounts.synced', { n: r.imported }) : r.error)
       load()
     } catch (err: any) { toast(err.message) } finally { setBusy(false) }
   }
@@ -104,6 +113,18 @@ export default function Accounts() {
             </div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={form.sync_history} onChange={e => setForm({ ...form, sync_history: e.target.checked })} />
+              {t('accounts.syncHistory')}
+            </label>
+            <label className="flex items-center gap-2 text-muted-foreground">
+              {t('accounts.syncLimit')}
+              <Input type="number" className="w-24 h-8 text-xs" value={form.sync_limit} onChange={e => setForm({ ...form, sync_limit: +e.target.value })} />
+            </label>
+            <span className="text-xs text-muted-foreground">{t('accounts.syncHistoryHint')}</span>
+          </div>
+
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={form.enabled} onChange={e => setForm({ ...form, enabled: e.target.checked })} />
@@ -133,6 +154,7 @@ export default function Accounts() {
               </div>
             </div>
             <Button variant="ghost" size="icon" disabled={busy} onClick={() => test(a.id)} aria-label={t('accounts.test')}><Plug /></Button>
+            <Button variant="ghost" size="icon" disabled={busy} onClick={() => syncHistory(a.id)} aria-label={t('accounts.syncHistory')}><History /></Button>
             <Button variant="ghost" size="icon" onClick={() => startEdit(a)} aria-label={t('common.edit')}><Pencil /></Button>
             <Button variant="ghost" size="icon" onClick={() => del(a.id)} aria-label={t('common.delete')}><Trash2 /></Button>
           </div>

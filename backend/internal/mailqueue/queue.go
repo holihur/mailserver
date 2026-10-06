@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"mailserver/internal/contacts"
+	"mailserver/internal/external"
 	"mailserver/internal/model"
 	"mailserver/internal/queue"
 	"mailserver/internal/runtimecfg"
@@ -28,10 +29,28 @@ const (
 	TypeSweep = "mail:sweep"
 	// SendDelay 延迟发送窗口：给用户留出「撤销发送」的时间。
 	SendDelay = 8 * time.Second
+
+	// TypeExtSync 第三方账号同步（历史/增量），异步执行避免阻塞 HTTP。
+	TypeExtSync = "external:sync"
 )
 
 type sendPayload struct {
 	ID uint `json:"id"`
+}
+
+type extSyncPayload struct {
+	AccountID uint `json:"account_id"`
+	History   bool `json:"history"`
+	Limit     int  `json:"limit"`
+}
+
+// EnqueueExtSync 异步执行第三方账号同步；同一账号 30 分钟内去重。
+func (c *Client) EnqueueExtSync(accountID uint, history bool, limit int) error {
+	payload, _ := json.Marshal(extSyncPayload{AccountID: accountID, History: history, Limit: limit})
+	_, err := c.c.Enqueue(asynq.NewTask(TypeExtSync, payload),
+		asynq.Unique(30*time.Minute),
+		asynq.MaxRetry(2))
+	return err
 }
 
 // Client 用于把发信任务入队。
@@ -175,6 +194,7 @@ func Start(redisURL string, db *gorm.DB, rt *runtimecfg.Store) error {
 	mux := asynq.NewServeMux()
 	mux.HandleFunc(TypeSend, h.send)
 	mux.HandleFunc(TypeSweep, h.sweep)
+	mux.HandleFunc(TypeExtSync, h.extSync)
 	go func() {
 		if err := srv.Run(mux); err != nil {
 			log.Println("asynq server:", err)
@@ -223,6 +243,40 @@ func (h *handler) send(ctx context.Context, t *asynq.Task) error {
 	if !fresh.Relayed && fresh.Attempts < queue.MaxAttempts {
 		return fmt.Errorf("send failed: %s", fresh.RelayErr)
 	}
+	return nil
+}
+
+func (h *handler) extSync(ctx context.Context, t *asynq.Task) error {
+	var p extSyncPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return nil
+	}
+	var a model.ExternalAccount
+	if err := h.db.First(&a, p.AccountID).Error; err != nil {
+		return nil // 账号已删
+	}
+	var n int
+	var err error
+	if p.History {
+		n, err = external.SyncHistory(h.db, &a, p.Limit)
+	} else {
+		n, err = external.Sync(h.db, &a)
+	}
+	upd := map[string]any{"last_sync": time.Now()}
+	if err != nil {
+		msg := err.Error()
+		if len(msg) > 480 {
+			msg = msg[:480]
+		}
+		upd["last_error"] = msg
+	} else {
+		upd["last_error"] = ""
+	}
+	h.db.Model(&model.ExternalAccount{}).Where("id = ?", a.ID).Updates(upd)
+	if err != nil {
+		return fmt.Errorf("ext sync failed: %w", err)
+	}
+	_ = n
 	return nil
 }
 

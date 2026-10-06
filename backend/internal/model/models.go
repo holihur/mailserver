@@ -251,22 +251,31 @@ type MailAlias struct {
 // ExternalAccount 第三方邮箱账号（用户自配）：从该账号 IMAP 收信，并可作为发件身份经其 SMTP 发信。
 // 密码用 AES-GCM 加密存储。
 type ExternalAccount struct {
-	ID        uint       `gorm:"primaryKey" json:"id"`
-	UserID    uint       `gorm:"index" json:"user_id"`
-	Email     string     `gorm:"size:255" json:"email"`
-	Name      string     `gorm:"size:120" json:"name"`
-	IMAPHost  string     `gorm:"size:255" json:"imap_host"`
-	IMAPPort  string     `gorm:"size:10" json:"imap_port"`
-	IMAPSSL   bool       `json:"imap_ssl"`
-	IMAPUser  string     `gorm:"size:255" json:"imap_user"`
-	IMAPPass  string     `gorm:"size:512" json:"-"`
-	SMTPHost  string     `gorm:"size:255" json:"smtp_host"`
-	SMTPPort  string     `gorm:"size:10" json:"smtp_port"`
-	SMTPSSL   bool       `json:"smtp_ssl"`
-	SMTPUser  string     `gorm:"size:255" json:"smtp_user"`
-	SMTPPass  string     `gorm:"size:512" json:"-"`
-	Enabled   bool       `json:"enabled"`
-	LastSync  *time.Time `json:"last_sync"`
-	LastError string     `gorm:"size:500" json:"last_error"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	UserID      uint       `gorm:"index" json:"user_id"`
+	Email       string     `gorm:"size:255" json:"email"`
+	Name        string     `gorm:"size:120" json:"name"`
+	IMAPHost    string     `gorm:"size:255" json:"imap_host"`
+	IMAPPort    string     `gorm:"size:10" json:"imap_port"`
+	IMAPSSL     bool       `json:"imap_ssl"`
+	IMAPUser    string     `gorm:"size:255" json:"imap_user"`
+	IMAPPass    string     `gorm:"size:512" json:"-"`
+	SMTPHost    string     `gorm:"size:255" json:"smtp_host"`
+	SMTPPort    string     `gorm:"size:10" json:"smtp_port"`
+	SMTPSSL     bool       `json:"smtp_ssl"`
+	SMTPUser    string     `gorm:"size:255" json:"smtp_user"`
+	SMTPPass    string     `gorm:"size:512" json:"-"`
+	Enabled     bool       `json:"enabled"`
+	SyncHistory bool       `json:"sync_history"` // 是否回填历史（已读）邮件
+	SyncLimit   int        `json:"sync_limit"`   // 每次回填上限（默认 200）
+	LastSync    *time.Time `json:"last_sync"`
+	LastError   string     `gorm:"size:500" json:"last_error"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+// ExternalSync 记录第三方账号已同步的 IMAP UID，避免历史回填重复。
+type ExternalSync struct {
+	ID        uint   `gorm:"primaryKey" json:"id"`
+	AccountID uint   `gorm:"uniqueIndex:idx_ext_uid" json:"account_id"`
+	UID       uint32 `gorm:"uniqueIndex:idx_ext_uid" json:"uid"`
 }

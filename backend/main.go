@@ -255,6 +255,7 @@ func main() {
 		log.Fatal("发信队列需要 Redis（REDIS_URL）：", err)
 	}
 	mb.MQ = mq
+	extBox.MQ = mq
 	// 新 IP 登录提醒：给用户自己发一封站内信
 	handler.NotifyLogin = func(db *gorm.DB, uid uint, email, ip, ua string) {
 		var u model.User
