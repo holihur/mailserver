@@ -3,6 +3,31 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.19.0] - 2026-10-06
+
+### 新增
+- **AI BYOK（自带密钥）初步支持**：新增 AI 服务商目录与**系统级 / 用户级**两级配置。管理员在「AI 服务商」配置整站默认 Key，用户可自配优先使用的 Key；覆盖 OpenAI、Anthropic、DeepSeek、通义千问、智谱 GLM、OpenRouter、Ollama 及任意兼容 OpenAI 协议的端点。
+- **BYOK 管理接口**：用户级 `/api/ai/providers`（CRUD + `/test` 连通性测试）、`/api/ai/catalog`、`/api/ai/status`；系统级 `/api/admin/ai-providers`。API Key 用 AES-GCM 加密落库、接口仅回传是否已配置。
+- **统一解析入口** `internal/ai.Resolve`：按「用户级 > 系统级」返回可用配置，为后续摘要 / 分类 / 智能回复等 AI 特性预留。
+- 前端新增用户页 `/ai` 与后台页 `/admin/ai`；GDPR 导出/注销与管理员删号已纳入 AI 配置。
+
+### 修复
+- **按收件账户筛选失效**：收件人下拉在 `onChange` 中先 `setState` 再同步调用加载，读到的是尚未更新的旧值（React 状态更新不会在同一事件内立即生效），导致结果按“上一次选择”过滤。改为由 `useEffect` 监听 `recipient` 变更后重载。
+
+### 变更
+- **列表行布局**：每行底部改为**左下角发件人、右下角收件人**，并突出“对方”（收件箱重发件人、已发送/草稿重收件人）；时间移至右上角，收件账户彩色标识保留在收件人一侧。
+- **左上角 Logo 放大**：应用主界面 / 次级页 / 后台顶栏统一放大品牌图标与文字，提升可辨识度。
+- **前端 ESLint 告警清零**：移除未使用变量；对 `react-hooks/exhaustive-deps` 以稳定的 `useCallback` / ref 方式修正（不改变运行行为）。
+
+### 重构
+- **拆分“上帝文件”，提升可维护性**（仅调整代码组织，功能等价）：
+  - `internal/imap/server.go`（1613 行）→ `server/auth/mailbox/fetch/store/parse/search` 多个文件。
+  - `internal/jmap/methods.go`（642 行）→ 按方法域拆为 `mailbox/email/thread/identity/submission/searchsnippet/blob`。
+  - `internal/handler/mail.go`（555 行）→ 拆出 `mail_batch.go` / `mail_send.go`；`admin_settings.go`（487 行）→ 拆出 `admin_tls.go` / `admin_dkim.go`。
+  - `internal/sieve/sieve.go`（597 行）→ `lexer/parser/interp`；`internal/emailauth/emailauth.go`（592 行）→ `dmarc/dkim/evaluate`。
+  - `main.go` 的静态资源与 HTTP 中间件拆至 `web.go`。
+  - 前端 `lib/i18n.tsx`（1498 行）→ `lib/i18n/{index,zh,en}`；`pages/MailApp.tsx`（1122 行）→ 拆出 `Compose` / `MailReader` / `MailListItem` / `MailStatus` 与 `lib/mailFormat.ts`。
+
 ## [v0.18.3] - 2026-10-05
 
 ### 新增

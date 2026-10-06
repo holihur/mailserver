@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast, confirmDestructive } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Textarea, Card, Badge, Label, Select } from './ui/controls'
 import { SkeletonRows } from './Skeleton'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X, FlaskConical, RotateCcw } from 'lucide-react'
+import { Trash2, Pencil, Check, X, FlaskConical, RotateCcw } from 'lucide-react'
 
 const DEFAULT_EXPR = 'subject.contains("促销") || from.endsWith("@spam.com")'
 const EMPTY = { name: '', expression: DEFAULT_EXPR, action: 'trash', folder: 'trash', forward_to: '', priority: 0, enabled: true, shadow: false }
@@ -37,10 +37,10 @@ export function RulesManager({ site = false }: { site?: boolean }) {
   const apiTest = site ? api.adminRuleTest : api.ruleTest
   const apiApply = site ? api.adminRuleApply : api.ruleApply
 
-  async function load() {
+  const load = useCallback(async () => {
     try { setRules(await apiList()) } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [site])
+  }, [apiList])
+  useEffect(() => { load() }, [load])
 
   function reset() { setForm({ ...EMPTY }); setEditId(null) }
 

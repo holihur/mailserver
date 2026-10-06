@@ -297,7 +297,7 @@ func (a *Admin) UserOne(w http.ResponseWriter, r *http.Request) {
 			for _, t := range []any{
 				&model.Mail{}, &model.Session{}, &model.LoginEvent{}, &model.MailToken{},
 				&model.MailRule{}, &model.Contact{}, &model.ExternalAccount{}, &model.MailFolder{},
-				&model.SieveScript{}, &model.ScheduledMail{},
+				&model.SieveScript{}, &model.ScheduledMail{}, &model.AIProvider{},
 			} {
 				if err := tx.Where("user_id = ?", u.ID).Delete(t).Error; err != nil {
 					return err

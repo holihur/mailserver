@@ -5,9 +5,12 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"mailserver/internal/message"
+	"mailserver/internal/model"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -81,4 +84,37 @@ func randToken() string {
 	b := make([]byte, 16)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// ---------- Blob ----------
+
+func (s *Server) readBlob(blobID string) ([]byte, error) {
+	switch {
+	case strings.HasPrefix(blobID, "m"):
+		var m model.Mail
+		if err := s.DB.First(&m, strings.TrimPrefix(blobID, "m")).Error; err != nil {
+			return nil, err
+		}
+		return message.Build("mailserver", &m), nil
+	case strings.HasPrefix(blobID, "a"):
+		rest := strings.TrimPrefix(blobID, "a")
+		dash := strings.LastIndex(rest, "-")
+		if dash < 0 {
+			return nil, fmt.Errorf("bad blob id")
+		}
+		mailID, idx := rest[:dash], rest[dash+1:]
+		var m model.Mail
+		if err := s.DB.First(&m, mailID).Error; err != nil {
+			return nil, err
+		}
+		atts := message.ParseAttachments(m.Attachments)
+		i, _ := strconv.Atoi(idx)
+		if i < 0 || i >= len(atts) {
+			return nil, fmt.Errorf("attachment not found")
+		}
+		return base64.StdEncoding.DecodeString(atts[i].Data)
+	case strings.HasPrefix(blobID, "u"):
+		return s.readUpload(blobID)
+	}
+	return nil, fmt.Errorf("unknown blob")
 }

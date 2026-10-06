@@ -16,6 +16,10 @@
 - SMTP 收发、POP3 / IMAP 同步、**JMAP**（RFC 8620/8621 标准方法集，含 **Push / EventSource**）、**ManageSieve**（RFC 5804）、**MCP**（HTTP，AI 客户端）。
 - 发信经中继 / 直连；**asynq(Redis) 异步发信队列**（重试 + 发信状态）。
 
+**AI（BYOK）**
+- **自带密钥（Bring Your Own Key）**：支持**系统级**（管理员配置整站默认）与**用户级**（用户自配）AI 服务商，覆盖 OpenAI、Anthropic、DeepSeek、通义千问、智谱 GLM、OpenRouter、Ollama 及任意兼容 OpenAI 协议的端点。
+- API Key **AES-GCM 加密存储、接口不回显**；解析时**用户级优先、系统级兜底**，并为后续摘要 / 分类 / 智能回复等特性预留统一入口（`internal/ai`）。
+
 **安全**
 - 网页登录 **TOTP 两步验证**（启用时展示**二维码**）、**OIDC 单点登录**（严格校验 id_token：JWKS 验签 + iss/aud/exp/nonce）。
 - **入站发件人认证**：SPF / DKIM 验签（RFC 6376，relaxed/simple）/ DMARC 对齐，结果写入邮件并在阅读区可视化；`DMARC_ENFORCE` 可隔离/拒收。

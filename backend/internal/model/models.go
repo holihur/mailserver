@@ -279,3 +279,20 @@ type ExternalSync struct {
 	AccountID uint   `gorm:"uniqueIndex:idx_ext_uid" json:"account_id"`
 	UID       uint32 `gorm:"uniqueIndex:idx_ext_uid" json:"uid"`
 }
+
+// AIProvider AI 服务商配置（BYOK：Bring Your Own Key），为后续 AI 能力打基础。
+// Scope="system" 为管理员配置的整站默认（UserID=0）；Scope="user" 为用户自有配置。
+// 解析时优先用户级、回退系统级。APIKey 用 AES-GCM 加密存储，接口永不回传明文。
+type AIProvider struct {
+	ID        uint      `gorm:"primaryKey" json:"id"`
+	Scope     string    `gorm:"size:10;index" json:"scope"`    // system | user
+	UserID    uint      `gorm:"index" json:"user_id"`          // scope=user 时归属用户
+	Name      string    `gorm:"size:120" json:"name"`          // 展示名，默认取服务商标签
+	Provider  string    `gorm:"size:40;index" json:"provider"` // openai | anthropic | deepseek | ... | custom
+	BaseURL   string    `gorm:"size:255" json:"base_url"`      // 兼容端点；空则用目录默认值
+	Model     string    `gorm:"size:120" json:"model"`         // 默认模型
+	APIKey    string    `gorm:"type:text" json:"-"`            // AES-GCM 加密的 API Key
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}

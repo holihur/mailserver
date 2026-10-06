@@ -38,6 +38,25 @@ func (h *GDPRBox) Export(w http.ResponseWriter, r *http.Request) {
 	var tokens []model.MailToken
 	h.DB.Where("user_id = ?", uid).Find(&tokens)
 
+	// AI BYOK 配置只导出元数据（不含加密的 API Key）
+	var aiProvs []model.AIProvider
+	h.DB.Where("scope = ? AND user_id = ?", "user", uid).Find(&aiProvs)
+	type aiMeta struct {
+		Name      string    `json:"name"`
+		Provider  string    `json:"provider"`
+		BaseURL   string    `json:"base_url"`
+		Model     string    `json:"model"`
+		Enabled   bool      `json:"enabled"`
+		CreatedAt time.Time `json:"created_at"`
+	}
+	aiMetaList := make([]aiMeta, 0, len(aiProvs))
+	for _, x := range aiProvs {
+		aiMetaList = append(aiMetaList, aiMeta{
+			Name: x.Name, Provider: x.Provider, BaseURL: x.BaseURL,
+			Model: x.Model, Enabled: x.Enabled, CreatedAt: x.CreatedAt,
+		})
+	}
+
 	// 令牌只导出元数据（不含明文/摘要）
 	type tokenMeta struct {
 		Name      string     `json:"name"`
@@ -55,10 +74,11 @@ func (h *GDPRBox) Export(w http.ResponseWriter, r *http.Request) {
 		"account": map[string]any{
 			"email": u.Email, "name": u.Name, "created_at": u.CreatedAt, "totp_enabled": u.TOTPEnabled,
 		},
-		"mails":       mails,
-		"contacts":    contacts,
-		"rules":       rules,
-		"mail_tokens": ts,
+		"mails":        mails,
+		"contacts":     contacts,
+		"rules":        rules,
+		"mail_tokens":  ts,
+		"ai_providers": aiMetaList,
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Content-Disposition",
@@ -114,6 +134,9 @@ func (h *GDPRBox) Delete(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		if err := tx.Where("user_id = ?", uid).Delete(&model.MailToken{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("scope = ? AND user_id = ?", "user", uid).Delete(&model.AIProvider{}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&model.User{}, uid).Error

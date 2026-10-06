@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmDestructive, promptAsync } from '../lib/ui'
+import { confirmDestructive, promptAsync } from '../lib/ui'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, KeyRound, Loader2, AlertCircle, CheckCircle2, UserCog, HardDrive, Send } from 'lucide-react'
+import { Plus, Trash2, KeyRound, Loader2, AlertCircle, UserCog, HardDrive, Send } from 'lucide-react'
 
 export default function AdminUsers() {
   const { t } = useI18n()

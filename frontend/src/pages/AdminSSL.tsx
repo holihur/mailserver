@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { toast, confirmDestructive } from '../lib/ui'
+import { confirmDestructive } from '../lib/ui'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'

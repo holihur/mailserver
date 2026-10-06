@@ -12,7 +12,6 @@ export default function AdminPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const [ov, setOv] = useState(null)
-  const [health, setHealth] = useState<any>(null)
   const [tls, setTls] = useState(null)
   const [settings, setSettings] = useState(null)
   const [providers, setProviders] = useState([])
@@ -27,10 +26,6 @@ export default function AdminPage() {
     api.settingsGet().then(setSettings).catch(() => {})
     api.providers().then(setProviders).catch(() => {})
     api.dnsList().then((d: any) => { setDomains(d || []); if (d?.[0]?.name) setCheckDomain(d[0].name) }).catch(() => {})
-    const loadHealth = () => api.adminHealth().then(setHealth).catch(() => {})
-    loadHealth()
-    const id = setInterval(loadHealth, 30000)
-    return () => clearInterval(id)
   }, [])
 
   async function runCheck() {

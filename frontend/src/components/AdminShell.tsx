@@ -4,7 +4,7 @@ import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
 import { SettingsMenu } from './HeaderControls'
 import { useI18n } from '../lib/i18n'
-import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign, History, DatabaseBackup } from 'lucide-react'
+import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign, History, DatabaseBackup, Sparkles } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
 
@@ -21,6 +21,7 @@ const NAV = [
   { to: '/admin/settings', labelKey: 'admin.host', icon: Server, group: 'nav.groupConfig' },
   { to: '/admin/ssl', labelKey: 'admin.ssl', icon: ShieldCheck, group: 'nav.groupConfig' },
   { to: '/admin/providers', labelKey: 'admin.providers', icon: Cloud, group: 'nav.groupConfig' },
+  { to: '/admin/ai', labelKey: 'ai.nav', icon: Sparkles, group: 'nav.groupConfig' },
   { to: '/admin/users', labelKey: 'admin.users', icon: Users, group: 'nav.groupUsers' },
   { to: '/admin/rules', labelKey: 'rules.siteNav', icon: Filter, group: 'nav.groupUsers' },
   { to: '/admin/routes', labelKey: 'routes.nav', icon: Route, group: 'nav.groupUsers' },
@@ -40,7 +41,7 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
   return (
     <div className="min-h-dvh bg-background flex flex-col">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
-        <Link to="/" className="font-semibold flex items-center gap-2"><Mail size={16} />{BRAND}</Link>
+        <Link to="/" className="font-semibold flex items-center gap-2 text-lg"><Mail size={20} />{BRAND}</Link>
         <Badge className="hidden sm:inline-flex">{t('admin.title')}</Badge>
         {ver?.version && (
           <Badge className="hidden sm:inline-flex" title={`commit ${ver.commit || '-'} · ${ver.date || '-'}`}>

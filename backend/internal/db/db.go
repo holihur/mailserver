@@ -30,7 +30,7 @@ func Open(dsn string) (*gorm.DB, error) {
 		sqlDB.SetConnMaxIdleTime(2 * time.Minute)
 		sqlDB.SetConnMaxLifetime(30 * time.Minute)
 	}
-	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}, &model.DnsProvider{}, &model.AcmeConfig{}, &model.Setting{}, &model.MailToken{}, &model.MailRule{}, &model.Contact{}, &model.MailRoute{}, &model.MailAlias{}, &model.ExternalAccount{}, &model.MailFolder{}, &model.SieveScript{}, &model.ScheduledMail{}, &model.AuditLog{}, &model.LoginEvent{}, &model.Session{}, &model.ExternalSync{}); err != nil {
+	if err := g.AutoMigrate(&model.User{}, &model.Mail{}, &model.Domain{}, &model.DnsRecord{}, &model.DnsProvider{}, &model.AcmeConfig{}, &model.Setting{}, &model.MailToken{}, &model.MailRule{}, &model.Contact{}, &model.MailRoute{}, &model.MailAlias{}, &model.ExternalAccount{}, &model.MailFolder{}, &model.SieveScript{}, &model.ScheduledMail{}, &model.AuditLog{}, &model.LoginEvent{}, &model.Session{}, &model.ExternalSync{}, &model.AIProvider{}); err != nil {
 		return nil, err
 	}
 	// 全文/子串检索加速：pg_trgm + GIN 索引（subject/from/to/body 的 ILIKE）。

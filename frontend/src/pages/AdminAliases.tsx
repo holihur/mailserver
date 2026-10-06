@@ -7,7 +7,7 @@ import { SkeletonRows } from '../components/Skeleton'
 import { EmptyState } from '../components/EmptyState'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X, AtSign } from 'lucide-react'
+import { Trash2, Pencil, Check, X, AtSign } from 'lucide-react'
 
 const EMPTY = { source: '', targets: '', keep: false, enabled: true }
 

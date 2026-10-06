@@ -18,10 +18,12 @@ const AdminRules = lazy(() => import('./pages/AdminRules'))
 const AdminRoutes = lazy(() => import('./pages/AdminRoutes'))
 const AdminAliases = lazy(() => import('./pages/AdminAliases'))
 const AdminBackup = lazy(() => import('./pages/AdminBackup'))
+const AdminAI = lazy(() => import('./pages/AdminAI'))
 const Contacts = lazy(() => import('./pages/Contacts'))
 const Accounts = lazy(() => import('./pages/Accounts'))
 const Rules = lazy(() => import('./pages/Rules'))
 const Security = lazy(() => import('./pages/Security'))
+const AI = lazy(() => import('./pages/AI'))
 const Sieve = lazy(() => import('./pages/Sieve'))
 const Scheduled = lazy(() => import('./pages/Scheduled'))
 const Privacy = lazy(() => import('./pages/Privacy'))
@@ -50,6 +52,7 @@ export default function App() {
           <Route path="/accounts" element={authed() ? <Accounts /> : <Navigate to="/login" />} />
           <Route path="/rules" element={authed() ? <Rules /> : <Navigate to="/login" />} />
           <Route path="/security" element={authed() ? <Security /> : <Navigate to="/login" />} />
+          <Route path="/ai" element={authed() ? <AI /> : <Navigate to="/login" />} />
           <Route path="/sieve" element={authed() ? <Sieve /> : <Navigate to="/login" />} />
           <Route path="/scheduled" element={authed() ? <Scheduled /> : <Navigate to="/login" />} />
           <Route path="/privacy" element={<Privacy />} />
@@ -64,6 +67,7 @@ export default function App() {
           <Route path="/admin/routes" element={authed() ? <AdminRoutes /> : <Navigate to="/login" />} />
           <Route path="/admin/aliases" element={authed() ? <AdminAliases /> : <Navigate to="/login" />} />
           <Route path="/admin/backup" element={authed() ? <AdminBackup /> : <Navigate to="/login" />} />
+          <Route path="/admin/ai" element={authed() ? <AdminAI /> : <Navigate to="/login" />} />
         </Routes>
       </Suspense>
     </BrowserRouter>

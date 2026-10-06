@@ -5,7 +5,7 @@ import { Button, Input, Card, Badge, Label } from '../components/ui/controls'
 import PageShell from '../components/PageShell'
 import { SkeletonRows } from '../components/Skeleton'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X, Plug, AtSign, History } from 'lucide-react'
+import { Trash2, Pencil, Check, X, Plug, AtSign, History } from 'lucide-react'
 
 const EMPTY = {
   email: '', name: '',

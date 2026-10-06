@@ -5,7 +5,7 @@ import { Button, Input, Card, Badge, Label, Select } from '../components/ui/cont
 import AdminShell from '../components/AdminShell'
 import { EmptyState } from '../components/EmptyState'
 import { useI18n } from '../lib/i18n'
-import { Plus, Trash2, Pencil, Check, X, FlaskConical, Route } from 'lucide-react'
+import { Trash2, Pencil, Check, X, FlaskConical, Route } from 'lucide-react'
 
 const EMPTY = {
   domain: '', action: 'relay', relay_host: '', relay_port: '587', relay_user: '',
