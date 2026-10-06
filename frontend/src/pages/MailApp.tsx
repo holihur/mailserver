@@ -46,6 +46,15 @@ function clampFab(x: number, y: number, w = FAB_SIZE, h = FAB_SIZE) {
   }
 }
 
+// 收件账户与主邮箱不同时（别名/多地址），生成一个紧凑标识（本地部分 + 确定性颜色）。
+function recipientChip(to: string, myEmail: string): { label: string; color: string } | null {
+  const first = String(to || '').split(',')[0].trim()
+  if (!first || !myEmail || first.toLowerCase() === myEmail.toLowerCase()) return null
+  let h = 0
+  for (let i = 0; i < first.length; i++) h = (h * 31 + first.charCodeAt(i)) % 360
+  return { label: first.split('@')[0] || first, color: `hsl(${h} 65% 42%)` }
+}
+
 export default function MailApp() {
   const { t } = useI18n()
   const navigate = useNavigate()
@@ -622,6 +631,14 @@ export default function MailApp() {
                     <span className="text-xs text-muted-foreground line-clamp-1">{m.body?.slice(0, 80)}</span>
                   </div>
                   <div className="flex items-center justify-end gap-2 mt-0.5">
+                    {folder !== 'sent' && (() => {
+                      const rc = recipientChip(m.to, me?.email)
+                      return rc ? (
+                        <span className="shrink-0 max-w-[45%] truncate rounded px-1.5 py-0.5 text-[10px] font-medium text-white" style={{ background: rc.color }} title={m.to}>
+                          {rc.label}
+                        </span>
+                      ) : null
+                    })()}
                     <span className={cn('text-xs truncate max-w-[70%]', m.read ? 'text-muted-foreground' : 'font-medium')}>
                       {folder === 'sent' ? m.to : m.from}
                     </span>
