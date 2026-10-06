@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { toast, confirmAsync, confirmDestructive, promptAsync } from '../lib/ui'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import { Button, Input, Textarea, Card } from '../components/ui/controls'
+import { Button, Input, Textarea, Card, Select } from '../components/ui/controls'
 import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../components/Dropdown'
 import { RecipientInput } from '../components/RecipientInput'
 import { SkeletonList } from '../components/Skeleton'
@@ -99,7 +99,8 @@ export default function MailApp() {
   async function load(p = page, s = sort, silent = false, g = group) {
     if (!silent) setLoading(true)
     try {
-      const d = await api.list(folder, q, p, s, g ? 'thread' : '')
+      const effQ = recipient ? (q.trim() ? `to:${recipient} ${q.trim()}` : `to:${recipient}`) : q
+      const d = await api.list(folder, effQ, p, s, g ? 'thread' : '')
       setItems(d.items); setTotal(d.total); setPage(d.page || p)
     } catch {} finally { if (!silent) setLoading(false) }
     api.unread().then((u: any) => {
@@ -247,8 +248,12 @@ export default function MailApp() {
     return () => document.removeEventListener('keydown', onKey)
   }, [preview])
 
+  useEffect(() => { api.recipients().then((rs: any) => setRecipients(Array.isArray(rs) ? rs : [])).catch(() => {}) }, [])
+
   const [selectMode, setSelectMode] = useState(false)
   const [group, setGroup] = useState(false)
+  const [recipient, setRecipient] = useState('')
+  const [recipients, setRecipients] = useState<string[]>([])
   const [thread, setThread] = useState<any[]>([])
   const [checked, setChecked] = useState<number[]>([])
   const [allSelected, setAllSelected] = useState(false)
@@ -535,6 +540,13 @@ export default function MailApp() {
                 <option value="subject">{t('mail.sortSubject')}</option>
                 <option value="sender">{t('mail.sortSender')}</option>
               </select>
+              {recipients.length > 0 && (
+                <Select value={recipient} className="h-9 w-auto text-xs shrink-0" aria-label={t('mail.recipientFilter')}
+                  onChange={e => { setRecipient(e.target.value); setPage(1); load(1, sort) }}>
+                  <option value="">{t('mail.allRecipients')}</option>
+                  {recipients.map(r => <option key={r} value={r}>{r}</option>)}
+                </Select>
+              )}
               <Button variant={group ? 'default' : 'outline'} size="default" className="h-9 shrink-0"
                 onClick={() => { const g = !group; setGroup(g); setPage(1); load(1, sort, false, g) }}>
                 {t('mail.threads')}
@@ -696,6 +708,10 @@ export default function MailApp() {
                       <p className="text-xs text-muted-foreground mt-1">
                         {t('mail.fromTo', { from: sel.from, to: sel.to })} · {new Date(sel.created_at).toLocaleString()}
                       </p>
+                      {(() => {
+                        const rc = recipientChip(sel.to, me?.email)
+                        return rc ? <span className="inline-block mt-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-white" style={{ background: rc.color }} title={sel.to}>{rc.label}</span> : null
+                      })()}
                       {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
                       <AuthBadges raw={sel.auth_results} t={t} />
                       {sel.status === 'failed' && sel.relay_err && (

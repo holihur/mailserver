@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -49,6 +50,33 @@ func uidOf(db *gorm.DB, w http.ResponseWriter, r *http.Request) (uint, bool) {
 		return 0, false
 	}
 	return uid, true
+}
+
+// GET /api/mails/recipients -> 当前用户收到过邮件的收件地址（去重，排除主邮箱）
+func (m *MailBox) Recipients(w http.ResponseWriter, r *http.Request) {
+	uid, ok := uidOf(m.DB, w, r)
+	if !ok {
+		return
+	}
+	var me model.User
+	m.DB.Select("email").First(&me, uid)
+	mine := strings.ToLower(strings.TrimSpace(me.Email))
+	var raw []string
+	m.DB.Model(&model.Mail{}).Where("user_id = ? AND folder <> ?", uid, "sent").Distinct().Pluck("\"to\"", &raw)
+	set := map[string]bool{}
+	out := []string{}
+	for _, s := range raw {
+		for _, a := range strings.Split(s, ",") {
+			a = strings.ToLower(strings.TrimSpace(a))
+			if a == "" || a == mine || set[a] {
+				continue
+			}
+			set[a] = true
+			out = append(out, a)
+		}
+	}
+	sort.Strings(out)
+	writeJSON(w, 200, out)
 }
 
 // GET /api/mails?folder=inbox&q=&page=1&pageSize=20

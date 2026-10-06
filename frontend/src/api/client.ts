@@ -34,6 +34,7 @@ export const api = {
   revokeSession: (jti) => req('/api/me/sessions/' + jti, { method: 'DELETE' }),
   list: (folder = 'inbox', q = '', page = 1, sort = 'newest', group = '') =>
     req(`/api/mails?folder=${folder}&q=${encodeURIComponent(q)}&page=${page}&sort=${sort}${group ? '&group=' + group : ''}`),
+  recipients: () => req('/api/mails/recipients'),
   thread: (id) => req(`/api/mails/${id}/thread`),
   unread: () => req('/api/mails/unread'),
   proxyImage: async (u: string) => {
