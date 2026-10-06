@@ -254,3 +254,23 @@ func TestNewStoreBackupDefaults(t *testing.T) {
 		t.Fatalf("非法默认未回退: int=%v keep=%d", s2.BackupIntervalHours(), s2.BackupKeep())
 	}
 }
+
+func TestStoreRetention(t *testing.T) {
+	s := &Store{vals: map[string]string{}}
+	if s.LoginRetentionDays() != 90 || s.AuditRetentionDays() != 180 {
+		t.Fatalf("默认应为 90/180，得到 %d/%d", s.LoginRetentionDays(), s.AuditRetentionDays())
+	}
+	s.vals[KeyLoginRetentionDays] = "30"
+	s.vals[KeyAuditRetentionDays] = "365"
+	if s.LoginRetentionDays() != 30 || s.AuditRetentionDays() != 365 {
+		t.Fatalf("自定义读取异常: %d/%d", s.LoginRetentionDays(), s.AuditRetentionDays())
+	}
+	s.vals[KeyLoginRetentionDays] = "99999"
+	if s.LoginRetentionDays() != 3650 {
+		t.Fatalf("上限应为 3650，得到 %d", s.LoginRetentionDays())
+	}
+	snap := s.Snapshot()
+	if snap["login_retention_days"] != 3650 || snap["audit_retention_days"] != 365 {
+		t.Fatalf("snapshot: %+v", snap)
+	}
+}

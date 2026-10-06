@@ -3,7 +3,7 @@ import { api } from '../api/client'
 import { Button, Input, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2, UserPlus, PlugZap } from 'lucide-react'
+import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2, UserPlus, PlugZap, History } from 'lucide-react'
 
 export default function AdminSettings() {
   const { t } = useI18n()
@@ -136,6 +136,15 @@ export default function AdminSettings() {
               {t('settings.oidcAutoCreate')}
             </label>
             <p className="text-xs text-muted-foreground break-all">{t('settings.oidcRedirect', { url: location.origin + '/api/oidc/callback' })}</p>
+          </Card>
+
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center gap-2"><History size={16} /><b className="text-sm">{t('settings.retention')}</b></div>
+            <p className="text-xs text-muted-foreground">{t('settings.retentionHint')}</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label={t('settings.loginRetention')}><Input type="number" placeholder="90" value={s.login_retention_days ?? ''} onChange={e => field('login_retention_days', e.target.value)} /></Field>
+              <Field label={t('settings.auditRetention')}><Input type="number" placeholder="180" value={s.audit_retention_days ?? ''} onChange={e => field('audit_retention_days', e.target.value)} /></Field>
+            </div>
           </Card>
 
           <Card className="p-4 space-y-3">

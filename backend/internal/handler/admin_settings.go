@@ -24,27 +24,29 @@ import (
 )
 
 var settingKeys = map[string]bool{
-	runtimecfg.KeyMailHost:         true,
-	runtimecfg.KeyPublicIP:         true,
-	runtimecfg.KeyAdminEmails:      true,
-	runtimecfg.KeyRelayHost:        true,
-	runtimecfg.KeyRelayPort:        true,
-	runtimecfg.KeyRelayUser:        true,
-	runtimecfg.KeyRelayPass:        true,
-	runtimecfg.KeyRelayFrom:        true,
-	runtimecfg.KeyRelayInsecure:    true,
-	runtimecfg.KeyDirectSend:       true,
-	runtimecfg.KeyRegistration:     true,
-	runtimecfg.KeyAutoUpdate:       true,
-	runtimecfg.KeyUpdateInterval:   true,
-	runtimecfg.KeyOIDCEnabled:      true,
-	runtimecfg.KeyOIDCIssuer:       true,
-	runtimecfg.KeyOIDCClientID:     true,
-	runtimecfg.KeyOIDCClientSecret: true,
-	runtimecfg.KeyOIDCAutoCreate:   true,
-	runtimecfg.KeyBackupDir:        true,
-	runtimecfg.KeyBackupInterval:   true,
-	runtimecfg.KeyBackupKeep:       true,
+	runtimecfg.KeyMailHost:           true,
+	runtimecfg.KeyPublicIP:           true,
+	runtimecfg.KeyAdminEmails:        true,
+	runtimecfg.KeyRelayHost:          true,
+	runtimecfg.KeyRelayPort:          true,
+	runtimecfg.KeyRelayUser:          true,
+	runtimecfg.KeyRelayPass:          true,
+	runtimecfg.KeyRelayFrom:          true,
+	runtimecfg.KeyRelayInsecure:      true,
+	runtimecfg.KeyDirectSend:         true,
+	runtimecfg.KeyRegistration:       true,
+	runtimecfg.KeyAutoUpdate:         true,
+	runtimecfg.KeyUpdateInterval:     true,
+	runtimecfg.KeyOIDCEnabled:        true,
+	runtimecfg.KeyOIDCIssuer:         true,
+	runtimecfg.KeyOIDCClientID:       true,
+	runtimecfg.KeyOIDCClientSecret:   true,
+	runtimecfg.KeyOIDCAutoCreate:     true,
+	runtimecfg.KeyBackupDir:          true,
+	runtimecfg.KeyBackupInterval:     true,
+	runtimecfg.KeyBackupKeep:         true,
+	runtimecfg.KeyLoginRetentionDays: true,
+	runtimecfg.KeyAuditRetentionDays: true,
 }
 
 // GET /api/admin/settings   PATCH /api/admin/settings
@@ -113,6 +115,12 @@ func (a *Admin) Settings(w http.ResponseWriter, r *http.Request) {
 					n = 3650
 				}
 				v = strconv.Itoa(n)
+			}
+			if k == runtimecfg.KeyLoginRetentionDays {
+				v = clampDays(v, 90)
+			}
+			if k == runtimecfg.KeyAuditRetentionDays {
+				v = clampDays(v, 180)
 			}
 			upd[k] = v
 		}
@@ -464,4 +472,16 @@ func deriveBaseDomain(host string) string {
 		return strings.Join(parts[len(parts)-2:], ".")
 	}
 	return h
+}
+
+// clampDays 解析并限制保留天数（1~3650），非法时用 def。
+func clampDays(v string, def int) string {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 1 {
+		n = def
+	}
+	if n > 3650 {
+		n = 3650
+	}
+	return strconv.Itoa(n)
 }

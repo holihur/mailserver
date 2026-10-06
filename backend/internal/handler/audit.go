@@ -107,25 +107,29 @@ func (a *Admin) AuditLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, logs)
 }
 
-// StartAuditRetention 每天清理超过 days 天的审计日志（days<=0 用 180）。
-func StartAuditRetention(db *gorm.DB, days int) {
-	if days <= 0 {
-		days = 180
-	}
+// StartAuditRetention 每天清理超过 days() 天的审计日志（动态读取，支持后台热改）。
+func StartAuditRetention(db *gorm.DB, days func() int) {
 	go func() {
 		for {
-			db.Where("created_at < ?", time.Now().AddDate(0, 0, -days)).Delete(&model.AuditLog{})
+			d := 180
+			if days != nil {
+				d = days()
+			}
+			db.Where("created_at < ?", time.Now().AddDate(0, 0, -d)).Delete(&model.AuditLog{})
 			time.Sleep(24 * time.Hour)
 		}
 	}()
 }
 
-// StartAuthRetention 每天清理过期会话 + 超过 loginDays 天的登录历史。
-// days<=0 用 90。避免 sessions / login_events 无限增长。
-func StartAuthRetention(db *gorm.DB, loginDays int) {
+// StartAuthRetention 每天清理过期会话 + 超过 days() 天的登录历史（动态读取）。
+func StartAuthRetention(db *gorm.DB, days func() int) {
 	go func() {
 		for {
-			PurgeAuth(db, loginDays)
+			d := 90
+			if days != nil {
+				d = days()
+			}
+			PurgeAuth(db, d)
 			time.Sleep(24 * time.Hour)
 		}
 	}()

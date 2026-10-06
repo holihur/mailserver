@@ -47,6 +47,9 @@ const (
 	KeyBackupDir      = "backup_dir"            // 定时备份目录（空=关闭定时备份）
 	KeyBackupInterval = "backup_interval_hours" // 备份间隔（小时，默认 24）
 	KeyBackupKeep     = "backup_keep"           // 保留份数（默认 7）
+
+	KeyLoginRetentionDays = "login_retention_days" // 登录历史保留天数（默认 90）
+	KeyAuditRetentionDays = "audit_retention_days" // 审计日志保留天数（默认 180）
 )
 
 // Relay 外发中继配置。
@@ -86,18 +89,20 @@ func newStore(cfg config.Config, rows []model.Setting) *Store {
 		s.vals[r.Key] = r.Value
 	}
 	defaults := map[string]string{
-		KeyMailHost:       cfg.Host,
-		KeyAdminEmails:    cfg.AdminEmails,
-		KeyRelayHost:      cfg.RelayHost,
-		KeyRelayPort:      cfg.RelayPort,
-		KeyRelayUser:      cfg.RelayUser,
-		KeyRelayPass:      cfg.RelayPass,
-		KeyRelayFrom:      cfg.RelayFrom,
-		KeyDKIMDomain:     cfg.DKIMDomain,
-		KeyDKIMSel:        cfg.DKIMSelector,
-		KeyBackupDir:      cfg.BackupDir,
-		KeyBackupInterval: backupDefault(cfg.BackupInterval, 24),
-		KeyBackupKeep:     backupDefault(cfg.BackupKeep, 7),
+		KeyMailHost:           cfg.Host,
+		KeyAdminEmails:        cfg.AdminEmails,
+		KeyRelayHost:          cfg.RelayHost,
+		KeyRelayPort:          cfg.RelayPort,
+		KeyRelayUser:          cfg.RelayUser,
+		KeyRelayPass:          cfg.RelayPass,
+		KeyRelayFrom:          cfg.RelayFrom,
+		KeyDKIMDomain:         cfg.DKIMDomain,
+		KeyDKIMSel:            cfg.DKIMSelector,
+		KeyBackupDir:          cfg.BackupDir,
+		KeyBackupInterval:     backupDefault(cfg.BackupInterval, 24),
+		KeyBackupKeep:         backupDefault(cfg.BackupKeep, 7),
+		KeyLoginRetentionDays: backupDefault(cfg.LoginRetentionDays, 90),
+		KeyAuditRetentionDays: backupDefault(cfg.AuditRetentionDays, 180),
 	}
 	for k, v := range defaults {
 		if _, ok := s.vals[k]; !ok {
@@ -181,6 +186,16 @@ func (s *Store) BackupIntervalHours() time.Duration {
 
 // BackupKeep 备份保留份数，默认 7，范围 1~3650。
 func (s *Store) BackupKeep() int { return atoiClamp(s.get(KeyBackupKeep), 7, 1, 3650) }
+
+// LoginRetentionDays 登录历史保留天数，默认 90，范围 1~3650。
+func (s *Store) LoginRetentionDays() int {
+	return atoiClamp(s.get(KeyLoginRetentionDays), 90, 1, 3650)
+}
+
+// AuditRetentionDays 审计日志保留天数，默认 180，范围 1~3650。
+func (s *Store) AuditRetentionDays() int {
+	return atoiClamp(s.get(KeyAuditRetentionDays), 180, 1, 3650)
+}
 
 func atoiClamp(v string, def, min, max int) int {
 	n, err := strconv.Atoi(strings.TrimSpace(v))
@@ -326,6 +341,8 @@ func (s *Store) Snapshot() map[string]any {
 		"backup_dir":             s.vals[KeyBackupDir],
 		"backup_interval_hours":  atoiClamp(s.vals[KeyBackupInterval], 24, 1, 8760),
 		"backup_keep":            atoiClamp(s.vals[KeyBackupKeep], 7, 1, 3650),
+		"login_retention_days":   atoiClamp(s.vals[KeyLoginRetentionDays], 90, 1, 3650),
+		"audit_retention_days":   atoiClamp(s.vals[KeyAuditRetentionDays], 180, 1, 3650),
 	}
 }
 

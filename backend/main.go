@@ -329,8 +329,8 @@ func main() {
 
 	go mailsmtp.Serve(":"+cfg.SMTPport, g, maxMsg, cfg.DMARCEnforce, tlsConf)
 	go external.Start(g)
-	handler.StartAuditRetention(g, cfg.AuditRetentionDays)
-	handler.StartAuthRetention(g, cfg.LoginRetentionDays)
+	handler.StartAuditRetention(g, rt.AuditRetentionDays)
+	handler.StartAuthRetention(g, rt.LoginRetentionDays)
 	// 定时备份 + 异地 hook（rclone 等）；目录/间隔/保留份数可在后台「备份」页调整
 	go func() {
 		for {
