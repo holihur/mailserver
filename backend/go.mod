@@ -9,7 +9,7 @@ require (
 	github.com/hibiken/asynq v0.26.0
 	github.com/joho/godotenv v1.5.1
 	github.com/miekg/dns v1.1.73
-	github.com/redis/go-redis/v9 v9.22.0
+	github.com/redis/go-redis/v9 v9.23.0
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
