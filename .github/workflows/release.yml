@@ -52,7 +52,7 @@ jobs:
         uses: anchore/sbom-action/download-syft@v0
 
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v6
+        uses: goreleaser/goreleaser-action@v7
         with:
           distribution: goreleaser
           # 固定到已知稳定的 2.18.2（v0.20.0 成功发版所用）；避免上游 2.18.3 回归导致发版失败
