@@ -11,7 +11,7 @@ require (
 	github.com/miekg/dns v1.1.73
 	github.com/redis/go-redis/v9 v9.22.0
 	golang.org/x/crypto v0.57.0
-	golang.org/x/net v0.59.0
+	golang.org/x/net v0.60.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gorm.io/driver/postgres v1.6.3
 	gorm.io/gorm v1.31.2
