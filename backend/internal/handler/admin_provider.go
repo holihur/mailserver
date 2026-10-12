@@ -1,6 +1,6 @@
 package handler
 
-// 管理后台：第三方域名服务商（阿里云 / Cloudflare）一键下发邮件解析。
+// 管理后台：第三方域名服务商（阿里云 / 腾讯云 / Cloudflare / GoDaddy / DigitalOcean / Vultr / Linode）一键下发邮件解析。
 // 流程：录入凭证（加密落库）→ 校验 → 列出账号域名 → 选择域名 → 自动配齐 A/MX/SPF/DKIM/DMARC。
 // 路由见 main.go：/api/admin/providers 与 /api/admin/providers/{id}/{test|domains|apply}
 
@@ -20,15 +20,18 @@ import (
 	"mailserver/internal/secret"
 )
 
-// providerCreateIn 兼容两种服务商的凭证字段。
+// providerCreateIn 兼容各服务商的凭证字段。
 type providerCreateIn struct {
 	Name            string `json:"name"`
 	Type            string `json:"type"`
 	AccessKeyID     string `json:"access_key_id"`
 	AccessKeySecret string `json:"access_key_secret"`
+	SecretID        string `json:"secret_id"`
+	SecretKey       string `json:"secret_key"`
 	APIToken        string `json:"api_token"`
 	Email           string `json:"email"`
 	APIKey          string `json:"api_key"`
+	APISecret       string `json:"api_secret"`
 }
 
 func (in providerCreateIn) creds() map[string]string {
@@ -38,11 +41,25 @@ func (in providerCreateIn) creds() map[string]string {
 			"access_key_id":     strings.TrimSpace(in.AccessKeyID),
 			"access_key_secret": strings.TrimSpace(in.AccessKeySecret),
 		}
+	case "tencent", "dnspod", "tencentcloud":
+		return map[string]string{
+			"secret_id":  strings.TrimSpace(in.SecretID),
+			"secret_key": strings.TrimSpace(in.SecretKey),
+		}
 	case "cloudflare":
 		return map[string]string{
 			"api_token": strings.TrimSpace(in.APIToken),
 			"email":     strings.TrimSpace(in.Email),
 			"api_key":   strings.TrimSpace(in.APIKey),
+		}
+	case "godaddy":
+		return map[string]string{
+			"api_key":    strings.TrimSpace(in.APIKey),
+			"api_secret": strings.TrimSpace(in.APISecret),
+		}
+	case "digitalocean", "vultr", "linode":
+		return map[string]string{
+			"api_token": strings.TrimSpace(in.APIToken),
 		}
 	}
 	return nil
@@ -86,7 +103,7 @@ func (a *Admin) Providers(w http.ResponseWriter, r *http.Request) {
 		}
 		creds := in.creds()
 		if len(creds) == 0 {
-			writeJSON(w, 400, map[string]string{"error": "不支持的服务商类型（可选 aliyun / cloudflare）"})
+			writeJSON(w, 400, map[string]string{"error": "不支持的服务商类型（可选 aliyun / tencent / cloudflare / godaddy / digitalocean / vultr / linode）"})
 			return
 		}
 		prov, err := provider.New(in.Type, creds)

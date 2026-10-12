@@ -3,6 +3,12 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.21.0] - 2026-10-12
+
+### 新增
+- **域名服务商扩展**：新增 **腾讯云 DNSPod / 云解析 DNS**（Tencent Cloud API v3，SecretId/SecretKey，TC3-HMAC-SHA256 签名）、**GoDaddy**、**DigitalOcean**、**Vultr**、**Linode** 的解析记录下发支持；后台「域名服务商」按服务商动态渲染凭证字段，一键配齐 A/MX/SPF/DKIM/DMARC。
+- 所有服务商共用统一接口（校验凭证 / 列出域名 / 写入-更新记录 / ACME DNS-01 删除记录），新增服务商只需实现 `internal/provider` 接口。
+
 ## [v0.20.0] - 2026-10-06
 
 ### 新增

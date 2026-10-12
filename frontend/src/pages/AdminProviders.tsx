@@ -12,15 +12,46 @@ import {
 
 const PROVIDERS = [
   { v: 'aliyun', label: 'Aliyun DNS', hintKey: 'providers.aliyunHint' },
+  { v: 'tencent', label: 'Tencent Cloud DNS', hintKey: 'providers.tencentHint' },
   { v: 'cloudflare', label: 'Cloudflare', hintKey: 'providers.cfHint' },
+  { v: 'godaddy', label: 'GoDaddy', hintKey: 'providers.godaddyHint' },
+  { v: 'digitalocean', label: 'DigitalOcean', hintKey: 'providers.doHint' },
+  { v: 'vultr', label: 'Vultr', hintKey: 'providers.vultrHint' },
+  { v: 'linode', label: 'Linode', hintKey: 'providers.linodeHint' },
 ]
 
-const emptyForm = { name: '', type: 'aliyun', access_key_id: '', access_key_secret: '', api_token: '', email: '', api_key: '' }
+type CredField = { key: string; placeholder: string; password?: boolean; optional?: boolean }
+
+// 各服务商需要的凭证字段，供表单动态渲染。
+const CRED_FIELDS: Record<string, CredField[]> = {
+  aliyun: [
+    { key: 'access_key_id', placeholder: 'AccessKey ID' },
+    { key: 'access_key_secret', placeholder: 'AccessKey Secret', password: true },
+  ],
+  tencent: [
+    { key: 'secret_id', placeholder: 'SecretId' },
+    { key: 'secret_key', placeholder: 'SecretKey', password: true },
+  ],
+  cloudflare: [
+    { key: 'api_token', placeholder: 'API Token', password: true, optional: true },
+    { key: 'email', placeholder: 'Email (Global API Key)', optional: true },
+    { key: 'api_key', placeholder: 'Global API Key', password: true, optional: true },
+  ],
+  godaddy: [
+    { key: 'api_key', placeholder: 'API Key' },
+    { key: 'api_secret', placeholder: 'API Secret', password: true },
+  ],
+  digitalocean: [{ key: 'api_token', placeholder: 'API Token', password: true }],
+  vultr: [{ key: 'api_token', placeholder: 'API Token', password: true }],
+  linode: [{ key: 'api_token', placeholder: 'API Token', password: true }],
+}
+
+const emptyForm = { name: '', type: 'aliyun', access_key_id: '', access_key_secret: '', secret_id: '', secret_key: '', api_token: '', email: '', api_key: '', api_secret: '' }
 
 export default function AdminProviders() {
   const { t } = useI18n()
   const [providers, setProviders] = useState([])
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState<Record<string, any>>(emptyForm)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
@@ -67,18 +98,26 @@ export default function AdminProviders() {
 
           <p className="text-xs text-muted-foreground flex items-start gap-1"><KeyRound size={13} className="mt-0.5 shrink-0" />{t(p?.hintKey)}</p>
 
-          {form.type === 'aliyun' ? (
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Input placeholder="AccessKey ID" value={form.access_key_id} onChange={e => setForm({ ...form, access_key_id: e.target.value })} required />
-              <Input type="password" placeholder="AccessKey Secret" value={form.access_key_secret} onChange={e => setForm({ ...form, access_key_secret: e.target.value })} required />
-            </div>
-          ) : (
+          {form.type === 'cloudflare' ? (
             <div className="space-y-3">
               <Input type="password" placeholder="API Token" value={form.api_token} onChange={e => setForm({ ...form, api_token: e.target.value })} />
               <div className="grid sm:grid-cols-2 gap-3">
                 <Input placeholder="Email (Global API Key)" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
                 <Input type="password" placeholder="Global API Key" value={form.api_key} onChange={e => setForm({ ...form, api_key: e.target.value })} />
               </div>
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-3">
+              {(CRED_FIELDS[form.type] || []).map(f => (
+                <Input
+                  key={f.key}
+                  type={f.password ? 'password' : undefined}
+                  placeholder={f.placeholder}
+                  value={form[f.key] || ''}
+                  onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                  required={!f.optional}
+                />
+              ))}
             </div>
           )}
 

@@ -1,4 +1,5 @@
-// Package provider 封装第三方域名服务商（阿里云 DNS / Cloudflare）的解析记录下发。
+// Package provider 封装第三方域名服务商（阿里云 / 腾讯云 DNSPod / Cloudflare / GoDaddy /
+// DigitalOcean / Vultr / Linode）的解析记录下发。
 // 目标是「开箱即用」：用户录入凭证 → 列出账号下域名 → 选择域名 → 自动配齐邮件所需解析。
 package provider
 
@@ -51,8 +52,18 @@ func New(kind string, creds map[string]string) (Provider, error) {
 	switch kind {
 	case "aliyun":
 		return newAliyun(creds)
+	case "tencent", "dnspod", "tencentcloud":
+		return newTencent(creds)
 	case "cloudflare":
 		return newCloudflare(creds)
+	case "godaddy":
+		return newGoDaddy(creds)
+	case "digitalocean":
+		return newDigitalOcean(creds)
+	case "vultr":
+		return newVultr(creds)
+	case "linode":
+		return newLinode(creds)
 	default:
 		return nil, fmt.Errorf("不支持的域名服务商: %q", kind)
 	}
@@ -116,4 +127,34 @@ func RelativeName(zone, fqdn string) string {
 		return strings.TrimSuffix(fqdn, "."+zone)
 	}
 	return fqdn
+}
+
+// dnsName 归一相对记录名：空串与 @ 都表示根，统一为 @。
+func dnsName(s string) string {
+	s = normHost(s)
+	if s == "" {
+		return "@"
+	}
+	return s
+}
+
+// sameName 比较两个相对记录名（空串与 @ 等价，大小写不敏感）。
+func sameName(a, b string) bool {
+	return strings.EqualFold(dnsName(a), dnsName(b))
+}
+
+// intPtrOrZero 安全解引用可空整数。
+func intPtrOrZero(p *int) int {
+	if p == nil {
+		return 0
+	}
+	return *p
+}
+
+// emptyRoot 把根记录（@ 或空）转成空串，用于以空串表示根的服务商（Vultr / Linode）。
+func emptyRoot(name string) string {
+	if n := dnsName(name); n != "@" {
+		return n
+	}
+	return ""
 }

@@ -32,7 +32,7 @@
 - **别名 / 转发**（按地址或整域 catch-all）、**邮件路由**（按域名中继/直连/丢弃）。
 
 **运维**
-- 自托管权威 DNS；一键 Let's Encrypt（DNS-01）或手动证书，热生效；DKIM 签名；阿里云 / Cloudflare 一键下发解析。
+- 自托管权威 DNS；一键 Let's Encrypt（DNS-01）或手动证书，热生效；DKIM 签名；阿里云 / 腾讯云 DNSPod / Cloudflare / GoDaddy / DigitalOcean / Vultr / Linode 一键下发解析。
 - **域名解析预检**：后台一键校验托管域名的 MX / SPF / DKIM / DMARC 是否生效。
 - **备份 / 恢复**：后台「备份」页（定时策略 / 立即备份 / 列表 + SHA256 / 下载 / 删除 / 二次确认恢复），整包用站内主密钥 **AES-256-GCM 流式加密**，恢复前自动另存当前状态。
 - **DNSSEC**：内置权威 DNS 在线签名（NSEC / `DNSSEC_NSEC3=1` 用 NSEC3），后台直接展示需在注册商设置的 **DS 记录**；步骤见 [`DNSSEC.md`](./DNSSEC.md)。
