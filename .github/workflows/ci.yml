@@ -93,6 +93,10 @@ jobs:
           sys.stderr.write(r.stderr)
           if r.returncode != 0:
               print('FAIL: go test 失败')
+              for line in r.stdout.splitlines():
+                  s = line.strip()
+                  if s.startswith('--- FAIL') or s.startswith('panic:') or (s.startswith('FAIL') and '\t' in line):
+                      print(f'::error title=go test::{line}')
               sys.exit(1)
           bad = []
           for line in r.stdout.splitlines():
@@ -105,6 +109,7 @@ jobs:
                   bad.append(f'{pkg} {pct}%')
           if bad:
               print('FAIL: 核心包覆盖率 <90%:', bad)
+              print('::error title=coverage::' + ', '.join(bad))
               sys.exit(1)
           print('OK: 核心包覆盖率均 >=90%')
           PY
