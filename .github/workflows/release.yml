@@ -55,7 +55,8 @@ jobs:
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: "~> v2"
+          # 固定到已知稳定的 2.18.2（v0.20.0 成功发版所用）；避免上游 2.18.3 回归导致发版失败
+          version: "v2.18.2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -83,6 +84,8 @@ jobs:
           platforms: linux/amd64
           load: true
           push: false
+          # 强制拉取最新基础镜像，避免命中过期缓存导致 Trivy 误报
+          pull: true
           tags: mailserver:scan
 
       - name: Trivy image scan (block HIGH/CRITICAL)

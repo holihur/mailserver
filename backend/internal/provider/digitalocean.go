@@ -72,7 +72,7 @@ func (d *digitalocean) do(ctx context.Context, method, path string, body any) (*
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	var env doEnvelope
 	if err := json.Unmarshal(raw, &env); err != nil {

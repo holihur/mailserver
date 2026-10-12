@@ -48,23 +48,23 @@ func TestTencentListAndEnsure(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch action {
 		case "DescribeDomainList":
-			io.WriteString(w, `{"Response":{"DomainList":[{"DomainId":123,"Name":"example.com"}],"RequestId":"x"}}`)
+			_, _ = io.WriteString(w, `{"Response":{"DomainList":[{"DomainId":123,"Name":"example.com"}],"RequestId":"x"}}`)
 		case "DescribeRecordList":
 			// 已存在 mail A -> 1.1.1.1
-			io.WriteString(w, `{"Response":{"RecordList":[{"RecordId":9,"Name":"mail","Type":"A","Value":"1.1.1.1","TTL":600,"MX":0,"Line":"默认"}]}}`)
+			_, _ = io.WriteString(w, `{"Response":{"RecordList":[{"RecordId":9,"Name":"mail","Type":"A","Value":"1.1.1.1","TTL":600,"MX":0,"Line":"默认"}]}}`)
 		case "CreateRecord":
 			var m map[string]any
-			json.Unmarshal(body, &m)
+			_ = json.Unmarshal(body, &m)
 			created = append(created, m)
-			io.WriteString(w, `{"Response":{"RecordId":10,"RequestId":"x"}}`)
+			_, _ = io.WriteString(w, `{"Response":{"RecordId":10,"RequestId":"x"}}`)
 		case "ModifyRecord":
 			var m map[string]any
-			json.Unmarshal(body, &m)
+			_ = json.Unmarshal(body, &m)
 			modified = append(modified, m)
-			io.WriteString(w, `{"Response":{"RecordId":9,"RequestId":"x"}}`)
+			_, _ = io.WriteString(w, `{"Response":{"RecordId":9,"RequestId":"x"}}`)
 		default:
 			t.Errorf("unexpected action %q", action)
-			io.WriteString(w, `{"Response":{"Error":{"Code":"X","Message":"unexpected"}}}`)
+			_, _ = io.WriteString(w, `{"Response":{"Error":{"Code":"X","Message":"unexpected"}}}`)
 		}
 	}))
 	defer srv.Close()
@@ -104,13 +104,13 @@ func TestTencentUnchangedAndDelete(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.Header.Get("X-TC-Action") {
 		case "DescribeRecordList":
-			io.WriteString(w, `{"Response":{"RecordList":[{"RecordId":7,"Name":"_dmarc","Type":"TXT","Value":"v=DMARC1","TTL":600}]}}`)
+			_, _ = io.WriteString(w, `{"Response":{"RecordList":[{"RecordId":7,"Name":"_dmarc","Type":"TXT","Value":"v=DMARC1","TTL":600}]}}`)
 		case "DeleteRecord":
 			deleted = true
-			io.WriteString(w, `{"Response":{"RequestId":"x"}}`)
+			_, _ = io.WriteString(w, `{"Response":{"RequestId":"x"}}`)
 		default:
 			t.Errorf("unexpected action %q", r.Header.Get("X-TC-Action"))
-			io.WriteString(w, `{"Response":{}}`)
+			_, _ = io.WriteString(w, `{"Response":{}}`)
 		}
 	}))
 	defer srv.Close()
@@ -137,7 +137,7 @@ func TestTencentUnchangedAndDelete(t *testing.T) {
 func TestTencentAPIError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"Response":{"Error":{"Code":"AuthFailure.SecretIdNotFound","Message":"bad id"},"RequestId":"x"}}`)
+		_, _ = io.WriteString(w, `{"Response":{"Error":{"Code":"AuthFailure.SecretIdNotFound","Message":"bad id"},"RequestId":"x"}}`)
 	}))
 	defer srv.Close()
 

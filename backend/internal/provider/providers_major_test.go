@@ -37,18 +37,18 @@ func TestDigitalOcean(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/domains") && !strings.Contains(r.URL.Path, "/records"):
-			io.WriteString(w, `{"domains":[{"name":"example.com"}]}`)
+			_, _ = io.WriteString(w, `{"domains":[{"name":"example.com"}]}`)
 		case r.Method == "GET" && strings.Contains(r.URL.Path, "/records"):
-			io.WriteString(w, `{"domain_records":[{"id":1,"type":"A","name":"mail","data":"1.1.1.1","ttl":1800}]}`)
+			_, _ = io.WriteString(w, `{"domain_records":[{"id":1,"type":"A","name":"mail","data":"1.1.1.1","ttl":1800}]}`)
 		case r.Method == "PUT":
 			put++
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		case r.Method == "POST":
 			post++
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.String())
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		}
 	}))
 	defer srv.Close()
@@ -87,28 +87,28 @@ func TestVultr(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/domains":
-			io.WriteString(w, `{"domains":[{"domain":"example.com"}],"meta":{"links":{"next":""}}}`)
+			_, _ = io.WriteString(w, `{"domains":[{"domain":"example.com"}],"meta":{"links":{"next":""}}}`)
 		case r.Method == "GET" && strings.Contains(r.URL.Path, "/records"):
-			io.WriteString(w, `{"records":[{"id":"r1","type":"A","name":"mail","data":"1.1.1.1","ttl":300,"priority":0}],"meta":{"links":{"next":""}}}`)
+			_, _ = io.WriteString(w, `{"records":[{"id":"r1","type":"A","name":"mail","data":"1.1.1.1","ttl":300,"priority":0}],"meta":{"links":{"next":""}}}`)
 		case r.Method == "PATCH":
 			body, _ := io.ReadAll(r.Body)
 			if !strings.Contains(string(body), `"data":"2.2.2.2"`) {
 				t.Errorf("bad patch body: %s", body)
 			}
 			patched = true
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		case r.Method == "POST":
 			var m map[string]any
 			body, _ := io.ReadAll(r.Body)
-			json.Unmarshal(body, &m)
+			_ = json.Unmarshal(body, &m)
 			if m["name"] != "" {
 				t.Errorf("vultr root name should be empty, got %v", m["name"])
 			}
 			created = true
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.String())
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		}
 	}))
 	defer srv.Close()
@@ -140,24 +140,24 @@ func TestLinode(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/domains":
-			io.WriteString(w, `{"data":[{"id":5,"domain":"example.com"}],"pages":1}`)
+			_, _ = io.WriteString(w, `{"data":[{"id":5,"domain":"example.com"}],"pages":1}`)
 		case r.Method == "GET" && strings.Contains(r.URL.Path, "/records"):
-			io.WriteString(w, `{"data":[{"id":1,"type":"A","name":"mail","target":"1.1.1.1","ttl_sec":300,"priority":0}],"pages":1}`)
+			_, _ = io.WriteString(w, `{"data":[{"id":1,"type":"A","name":"mail","target":"1.1.1.1","ttl_sec":300,"priority":0}],"pages":1}`)
 		case r.Method == "PUT":
 			put++
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		case r.Method == "POST":
 			var m map[string]any
 			body, _ := io.ReadAll(r.Body)
-			json.Unmarshal(body, &m)
+			_ = json.Unmarshal(body, &m)
 			if m["name"] != "" {
 				t.Errorf("linode root name should be empty, got %v", m["name"])
 			}
 			post++
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.String())
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		}
 	}))
 	defer srv.Close()
@@ -189,17 +189,17 @@ func TestGoDaddy(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == "GET" && r.URL.Path == "/v1/domains":
-			io.WriteString(w, `[{"domainId":"1","domain":"example.com","status":"ACTIVE"}]`)
+			_, _ = io.WriteString(w, `[{"domainId":"1","domain":"example.com","status":"ACTIVE"}]`)
 		case r.Method == "GET" && strings.Contains(r.URL.Path, "/records/A/mail"):
-			io.WriteString(w, `[{"data":"1.1.1.1","name":"mail","ttl":600,"type":"A"}]`)
+			_, _ = io.WriteString(w, `[{"data":"1.1.1.1","name":"mail","ttl":600,"type":"A"}]`)
 		case r.Method == "GET" && strings.Contains(r.URL.Path, "/records/MX/"):
-			io.WriteString(w, `[]`)
+			_, _ = io.WriteString(w, `[]`)
 		case r.Method == "PUT":
 			puts++
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		default:
 			t.Errorf("unexpected %s %s", r.Method, r.URL.String())
-			io.WriteString(w, `{}`)
+			_, _ = io.WriteString(w, `{}`)
 		}
 	}))
 	defer srv.Close()

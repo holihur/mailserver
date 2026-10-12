@@ -113,7 +113,7 @@ func (t *tencent) call(ctx context.Context, action string, params any, out any) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 
 	var env struct {
