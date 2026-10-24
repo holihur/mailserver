@@ -76,7 +76,7 @@ func testRelay(ctx context.Context, host, port, user, pass string, insecure bool
 		return steps, fmt.Errorf("TCP 连接 %s 失败：%w", addr, err)
 	}
 	steps = append(steps, "TCP 连接成功")
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 	if port == "465" || port == "8465" {
 		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure})

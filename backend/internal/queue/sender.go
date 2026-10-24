@@ -160,7 +160,7 @@ func smtpSession(host, port, user, pass string, insecure bool, from string, to [
 	if err != nil {
 		return fmt.Errorf("连接中继 %s 失败：%w（多为云厂商封禁该出站端口；Gmail 用 587 或 465）", addr, err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	// 整体 2 分钟上限，防止服务器连上后不响应导致队列永久卡住
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Minute))
 	if port == "465" || port == "8465" {
