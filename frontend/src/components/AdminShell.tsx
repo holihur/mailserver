@@ -3,8 +3,9 @@ import { Link, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { Button, Badge } from './ui/controls'
 import { SettingsMenu } from './HeaderControls'
+import { TopTabs } from './TopTabs'
 import { useI18n } from '../lib/i18n'
-import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign, History, DatabaseBackup, Sparkles } from 'lucide-react'
+import { LayoutDashboard, Server, ShieldCheck, Cloud, Users, Mail, Info, Filter, Route, AtSign, History, DatabaseBackup, Sparkles, Lock } from 'lucide-react'
 import { cn } from '../lib/utils'
 import { BRAND } from '../lib/brand'
 
@@ -42,6 +43,7 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
     <div className="min-h-dvh bg-background flex flex-col">
       <header className="border-b border-border px-4 h-14 flex items-center gap-3 sticky top-0 bg-background/90 backdrop-blur z-10">
         <Link to="/" className="font-semibold flex items-center gap-2 text-lg"><Mail size={20} />{BRAND}</Link>
+        <TopTabs className="hidden sm:flex ml-1" />
         <Badge className="hidden sm:inline-flex">{t('admin.title')}</Badge>
         {ver?.version && (
           <Badge className="hidden sm:inline-flex" title={`commit ${ver.commit || '-'} · ${ver.date || '-'}`}>
@@ -54,9 +56,13 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
       </header>
 
       {me && !me.admin ? (
-        <div className="flex-1 max-w-xl mx-auto p-8 text-sm text-muted-foreground space-y-2">
-          <p className="font-semibold text-foreground">{t('admin.needAdmin')}</p>
-          <p>{t('admin.needAdminHint')}</p>
+        <div className="flex-1 grid place-items-center p-6">
+          <div className="max-w-md w-full rounded-lg border border-border bg-card p-6 text-center space-y-3">
+            <div className="mx-auto grid place-items-center size-12 rounded-full bg-muted"><Lock size={22} className="text-muted-foreground" /></div>
+            <h2 className="font-semibold">{t('admin.trialTitle')}</h2>
+            <p className="text-sm text-muted-foreground">{t('admin.trialHint')}</p>
+            <Link to="/"><Button variant="outline" size="sm">{t('admin.backToMail')}</Button></Link>
+          </div>
         </div>
       ) : (
         <div className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-4 md:grid md:grid-cols-[190px_1fr] md:gap-5">
@@ -78,6 +84,10 @@ export default function AdminShell({ title, desc, children }: { title?: any; des
           </aside>
           <main className="min-w-0 space-y-4">
             <div>
+              <div className="text-xs text-muted-foreground flex items-center gap-1.5 mb-1">
+                <span>{t('admin.breadcrumbHome')}</span><span className="opacity-50">/</span>
+                <span className="text-foreground">{(() => { const n = NAV.find(x => pathname === x.to); return n ? t(n.labelKey) : title })()}</span>
+              </div>
               <h1 className="text-xl font-semibold">{title}</h1>
               {desc && <p className="text-sm text-muted-foreground mt-0.5">{desc}</p>}
             </div>

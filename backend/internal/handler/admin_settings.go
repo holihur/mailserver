@@ -23,6 +23,10 @@ var settingKeys = map[string]bool{
 	runtimecfg.KeyRelayFrom:          true,
 	runtimecfg.KeyRelayInsecure:      true,
 	runtimecfg.KeyDirectSend:         true,
+	runtimecfg.KeyCatchAll:           true,
+	runtimecfg.KeyAutoReply:          true,
+	runtimecfg.KeyAutoReplySub:       true,
+	runtimecfg.KeyAutoReplyBody:      true,
 	runtimecfg.KeyRegistration:       true,
 	runtimecfg.KeyAutoUpdate:         true,
 	runtimecfg.KeyUpdateInterval:     true,
@@ -68,7 +72,7 @@ func (a *Admin) Settings(w http.ResponseWriter, r *http.Request) {
 			if k == runtimecfg.KeyMailHost {
 				v = strings.Trim(strings.ToLower(v), ".")
 			}
-			if k == runtimecfg.KeyRegistration || k == runtimecfg.KeyRelayInsecure || k == runtimecfg.KeyDirectSend || k == runtimecfg.KeyAutoUpdate || k == runtimecfg.KeyOIDCEnabled || k == runtimecfg.KeyOIDCAutoCreate {
+			if k == runtimecfg.KeyRegistration || k == runtimecfg.KeyRelayInsecure || k == runtimecfg.KeyDirectSend || k == runtimecfg.KeyAutoUpdate || k == runtimecfg.KeyOIDCEnabled || k == runtimecfg.KeyOIDCAutoCreate || k == runtimecfg.KeyAutoReply {
 				if v == "1" || strings.EqualFold(v, "true") || strings.EqualFold(v, "on") {
 					v = "1"
 				} else {

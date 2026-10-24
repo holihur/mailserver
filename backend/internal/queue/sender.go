@@ -150,49 +150,63 @@ func sendSMTP(c runtimecfg.Relay, from string, to []string, msg []byte) error {
 }
 
 func smtpSession(host, port, user, pass string, insecure bool, from string, to []string, msg []byte) error {
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 15*time.Second)
-	if err != nil {
-		return err
+	host = strings.TrimSpace(host)
+	port = strings.TrimSpace(port)
+	if port == "" {
+		port = "587"
 	}
+	addr := net.JoinHostPort(host, port)
+	conn, err := net.DialTimeout("tcp", addr, 15*time.Second)
+	if err != nil {
+		return fmt.Errorf("连接中继 %s 失败：%w（多为云厂商封禁该出站端口；Gmail 用 587 或 465）", addr, err)
+	}
+	defer conn.Close()
+	// 整体 2 分钟上限，防止服务器连上后不响应导致队列永久卡住
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Minute))
 	if port == "465" || port == "8465" {
 		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure})
 	}
 	cl, err := smtp.NewClient(conn, host)
 	if err != nil {
-		return err
+		return fmt.Errorf("SMTP 握手失败（%s）：%w", addr, err)
 	}
 	defer func() { _ = cl.Close() }()
 	if ok, _ := cl.Extension("STARTTLS"); ok {
 		if err := cl.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure}); err != nil {
-			return err
+			return fmt.Errorf("STARTTLS 失败：%w", err)
 		}
 	}
 	if user != "" {
 		if ok, _ := cl.Extension("AUTH"); ok {
 			if err := cl.Auth(smtp.PlainAuth("", user, pass, host)); err != nil {
-				return err
+				if strings.Contains(strings.ToLower(host), "gmail") {
+					return fmt.Errorf("中继认证失败：%w（Gmail 需开启两步验证并使用「应用专用密码」，不能直接用登录密码；发件人地址需与账号或已验证别名一致）", err)
+				}
+				return fmt.Errorf("中继认证失败（检查用户名/密码）：%w", err)
 			}
 		}
 	}
 	if err := cl.Mail(from); err != nil {
-		return err
+		return fmt.Errorf("MAIL FROM <%s> 被中继拒绝：%w", from, err)
 	}
 	for _, rcpt := range to {
 		if err := cl.Rcpt(rcpt); err != nil {
-			return err
+			return fmt.Errorf("RCPT TO <%s> 被中继拒绝：%w", rcpt, err)
 		}
 	}
 	w, err := cl.Data()
 	if err != nil {
-		return err
+		return fmt.Errorf("中继拒绝 DATA：%w", err)
 	}
 	if _, err := w.Write(msg); err != nil {
-		return err
+		return fmt.Errorf("写入邮件内容失败：%w", err)
 	}
 	if err := w.Close(); err != nil {
-		return err
+		return fmt.Errorf("中继未确认收下邮件：%w", err)
 	}
-	return cl.Quit()
+	// w.Close 已确认 250，QUIT 失败（部分中继直接断开）不应重发导致重复投递
+	_ = cl.Quit()
+	return nil
 }
 
 // directSession 直连对方 MX:25。开启 DANE 且对端 TLSA 经 DNSSEC 验证通过时，

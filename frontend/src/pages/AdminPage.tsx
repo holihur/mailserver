@@ -4,9 +4,10 @@ import { api } from '../api/client'
 import { Card, Button, Input } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { SkeletonCards } from '../components/Skeleton'
+import { DeliverabilityScore } from '../components/DeliverabilityScore'
 import { useI18n } from '../lib/i18n'
 import { toast } from '../lib/ui'
-import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe, Loader2 } from 'lucide-react'
+import { Server, ShieldCheck, Cloud, Users, CheckCircle2, Circle, Globe, Loader2, Rocket, ArrowRight } from 'lucide-react'
 
 export default function AdminPage() {
   const { t } = useI18n()
@@ -68,6 +69,19 @@ export default function AdminPage() {
       </div>
       )}
 
+      {localStorage.getItem('mailserver.onboarded') !== '1' && (
+        <Card className="p-4 border-primary/40 bg-primary/5">
+          <div className="flex items-center gap-3">
+            <div className="grid place-items-center size-10 shrink-0 rounded-full bg-primary/15 text-primary"><Rocket size={20} /></div>
+            <div className="flex-1 min-w-0">
+              <b className="text-sm">{t('onboarding.entry')}</b>
+              <p className="text-xs text-muted-foreground">{t('onboarding.entryHint')}</p>
+            </div>
+            <Link to="/admin/welcome"><Button size="sm">{t('onboarding.entry')}<ArrowRight /></Button></Link>
+          </div>
+        </Card>
+      )}
+
       <Card className="p-4">
         <div className="flex items-center justify-between gap-2">
           <b className="text-sm">{t('admin.checklist')}</b>
@@ -90,6 +104,8 @@ export default function AdminPage() {
           ))}
         </div>
       </Card>
+
+      <DeliverabilityScore domain={checkDomain} />
 
       <Card className="p-4 space-y-3">
         <b className="text-sm flex items-center gap-1.5"><Globe size={15} />{t('admin.domainCheck')}</b>

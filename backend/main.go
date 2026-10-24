@@ -246,6 +246,9 @@ func main() {
 
 	// 运行时配置（后台可改，DB 持久化，环境变量仅作引导）
 	rt := runtimecfg.New(g, cfg)
+	// 入站 SMTP 读取后台配置：catch-all / 全局自动回复
+	mailsmtp.CatchAllFn = rt.CatchAll
+	mailsmtp.AutoReplyFn = rt.AutoReply
 	// asynq 发信队列（Redis 后端）：入队 + worker + 定时兜底
 	mq, err := mailqueue.NewClient(cfg.RedisURL, g, cfg.SendDailyLimit, cfg.SendPerMinute)
 	if err != nil {
@@ -283,6 +286,8 @@ func main() {
 		_ = mq.EnqueueSend(m.ID)
 	}
 	defer mq.Close()
+	// 转发/自动回复/echo：生成外部邮件后立即入队（sweep 仍作为兼底）
+	deliver.EnqueueHook = func(id uint) { _ = mq.EnqueueSend(id) }
 	mcpSrv := &mcp.Server{DB: g, MQ: mq}
 	if err := mailqueue.Start(cfg.RedisURL, g, rt); err != nil {
 		log.Fatal("启动 asynq 失败：", err)

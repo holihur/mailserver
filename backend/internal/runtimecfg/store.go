@@ -32,6 +32,10 @@ const (
 	KeyRelayFrom        = "relay_from"
 	KeyRelayInsecure    = "relay_insecure" // 跳过中继 TLS 证书校验（自签/域名不匹配）
 	KeyDirectSend       = "direct_send"    // 无中继时直连对方 MX:25 投递
+	KeyCatchAll         = "catch_all"      // 未知收件人转发地址（catch-all）
+	KeyAutoReply        = "auto_reply"     // 全局自动回复开关
+	KeyAutoReplySub     = "auto_reply_subject"
+	KeyAutoReplyBody    = "auto_reply_body"
 	KeyDKIMDomain       = "dkim_domain"
 	KeyDKIMSel          = "dkim_selector"
 	KeyDKIMKeyEnc       = "dkim_key_enc"         // AES-GCM 加密的 DKIM 私钥 PEM
@@ -98,6 +102,8 @@ func newStore(cfg config.Config, rows []model.Setting) *Store {
 		KeyRelayFrom:          cfg.RelayFrom,
 		KeyDKIMDomain:         cfg.DKIMDomain,
 		KeyDKIMSel:            cfg.DKIMSelector,
+		KeyAutoReplySub:       "自动回复",
+		KeyAutoReplyBody:      "我已收到您的邮件，会尽快回复。",
 		KeyBackupDir:          cfg.BackupDir,
 		KeyBackupInterval:     backupDefault(cfg.BackupInterval, 24),
 		KeyBackupKeep:         backupDefault(cfg.BackupKeep, 7),
@@ -258,6 +264,18 @@ func (s *Store) Relay() Relay {
 	}
 }
 
+// CatchAll 返回未知收件人的转发地址（为空则关闭）。
+func (s *Store) CatchAll() string { return s.get(KeyCatchAll) }
+
+// AutoReply 返回全局自动回复配置（开关 / 主题 / 正文）。
+func (s *Store) AutoReply() (bool, string, string) {
+	sub := s.get(KeyAutoReplySub)
+	if sub == "" {
+		sub = "自动回复"
+	}
+	return parseBool(s.get(KeyAutoReply)), sub, s.get(KeyAutoReplyBody)
+}
+
 // Signer 返回当前 DKIM 签名器（可能为 nil）。
 func (s *Store) Signer() *dkim.Signer { return s.signer.Load() }
 
@@ -327,6 +345,10 @@ func (s *Store) Snapshot() map[string]any {
 		"relay_pass_set":         s.vals[KeyRelayPass] != "",
 		"relay_insecure":         parseBool(s.vals[KeyRelayInsecure]),
 		"direct_send":            parseBool(s.vals[KeyDirectSend]),
+		"catch_all":              s.vals[KeyCatchAll],
+		"auto_reply":             parseBool(s.vals[KeyAutoReply]),
+		"auto_reply_subject":     s.vals[KeyAutoReplySub],
+		"auto_reply_body":        s.vals[KeyAutoReplyBody],
 		"dkim_domain":            s.vals[KeyDKIMDomain],
 		"dkim_selector":          s.vals[KeyDKIMSel],
 		"dkim_ready":             s.signer.Load() != nil,

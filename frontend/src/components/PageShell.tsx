@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { SettingsMenu } from './HeaderControls'
+import { TopTabs } from './TopTabs'
 import { BRAND } from '../lib/brand'
 import { Mail } from 'lucide-react'
 
@@ -20,6 +21,7 @@ export default function PageShell({
     <div className="min-h-dvh bg-background flex flex-col">
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
         <Link to="/" className="flex items-center gap-2 font-semibold shrink-0 text-lg"><Mail size={20} />{BRAND}</Link>
+        <TopTabs className="hidden sm:flex ml-2" />
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground min-w-0">
           {Icon && <Icon size={15} className="shrink-0" />}
           <span className="truncate">{title}</span>

@@ -47,6 +47,7 @@ export const api = {
   patch: (id, b) => req(`/api/mails/${id}`, { method: 'PATCH', body: JSON.stringify(b) }),
   trash: (id) => req(`/api/mails/${id}`, { method: 'DELETE' }),
   undoSend: (id) => req(`/api/mails/${id}/undo`, { method: 'POST' }),
+  retrySend: (id) => req(`/api/mails/${id}/retry`, { method: 'POST' }),
   batch: (ids, action, folder = '', extra = {}) => req('/api/mails/batch', { method: 'POST', body: JSON.stringify({ ids, action, folder, ...extra }) }),
   importMails: async (file: File, folder = 'inbox') => {
     const t = localStorage.getItem('token')

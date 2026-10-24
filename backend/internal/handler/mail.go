@@ -238,6 +238,24 @@ func (m *MailBox) One(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"ok": true})
 		return
 	}
+	// POST /api/mails/{id}/retry：重新投递发送失败的邮件（#49 失败可归因）
+	if strings.HasSuffix(rest, "/retry") {
+		if r.Method != "POST" {
+			w.WriteHeader(405)
+			return
+		}
+		if mail.Folder != "sent" || (mail.Status != "failed" && strings.TrimSpace(mail.RelayErr) == "") {
+			writeJSON(w, 400, map[string]string{"error": "只有发送失败的邮件可以重试"})
+			return
+		}
+		m.DB.Model(&mail).Updates(map[string]any{"relayed": false, "attempts": 0, "relay_err": "", "status": "queued"})
+		if m.MQ != nil {
+			_ = m.MQ.EnqueueSend(mail.ID)
+		}
+		push.Notify(uid)
+		writeJSON(w, 200, map[string]any{"ok": true, "id": mail.ID})
+		return
+	}
 	// POST /api/mails/{id}/receipt：回复已读回执（MDN）
 	if strings.HasSuffix(rest, "/receipt") {
 		if r.Method != "POST" {

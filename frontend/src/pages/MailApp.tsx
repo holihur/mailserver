@@ -7,6 +7,7 @@ import { Dropdown, DropdownItem, DropdownSeparator, DropdownLabel } from '../com
 import { SkeletonList } from '../components/Skeleton'
 import { EmptyState } from '../components/EmptyState'
 import { SettingsMenu } from '../components/HeaderControls'
+import { TopTabs } from '../components/TopTabs'
 import MailReader from '../components/MailReader'
 import { MailListItem } from '../components/MailListItem'
 import Compose from '../components/Compose'
@@ -407,6 +408,7 @@ export default function MailApp() {
     <div className="h-dvh bg-background flex flex-col overflow-hidden">
       <header className="border-b border-border px-3 sm:px-4 h-14 flex items-center gap-2 sticky top-0 bg-background/90 backdrop-blur z-10">
         <b className="shrink-0 truncate max-w-[45vw] flex items-center gap-2 text-lg"><Mail size={20} />{BRAND}</b>
+        <TopTabs className="hidden sm:flex ml-2" />
         <div className="flex-1" />
         <Button size="sm" className="hidden sm:inline-flex" onClick={() => setShowCompose(true)}><PenLine /><span className="hidden sm:inline">{t('mail.compose')}</span></Button>
         <SettingsMenu />
@@ -494,6 +496,19 @@ export default function MailApp() {
             <Plus size={16} />{t('folders.new')}
           </button>
           <p className="text-xs text-muted-foreground px-3 pt-4">{t('mail.total', { n: total })}</p>
+          <div className="pt-3 mt-2 border-t border-border space-y-0.5">
+            {[
+              { to: '/contacts', icon: Contact, label: t('nav.contacts') },
+              { to: '/rules', icon: Filter, label: t('nav.rules') },
+              { to: '/setup', icon: Settings, label: t('nav.setup') },
+              { to: '/security', icon: KeyRound, label: t('nav.security') },
+            ].map(x => (
+              <button key={x.to} onClick={() => navigate(x.to)}
+                className="w-full flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">
+                <x.icon size={15} />{x.label}
+              </button>
+            ))}
+          </div>
         </aside>
 
         <section className="flex-1 min-w-0 flex">

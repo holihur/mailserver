@@ -37,6 +37,10 @@ var (
 // VacationHook 由 main 注入：发送 vacation 自动回复（含去重）；未注入则不回复。
 var VacationHook func(db *gorm.DB, uid uint, from, subject, text string)
 
+// EnqueueHook 由 main 注入（asynq 入队）：转发/自动回复/echo 生成的外部邮件立即入队，
+// 不再等 30s 的 sweep 兜底；未注入时仍由 sweep 收底。
+var EnqueueHook func(mailID uint)
+
 // ToUser 把邮件投递给用户：
 //  1. 超出配额则丢弃（入站 SMTP 已在 RCPT 阶段拒绝）；
 //  2. 若有启用的 Sieve 脚本且命中，按脚本动作处理（fileinto/redirect/discard/keep）；
@@ -182,8 +186,11 @@ func Forward(db *gorm.DB, from string, targets []string, subject, body, atts str
 			if len(SRSSecret) > 0 && SRSAliasDomain != "" {
 				envFrom = srs.Encode(SRSSecret, from, SRSAliasDomain)
 			}
-			db.Create(&model.Mail{From: from, EnvelopeFrom: envFrom, To: t,
-				Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true, Status: "queued"})
+			m := model.Mail{From: from, EnvelopeFrom: envFrom, To: t,
+				Subject: subject, Body: body, Attachments: atts, Folder: "sent", Read: true, Status: "queued"}
+			if err := db.Create(&m).Error; err == nil && EnqueueHook != nil {
+				EnqueueHook(m.ID)
+			}
 		}
 	}
 }

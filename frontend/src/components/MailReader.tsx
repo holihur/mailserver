@@ -6,7 +6,7 @@ import { Dropdown, DropdownItem, DropdownSeparator } from './Dropdown'
 import { useI18n } from '../lib/i18n'
 import { cn, linkify } from '../lib/utils'
 import { recipientChip, attList, attKind, fmtSize, fmtWhen } from '../lib/mailFormat'
-import { AuthBadges } from './MailStatus'
+import { TrustBar } from './MailStatus'
 import { ArrowLeft, MoreVertical, Star, MailOpen, Reply, ReplyAll, Forward, Trash2, XCircle, Clock, Download } from 'lucide-react'
 
 // 邮件阅读区（详情面板）。从 MailApp 拆出，降低单文件复杂度。
@@ -45,7 +45,7 @@ export default function MailReader({
                 return rc ? <span className="inline-block mt-1 rounded px-1.5 py-0.5 text-[10px] font-medium text-white" style={{ background: rc.color }} title={sel.to}>{rc.label}</span> : null
               })()}
               {sel.cc && <p className="text-xs text-muted-foreground mt-0.5">Cc: {sel.cc}</p>}
-              <AuthBadges raw={sel.auth_results} t={t} />
+              <TrustBar raw={sel.auth_results} from={sel.from} t={t} />
               {sel.status === 'failed' && sel.relay_err && (
                 <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive" role="alert">
                   <b>{t('mail.stFailed')}:</b> {sel.relay_err}
@@ -82,7 +82,12 @@ export default function MailReader({
                 {sel.status === 'failed' ? t('mail.stFailed') : sel.status === 'sending' ? t('mail.stSending') : t('mail.stQueued')}
               </div>
               {sel.relay_err && <p className="mt-1 text-xs break-words">{sel.relay_err}</p>}
-              {sel.status === 'failed' && <p className="mt-1 text-xs">{t('mail.failedHint')}</p>}
+              {sel.status === 'failed' && (
+                <div className="mt-2 flex items-center gap-2">
+                  <p className="text-xs flex-1">{t('mail.failedHint')}</p>
+                  <Button size="sm" variant="outline" onClick={async () => { await api.retrySend(sel.id); setSel({ ...sel, status: 'queued', relay_err: '' }) }}>{t('mail.retry')}</Button>
+                </div>
+              )}
             </div>
           )}
           {sel.body_html ? (

@@ -5,6 +5,7 @@ package handler
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -35,8 +36,16 @@ func (a *Admin) RelayTest(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]any{"ok": err == nil, "steps": steps, "host": c.Host, "port": c.Port}
 	if err != nil {
 		resp["error"] = err.Error()
-		if strings.Contains(err.Error(), "certificate") {
-			resp["hint"] = "证书与中继地址不一致：请确认 relay_host 填的是外部发信服务（如 smtpdm.aliyun.com），而不是自己的域名；确需忽略可勾选「跳过 TLS 证书校验」。"
+		es := err.Error()
+		switch {
+		case strings.Contains(es, "certificate"):
+			resp["hint"] = "证书与中继地址不一致：请确认 relay_host 填的是外部发信服务（如 smtp.gmail.com），而不是自己的域名；确需忽略可勾选「跳过 TLS 证书校验」。"
+		case strings.Contains(es, "超时"):
+			resp["hint"] = "TCP 连接超时：多为云厂商封禁出站 25/587 或安全组未放行。Gmail 请用 587（STARTTLS）或 465（SSL），并确认服务器能访问外网。"
+		case strings.Contains(es, "认证"):
+			if strings.Contains(strings.ToLower(c.Host), "gmail") {
+				resp["hint"] = "Gmail：请开启两步验证并生成「应用专用密码」，不要直接用 Google 登录密码；发件人地址需为 Gmail 账号或已在 Gmail 中验证的别名。"
+			}
 		}
 	}
 	writeJSON(w, 200, resp)
@@ -49,14 +58,29 @@ func testRelay(ctx context.Context, host, port, user, pass string, insecure bool
 	if port == "" {
 		port = "587"
 	}
+	addr := net.JoinHostPort(host, port)
+
+	if ips, err := net.LookupHost(host); err == nil {
+		steps = append(steps, "DNS 解析成功："+strings.Join(ips, ", "))
+	} else {
+		return steps, fmt.Errorf("DNS 解析 %s 失败：%w（请检查 relay_host 是否填写正确）", host, err)
+	}
+
 	d := net.Dialer{Timeout: 10 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, port))
+	conn, err := d.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return steps, fmt.Errorf("TCP 连接 %s:%s 失败：%w", host, port, err)
+		var ne net.Error
+		if errors.As(err, &ne) && ne.Timeout() {
+			return steps, fmt.Errorf("TCP 连接 %s 超时：多为云厂商封禁出站端口或安全组未放行。Gmail 请用 587（STARTTLS）或 465（SSL）", addr)
+		}
+		return steps, fmt.Errorf("TCP 连接 %s 失败：%w", addr, err)
 	}
 	steps = append(steps, "TCP 连接成功")
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 	if port == "465" || port == "8465" {
 		conn = tls.Client(conn, &tls.Config{ServerName: host, MinVersion: tls.VersionTLS12, InsecureSkipVerify: insecure})
+		steps = append(steps, "已启用隐式 TLS（465）")
 	}
 	cl, err := smtp.NewClient(conn, host)
 	if err != nil {

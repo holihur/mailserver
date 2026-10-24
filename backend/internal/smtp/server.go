@@ -22,6 +22,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// 运行时配置钩子（main 注入，避免 smtp → runtimecfg → ... 的包循环）。
+var (
+	CatchAllFn  func() string
+	AutoReplyFn func() (enabled bool, subject, body string)
+)
+
 func Serve(addr string, db *gorm.DB, maxBytes int64, dmarc string, tlsConf *tls.Config) {
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -218,15 +224,25 @@ func saveMail(db *gorm.DB, from, to, remoteIP, raw, dmarcEnforce string) {
 		return
 	}
 
-	// 普通收件人：按收件人找本地用户，找不到则丢弃（防垃圾占库）
+	// 普通收件人：echo 虚拟地址、普通用户、未知收件人（catch-all）
+	local, domain := splitAddr(to)
+	if local == "echo" && hostedDomain(db, domain) {
+		handleEcho(db, from, to, subject, body, htmlBody, atts, opts)
+		return
+	}
 	var u model.User
 	if err := db.Where("LOWER(email) = ?", to).First(&u).Error; err != nil {
+		if ca := catchAllAddr(); ca != "" && hostedDomain(db, domain) {
+			handleCatchAll(db, ca, from, to, subject, body, htmlBody, atts, opts)
+			return
+		}
 		return
 	}
 	if in.IsMDN {
 		markReceipt(db, u.ID, in.OriginalID)
 	}
 	deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts, opts)
+	maybeAutoReply(db, u.Email, from, subject, body, opts.Bulk)
 }
 
 // expandAliases 递归展开别名到最终地址（visited + 深度上限，防别名自指/环路）。
@@ -271,6 +287,7 @@ func numericPrefix(s string) uint {
 }
 
 // recipientExists 判断收件人是否为本地已有用户或别名（RCPT 阶段就拒绝未知收件人，避免静默丢信）。
+// echo 虚拟地址与配置了 catch-all 的托管域名也会接受。
 func recipientExists(db *gorm.DB, addr string) bool {
 	addr = strings.ToLower(strings.TrimSpace(addr))
 	if addr == "" {
@@ -281,5 +298,101 @@ func recipientExists(db *gorm.DB, addr string) bool {
 	if n > 0 {
 		return true
 	}
-	return alias.Match(db, addr) != nil
+	if alias.Match(db, addr) != nil {
+		return true
+	}
+	local, domain := splitAddr(addr)
+	if !hostedDomain(db, domain) {
+		return false
+	}
+	if local == "echo" {
+		return true
+	}
+	return catchAllAddr() != ""
+}
+
+func splitAddr(addr string) (local, domain string) {
+	addr = strings.ToLower(strings.TrimSpace(addr))
+	if i := strings.LastIndexByte(addr, '@'); i > 0 {
+		return addr[:i], strings.Trim(addr[i+1:], ".")
+	}
+	return addr, ""
+}
+
+func hostedDomain(db *gorm.DB, domain string) bool {
+	if domain == "" {
+		return false
+	}
+	var n int64
+	db.Model(&model.Domain{}).Where("LOWER(name) = ?", domain).Count(&n)
+	return n > 0
+}
+
+func isEchoAddr(addr string) bool {
+	local, _ := splitAddr(addr)
+	return local == "echo"
+}
+
+func catchAllAddr() string {
+	if CatchAllFn == nil {
+		return ""
+	}
+	ca := strings.ToLower(strings.TrimSpace(CatchAllFn()))
+	if ca == "" || !strings.Contains(ca, "@") {
+		return ""
+	}
+	return ca
+}
+
+// handleEcho：任何人给 echo@ 发信，自动把原文回显给发件人（自己的 echo 与批量信不回，防环）。
+func handleEcho(db *gorm.DB, from, to, subject, body, htmlBody, atts string, opts deliver.Options) {
+	if opts.Bulk || from == "" || isEchoAddr(from) {
+		return
+	}
+	replySubject := "Re: " + subject
+	if strings.TrimSpace(subject) == "" {
+		replySubject = "Re: (无主题)"
+	}
+	var sb strings.Builder
+	sb.WriteString("这是 echo 自动回显。\n\n--- 原始邮件 ---\n")
+	sb.WriteString("From: " + from + "\nTo: " + to + "\nSubject: " + subject + "\n\n")
+	sb.WriteString(body)
+	deliver.Forward(db, to, []string{from}, replySubject, sb.String(), "")
+}
+
+// handleCatchAll：未知收件人的邮件转投到指定邮箱（本地用户直接入库，外部地址入发件队列）。
+func handleCatchAll(db *gorm.DB, catchAll, from, to, subject, body, htmlBody, atts string, opts deliver.Options) {
+	var u model.User
+	if err := db.Where("LOWER(email) = ?", catchAll).First(&u).Error; err == nil {
+		deliver.ToUser(db, &u, from, to, "", "", subject, body, htmlBody, atts, opts)
+	} else {
+		deliver.Forward(db, from, []string{catchAll}, subject, body, atts)
+	}
+	maybeAutoReply(db, catchAll, from, subject, body, opts.Bulk)
+}
+
+// maybeAutoReply：全局自动回复（后台开关），同一发件人 24h 内只回一次。
+func maybeAutoReply(db *gorm.DB, replyFrom, from, subject, body string, bulk bool) {
+	if bulk || from == "" || replyFrom == "" || AutoReplyFn == nil {
+		return
+	}
+	enabled, subj, tpl := AutoReplyFn()
+	if !enabled || strings.EqualFold(from, replyFrom) || isEchoAddr(from) {
+		return
+	}
+	var n int64
+	db.Model(&model.Mail{}).
+		Where("folder = ? AND LOWER(\"to\") = ? AND LOWER(\"from\") = ? AND created_at > ?",
+			"sent", strings.ToLower(from), strings.ToLower(replyFrom), time.Now().Add(-24*time.Hour)).
+		Count(&n)
+	if n > 0 {
+		return
+	}
+	if subj == "" {
+		subj = "自动回复"
+	}
+	if strings.TrimSpace(tpl) == "" {
+		tpl = "我已收到您的邮件，会尽快回复。"
+	}
+	deliver.Forward(db, replyFrom, []string{from}, subj, tpl+"\n\n--- 原邮件 ---\n"+body, "")
 }

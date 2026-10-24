@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import { Button, Input, Card, Badge } from '../components/ui/controls'
+import { Button, Input, Textarea, Card, Badge } from '../components/ui/controls'
 import AdminShell from '../components/AdminShell'
 import { useI18n } from '../lib/i18n'
-import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2, UserPlus, PlugZap, History } from 'lucide-react'
+import { Save, Wand2, Upload, KeyRound, Server, Send, ShieldAlert, CheckCircle2, Loader2, UserPlus, PlugZap, History, ReplyAll } from 'lucide-react'
 
 export default function AdminSettings() {
   const { t } = useI18n()
@@ -37,6 +37,10 @@ export default function AdminSettings() {
         oidc_issuer: s.oidc_issuer || '',
         oidc_client_id: s.oidc_client_id || '',
         oidc_auto_create: s.oidc_auto_create ? '1' : '0',
+        catch_all: s.catch_all || '',
+        auto_reply: s.auto_reply ? '1' : '0',
+        auto_reply_subject: s.auto_reply_subject || '',
+        auto_reply_body: s.auto_reply_body || '',
       }
       if (relayPass) body.relay_pass = relayPass
       if (oidcSecret) body.oidc_client_secret = oidcSecret
@@ -87,6 +91,25 @@ export default function AdminSettings() {
                 <Button type="button" variant="outline" onClick={detectIP}>{t('settings.autoDetect')}</Button>
               </div>
             </Field>
+          </Card>
+
+          <Card className="p-4 space-y-3">
+            <div className="flex items-center gap-2"><ReplyAll size={16} /><b className="text-sm">{t('settings.autoReply')}</b></div>
+            <Field label={t('settings.catchAll')} hint={t('settings.catchAllHint')}>
+              <Input placeholder="catchall@example.com" value={s.catch_all || ''} onChange={e => field('catch_all', e.target.value)} />
+            </Field>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" className="mt-0.5" checked={!!s.auto_reply}
+                onChange={e => field('auto_reply', e.target.checked ? '1' : '0')} />
+              <span className="text-muted-foreground">{t('settings.autoReplyHint')}</span>
+            </label>
+            <Field label={t('settings.autoReplySubject')}>
+              <Input value={s.auto_reply_subject || ''} onChange={e => field('auto_reply_subject', e.target.value)} />
+            </Field>
+            <Field label={t('settings.autoReplyBody')}>
+              <Textarea rows={4} value={s.auto_reply_body || ''} onChange={e => field('auto_reply_body', e.target.value)} />
+            </Field>
+            <p className="text-xs text-muted-foreground">{t('settings.echoHint')}</p>
           </Card>
 
           <Card className="p-4 space-y-3">

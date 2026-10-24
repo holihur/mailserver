@@ -79,6 +79,13 @@ export function MailListItem({ m, folder, sel, me, selectMode, checked, touch, o
           </span>
         </span>
       </div>
+      {folder === 'sent' && m.status === 'failed' && (
+        <div className="mt-1 flex items-center gap-2 text-[11px] text-destructive">
+          <span className="truncate flex-1" title={m.relay_err || ''}>{t('mail.failReason')}: {m.relay_err || '-'}</span>
+          <button type="button" className="underline shrink-0"
+            onClick={async e => { e.stopPropagation(); await api.retrySend(m.id); load?.() }}>{t('mail.retry')}</button>
+        </div>
+      )}
     </div>
   )
 }
