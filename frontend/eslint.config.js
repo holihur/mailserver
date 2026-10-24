@@ -25,6 +25,11 @@ export default tseslint.config(
       'no-control-regex': 'warn',
       'prefer-const': 'warn',
       'no-irregular-whitespace': 'warn',
+      // eslint-plugin-react-hooks v7 新增的严格规则：现有代码大量使用「effect 内触发加载」模式，
+      // 直接升级会命中 20+ 处。先显式关闭以保持 CI 稳定，后续渐进重构。
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
+      'react-hooks/immutability': 'off',
     },
   },
 )
