@@ -255,7 +255,7 @@ func ExportZones(db *gorm.DB, path string) {
 		var rs []any
 		for _, r := range recs {
 			rs = append(rs, map[string]any{
-				"name": r.Name, "type": r.Type, "value": r.Value, "ttl": r.TTL, "prio": r.Prio,
+				"name": r.Name, "type": r.Type, "value": normalizeTargetValue(r.Type, r.Value, dm.Name), "ttl": r.TTL, "prio": r.Prio,
 			})
 		}
 		if rs == nil {
@@ -275,20 +275,51 @@ func BuildMailRecords(domain, ip, mailHost, selector, dkimTXT string) []model.Dn
 	if selector == "" {
 		selector = "dkim"
 	}
+	mailHost = strings.Trim(strings.TrimSpace(mailHost), ".")
 	if mailHost == "" {
 		mailHost = "mail." + domain
 	}
-	mailHost = strings.Trim(strings.TrimSpace(mailHost), ".")
 	if dkimTXT == "" {
 		dkimTXT = "v=DKIM1; k=rsa; p=PASTE_PUBLIC_KEY_HERE"
 	}
 	return []model.DnsRecord{
 		{Name: "mail", Type: "A", Value: ip, TTL: 600},
-		{Name: "@", Type: "MX", Value: mailHost, TTL: 3600, Prio: 10},
+		// MX 目标是绝对域名：必须带结尾点，否则内置 DNS 会再拼一次区名。
+		{Name: "@", Type: "MX", Value: mailHost + ".", TTL: 3600, Prio: 10},
 		{Name: "@", Type: "TXT", Value: "v=spf1 mx ~all", TTL: 3600},
 		{Name: "_dmarc", Type: "TXT", Value: "v=DMARC1; p=none; rua=mailto:postmaster@" + domain, TTL: 3600},
 		{Name: selector + "._domainkey", Type: "TXT", Value: dkimTXT, TTL: 3600},
 	}
+}
+
+// normalizeTarget 把记录目标规范为绝对域名：已带结尾点则原样返回；
+// 等于 zone 或是其子域但漏了结尾点时补 "."；其余视为相对名（如 "mail"），
+// 保留给内置 DNS 补全区名。
+func normalizeTarget(v, zone string) string {
+	v = strings.TrimSpace(v)
+	if v == "" || v == "@" || strings.HasSuffix(v, ".") {
+		return v
+	}
+	lv, lz := strings.ToLower(v), strings.ToLower(strings.Trim(zone, "."))
+	if lz != "" && (lv == lz || strings.HasSuffix(lv, "."+lz)) {
+		return v + "."
+	}
+	return v
+}
+
+// normalizeTargetValue 规范化 MX/NS/CNAME 的目标及 SRV 的 target 字段。
+func normalizeTargetValue(typ, value, zone string) string {
+	switch typ {
+	case "MX", "NS", "CNAME":
+		return normalizeTarget(value, zone)
+	case "SRV":
+		f := strings.Fields(value)
+		if len(f) == 4 {
+			f[3] = normalizeTarget(f[3], zone)
+			return strings.Join(f, " ")
+		}
+	}
+	return value
 }
 
 // UpsertDomainWithRecords 确保本地存在该域名及其记录（第三方 DNS 一键配置时同步一份供账号/展示用），

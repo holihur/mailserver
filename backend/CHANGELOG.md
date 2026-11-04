@@ -3,6 +3,11 @@
 本文件面向使用者，记录 **Sweetcorn** 的重要变更，按版本倒序排列。
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [v0.22.1] - 2026-11-04
+
+### 修复
+- **自托管权威 DNS 的 MX 目标重复拼接区名**：MX 目标漏写结尾点时（如 `mail.example.com`）会被解析成 `mail.example.com.example.com.`，外部 DNS 缓存过期后将导致发往该域的邮件投递失败。现在生成记录时补全结尾点，导出 `zones.json` 时也会规范化 MX/NS/CNAME/SRV 目标，兼容导入的绝对域名漏写结尾点。
+
 ## [v0.21.0] - 2026-10-12
 
 ### 新增
